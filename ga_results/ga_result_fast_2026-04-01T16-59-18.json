@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-04-01T16:59:18.475Z",
+  "totalTimeMinutes": "79.0",
+  "generations": 8,
+  "bestFitness": null,
+  "bestParams": {
+    "sameFour": 200,
+    "sameThree": 120,
+    "sameTwo": 50,
+    "single": -40,
+    "tingImprovement": 1000,
+    "makesTing": 2000,
+    "tingWidth": 150,
+    "nearTing": 300,
+    "specialCard": 50,
+    "specialSentence": 30
+  },
+  "fitnessHistory": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "baselineParams": {
+    "sameFour": 200,
+    "sameThree": 120,
+    "sameTwo": 50,
+    "single": -40,
+    "tingImprovement": 1000,
+    "makesTing": 2000,
+    "tingWidth": 150,
+    "nearTing": 300,
+    "specialCard": 50,
+    "specialSentence": 30
+  },
+  "validation": {
+    "baselineResult": {
+      "hu": 3202,
+      "ting": 18837
+    },
+    "bestResult": {
+      "hu": 3144,
+      "ting": 19083
+    },
+    "huImprovement": -0.19333333333333333,
+    "tingImprovement": 0.8200000000000001
+  },
+  "config": {
+    "populationSize": 20,
+    "eliteCount": 2,
+    "tournamentSize": 3,
+    "crossoverRate": 0.85,
+    "mutationRate": 0.2,
+    "mutationScale": 0.25,
+    "maxGenerations": 30,
+    "earlyStoppingPatience": 8,
+    "earlyStoppingMinDelta": 0.001,
+    "sampleSize": 2000,
+    "timeBudgetMinutes": 120,
+    "numWorkers": 11
+  }
+}
