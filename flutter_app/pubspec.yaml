@@ -1,0 +1,30 @@
+name: shangdaren_game
+description: "上大人字牌游戏"
+publish_to: 'none'
+version: 1.0.0+100
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/html/
+    - assets/html/audio/
+    - assets/html/audio/female/
+    - assets/html/audio/male/
+    - assets/html/images/
+    - assets/html/images/s/
+    - assets/html/images/v/

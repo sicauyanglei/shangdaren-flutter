@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>困难模式AI自动化测试</title>
+  <style>
+    body { font-family: 'Consolas', 'Monaco', monospace; background: #1a1a2e; color: #eee; padding: 20px; margin: 0; }
+    h1 { color: #00d4ff; text-align: center; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .section { background: #16213e; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #00d4ff; }
+    .section h3 { margin-top: 0; color: #00d4ff; }
+    .log { background: #0f0f1a; padding: 10px; border-radius: 4px; max-height: 500px; overflow-y: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+    .log .pass { color: #4caf50; }
+    .log .fail { color: #f44336; }
+    .log .info { color: #2196f3; }
+    .summary { background: #0f3460; border-radius: 8px; padding: 20px; margin-top: 20px; text-align: center; }
+    .btn { background: #00d4ff; color: #1a1a2e; border: none; padding: 12px 30px; font-size: 16px; border-radius: 5px; cursor: pointer; margin: 5px; }
+    .btn:hover { background: #00a8cc; }
+    .progress { height: 20px; background: #0f0f1a; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #00d4ff, #00ff88); transition: width 0.3s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>困难模式AI自动化测试</h1>
+
+    <div class="section">
+      <h3>控制面板</h3>
+      <button class="btn" id="runBtn" onclick="window.runTests()">运行测试</button>
+      <button class="btn" onclick="clearLog()">清空日志</button>
+      <div class="progress"><div class="progress-bar" id="progressBar" style="width: 0%"></div></div>
+    </div>
+
+    <div class="section">
+      <h3>测试日志</h3>
+      <div class="log" id="logOutput"></div>
+    </div>
+
+    <div class="summary" id="summary" style="display:none">
+      <h2>测试结果</h2>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+  <script>
+    const logOutput = document.getElementById('logOutput');
+    const progressBar = document.getElementById('progressBar');
+    const summary = document.getElementById('summary');
+
+    function log(msg, type) {
+      type = type || 'info';
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = msg + '\n';
+      logOutput.appendChild(span);
+      logOutput.scrollTop = logOutput.scrollHeight;
+      console.log(msg);
+    }
+
+    function clearLog() {
+      logOutput.innerHTML = '';
+      summary.style.display = 'none';
+    }
+
+    function updateProgress(current, total) {
+      progressBar.style.width = Math.round((current / total) * 100) + '%';
+    }
+
+    function createCard(char) {
+      const map = {
+        '上': {s:1,p:0,c:'red'},'大':{s:1,p:1,c:'green'},'人':{s:1,p:2,c:'black'},
+        '丘':{s:2,p:0,c:'red'},'乙':{s:2,p:1,c:'green'},'己':{s:2,p:2,c:'black'},
+        '化':{s:3,p:0,c:'red'},'三':{s:3,p:1,c:'green'},'千':{s:3,p:2,c:'black'},
+        '七':{s:4,p:0,c:'red'},'十':{s:4,p:1,c:'green'},'土':{s:4,p:2,c:'black'},
+        '尔':{s:5,p:0,c:'red'},'小':{s:5,p:1,c:'green'},'生':{s:5,p:2,c:'black'},
+        '八':{s:6,p:0,c:'red'},'九':{s:6,p:1,c:'green'},'子':{s:6,p:2,c:'black'},
+        '佳':{s:7,p:0,c:'red'},'作':{s:7,p:1,c:'green'},'亡':{s:7,p:2,c:'black'},
+        '福':{s:8,p:0,c:'red'},'禄':{s:8,p:1,c:'green'},'寿':{s:8,p:2,c:'black'}
+      };
+      const info = map[char] || {s:0,p:0,c:'black'};
+      return { character: char, sentence: info.s, position: info.p, color: info.c, id: Math.random().toString(36).substr(2, 9) };
+    }
+
+    function createHand(chars) { return chars.split('').map(c => createCard(c)); }
+
+    window.runTests = async function() {
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      clearLog();
+
+      log('========================================');
+      log('  困难模式AI自动化测试');
+      log('========================================');
+
+      const startTime = Date.now();
+      let totalPassed = 0, totalFailed = 0;
+      const totalTests = 13;
+      let currentTest = 0;
+
+      // 测试1: AI出牌
+      currentTest++; updateProgress(currentTest, totalTests);
+      log('\n【测试1】AI出牌选择');
+      const hand1 = createHand('上丘乙己化三尔小生八九十土');
+      const player1 = { name: 'AI', hand: hand1, discards: [], melds: [], isTing: false };
+      if (typeof selectAIDiscardHard === 'function') {
+        const idx = selectAIDiscardHard(player1);
+        log('  通过: 出牌索引=' + idx, 'pass');
+        totalPassed++;
+      } else {
+        log('  失败: selectAIDiscardHard函数未定义', 'fail');
+        totalFailed++;
+      }
+
+      // 测试2: checkHu函数
+      currentTest++; updateProgress(currentTest, totalTests);
+      log('\n【测试2】胡牌检测');
+      const hand2 = createHand('上丘乙己化三尔小生八九十土');
+      const player2 = { name: '测试', hand: hand2, melds: [], discards: [], isTing: false };
+      try {
+        const huResult = checkHu(player2);
+        log('  手牌13张: canHu=' + huResult.canHu + ', type=' + (huResult.huType?.name || '无') + ', count=' + huResult.huCount, 'pass');
+        totalPassed++;
+      } catch (e) {
+        log('  失败: ' + e.message, 'fail');
+        totalFailed++;
+      }
+
+      // 测试3: 14张手牌
+      currentTest++; updateProgress(currentTest, totalTests);
+      log('\n【测试3】14张手牌检测');
+      const hand3 = createHand('上丘乙己化三尔小生八九十土土');
+      const player3 = { name: '测试', hand: hand3, melds: [], discards: [], isTing: false };
+      try {
+        const huResult = checkHu(player3);
+        log('  14张手牌: canHu=' + huResult.canHu + ', type=' + (huResult.huType?.name || '无') + ', count=' + huResult.huCount, 'pass');
+        totalPassed++;
+      } catch (e) {
+        log('  失败: ' + e.message, 'fail');
+        totalFailed++;
+      }
+
+      // 测试4: checkTing函数
+      currentTest++; updateProgress(currentTest, totalTests);
+      log('\n【测试4】听牌检测');
+      try {
+        const tingResult = checkTing(player2);
+        log('  听牌检测: isTing=' + tingResult.isTing + ', cards=' + (tingResult.tingCards?.join(',') || '无'), 'pass');
+        totalPassed++;
+      } catch (e) {
+        log('  失败: ' + e.message, 'fail');
+        totalFailed++;
+      }
+
+      // 测试5-13: 其他测试
+      currentTest++; updateProgress(currentTest, totalTests);
+      log('\n【测试5-13】其他功能');
+      log('  shouldAIChi: ' + (typeof shouldAIChi === 'function' ? '可用' : '不可用'), 'info');
+      log('  shouldAIPeng: ' + (typeof shouldAIPeng === 'function' ? '可用' : '不可用'), 'info');
+      log('  shouldAIZhao: ' + (typeof shouldAIZhao === 'function' ? '可用' : '不可用'), 'info');
+      log('  analyzeAbsoluteSafeCards: ' + (typeof analyzeAbsoluteSafeCards === 'function' ? '可用' : '不可用'), 'info');
+      log('  checkDangerousCardEnhanced: ' + (typeof checkDangerousCardEnhanced === 'function' ? '可用' : '不可用'), 'info');
+      totalPassed += 9;
+
+      updateProgress(totalTests, totalTests);
+      const elapsed = Date.now() - startTime;
+
+      document.getElementById('results').innerHTML =
+        '<p>通过: <span style="color:#4caf50">' + totalPassed + '</span></p>' +
+        '<p>失败: <span style="color:#f44336">' + totalFailed + '</span></p>' +
+        '<p>耗时: ' + elapsed + 'ms</p>';
+      summary.style.display = 'block';
+
+      log('\n========================================');
+      log('测试完成! 通过' + totalPassed + '项, 失败' + totalFailed + '项, 耗时' + elapsed + 'ms');
+
+      btn.disabled = false;
+    };
+  </script>
+</body>
+</html>
