@@ -256,10 +256,15 @@ function logState(tag, stateObj) {
 
 window.addEventListener('error', function(e) {
   addLog('ERROR', '[UNCAUGHT]', e.message, 'at', e.filename + ':' + e.lineno + ':' + e.colno);
+  if (typeof FlutterBridge !== 'undefined' && FlutterBridge.onError) {
+    try { FlutterBridge.onError('UNCAUGHT: ' + e.message); } catch(ex) {}
+  }
+  e.preventDefault();
 });
 
 window.addEventListener('unhandledrejection', function(e) {
   addLog('ERROR', '[UNHANDLED_REJECT]', e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : 'unknown');
+  e.preventDefault();
 });
 
 console.log = (...args) => addLog('INFO', ...args);
@@ -598,9 +603,6 @@ async function playLocalAudio(text, playerIndex = -1, volumeMultiplier = 1.0) {
   const audioPath = `audio/${audioKey}.mp3`;
   
   return new Promise((resolve) => {
-    const audio = new Audio(audioPath);
-    audio.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
-    
     let hasResolved = false;
     
     const safeResolve = () => {
@@ -614,30 +616,21 @@ async function playLocalAudio(text, playerIndex = -1, volumeMultiplier = 1.0) {
       safeResolve();
     }, 3000);
     
-    audio.onended = () => {
-      clearTimeout(timeout);
-      safeResolve();
-    };
-    
-    audio.onerror = () => {
-      clearTimeout(timeout);
-      safeResolve();
-    };
-    
-    audio.play().then(() => {
-    }).catch(() => {
-      clearTimeout(timeout);
-      const preloaded = audioPreloaded.get(audioKey);
-      if (preloaded) {
+    const preloaded = audioPreloaded.get(audioKey);
+    if (preloaded) {
+      try {
         preloaded.currentTime = 0;
         preloaded.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
         preloaded.onended = () => { clearTimeout(timeout); safeResolve(); };
         preloaded.onerror = () => { clearTimeout(timeout); safeResolve(); };
-        preloaded.play().catch(() => safeResolve());
-      } else {
+        preloaded.play().then(() => {}).catch(() => { clearTimeout(timeout); safeResolve(); });
+      } catch(e) {
+        clearTimeout(timeout);
         safeResolve();
       }
-    });
+    } else {
+      safeResolve();
+    }
   });
 }
 
@@ -1299,22 +1292,48 @@ function recordActivity() {
 setInterval(() => {
   if (!gameState.gameStarted || gameState.isPaused || gameState.isHandlingHu || gameState.isDealing) return;
   if (autoTestRunning) return;
-  if (gameState.countdown > 0) return;
   
   const elapsed = Date.now() - lastActivityTime;
-  if (elapsed > 15000) {
-    console.log('看门狗检测到卡死，强制恢复 isDrawing=', gameState.isDrawing, 'isMyTurn=', gameState.isMyTurn, 'waitingForResponse=', gameState.waitingForResponse);
+  
+  if (gameState.isDrawing && elapsed > 8000) {
+    logError('WATCHDOG', 'isDrawing卡死超过8s，强制完成 isDrawing=' + gameState.isDrawing + ' elapsed=' + elapsed);
+    gameState.isDrawing = false;
+    const me = gameState.players[1];
+    if (gameState.currentPlayerIndex === 1 && me.hand.length > 0) {
+      gameState.isMyTurn = true;
+      startCountdown();
+      updateActionButtons();
+      renderMyHand();
+    }
+    recordActivity();
+    return;
+  }
+  
+  if (gameState.countdown > 0) return;
+  
+  if (elapsed > 10000) {
+    logError('WATCHDOG', '检测到卡死，强制恢复 isDrawing=' + gameState.isDrawing + ' isMyTurn=' + gameState.isMyTurn + ' waiting=' + gameState.waitingForResponse + ' elapsed=' + elapsed);
     
     if (gameState.isDrawing) {
       gameState.isDrawing = false;
     }
     
+    const wasMyTurn = gameState.isMyTurn;
+    
     if (gameState.waitingForResponse) {
       gameState.waitingForResponse = false;
-      hideAllActionButtons();
+      gameState.canPeng = false;
+      gameState.canChi = false;
+      gameState.canZhao = false;
+      gameState.canHu = false;
+      gameState.actionCancelled = true;
+      const container = document.getElementById('actionButtons');
+      if (container) container.innerHTML = '';
     }
     
-    if (gameState.isMyTurn) {
+    if (wasMyTurn || gameState.currentPlayerIndex === 1) {
+      logWarn('WATCHDOG', '看门狗强制人类玩家出牌 wasMyTurn=' + wasMyTurn + ' currentPlayerIndex=' + gameState.currentPlayerIndex);
+      gameState.isMyTurn = true;
       const me = gameState.players[1];
       if (me.hand.length > 0) {
         if (gameState.lastDrawnCard) {
@@ -1801,27 +1820,26 @@ function moveToNextPiaoPlayer() {
 
 function startRound() {
   
-  // 防止重复调用
   if (gameState.isStartingRound) {
     console.log('警告: startRound 已经在执行中，跳过重复调用');
     return;
   }
   gameState.isStartingRound = true;
   
-  // 重置胡牌处理标志
   gameState.isHandlingHu = false;
-  
-  // 重置流局处理标志
   gameState.isLiuJuHandled = false;
-  
-  // 重置消息关闭标志
   gameState.isClosingMessage = false;
   
-  // 清除飘分倒计时定时器，防止竞态问题
   if (piaoCountdownTimer) {
     clearInterval(piaoCountdownTimer);
     piaoCountdownTimer = null;
   }
+  
+  document.querySelectorAll('[style*="z-index: 9999"], [style*="z-index: 10000"], [style*="z-index:10000"], [style*="z-index:9999"]').forEach(el => {
+    if (el.parentNode) el.remove();
+  });
+  
+  clearCaches();
   
   gameState.roundNumber++;
   
@@ -2150,10 +2168,16 @@ function renderMyHand() {
       cardEl.onclick = function() { selectCard(cards[0].index); };
       
       function startDrag(clientX, clientY) {
-        // 必须等待摸牌动画完成后才能拖拽出牌
-        if (!gameState.isMyTurn || gameState.isDrawing) {
-          console.log('不能拖拽出牌: isMyTurn=', gameState.isMyTurn, 'isDrawing=', gameState.isDrawing);
+        if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
           return;
+        }
+        if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
+          logWarn('DRAG', 'isMyTurn=false但currentPlayerIndex=1，允许拖拽并修复状态');
+          gameState.isMyTurn = true;
+        }
+        if (gameState.isDrawing) {
+          logWarn('DRAG', 'isDrawing=true时尝试拖拽，强制完成摸牌');
+          gameState.isDrawing = false;
         }
         
         const cardIndex = cards[0].index;
@@ -2307,6 +2331,15 @@ function createCardImageElement(card) {
 }
 
 function startTurn() {
+  try {
+    _startTurn();
+  } catch(e) {
+    logError('TURN', 'startTurn异常:', e.message, e.stack);
+    try { moveToNextPlayer(); } catch(e2) {}
+  }
+}
+
+function _startTurn() {
   recordActivity();
   if (gameState.isDealing) {
     logDebug('TURN', '发牌中，跳过startTurn');
@@ -2340,7 +2373,11 @@ function startTurn() {
       tingBadge.classList.add('hidden');
       zimoBadge.classList.add('hidden');
       
-      animateDrawCard(gameState.currentPlayerIndex, drawnCard, () => {
+      let drawCallbackFired = false;
+      
+      const drawCallback = () => {
+        if (drawCallbackFired) return;
+        drawCallbackFired = true;
         currentPlayer.hand.push(drawnCard);
         currentPlayer.hand = sortHand(currentPlayer.hand);
         renderMyHand();
@@ -2365,7 +2402,16 @@ function startTurn() {
         
         startCountdown();
         updateActionButtons();
-      });
+      };
+      
+      animateDrawCard(gameState.currentPlayerIndex, drawnCard, drawCallback);
+      
+      setTimeout(() => {
+        if (!drawCallbackFired) {
+          logError('DRAW', '摸牌动画回调超时未触发(3s)，强制完成摸牌');
+          drawCallback();
+        }
+      }, 3000);
     } else {
       if (isDealerFirstTurn) {
         gameState.hasDealerPlayedFirstTurn = true;
@@ -2548,8 +2594,27 @@ function updateCountdownUI() {
 }
 
 function handleTimeout() {
+  try {
+    _handleTimeout();
+  } catch(e) {
+    logError('TIMEOUT', 'handleTimeout异常:', e.message, e.stack);
+    try {
+      gameState.isDrawing = false;
+      gameState.isMyTurn = false;
+      gameState.waitingForResponse = false;
+      const me = gameState.players[1];
+      if (me && me.hand.length > 0) {
+        moveToNextPlayer();
+      }
+    } catch(e2) {
+      logError('TIMEOUT', 'handleTimeout恢复失败:', e2.message);
+    }
+  }
+}
+
+function _handleTimeout() {
   if (autoTestRunning) {
-    autoTestLog('handleTimeout() called! isDealing=' + gameState.isDealing + ' isMyTurn=' + gameState.isMyTurn + ' waiting=' + gameState.waitingForResponse);
+    autoTestLog('handleTimeout() called! isDealing=' + gameState.isDealing + ' isMyTurn=' + gameState.isMyTurn + ' waiting=' + gameState.waitingForResponse + ' isDrawing=' + gameState.isDrawing);
   }
   if (gameState.isDealing) {
     return;
@@ -2559,10 +2624,49 @@ function handleTimeout() {
   
   if (gameState.waitingForResponse) {
     passAction();
-  } else if (gameState.isMyTurn && !gameState.isDrawing) {
+  } else if (gameState.isMyTurn) {
+    if (gameState.isDrawing) {
+      logWarn('TIMEOUT', '超时时isDrawing=true，强制完成摸牌');
+      gameState.isDrawing = false;
+    }
+    
     const me = gameState.players[1];
     
     if (me.hand.length > 0) {
+      if (gameState.lastDrawnCard) {
+        const lastDrawnIndex = me.hand.findIndex(c => c.id === gameState.lastDrawnCard.id);
+        if (lastDrawnIndex !== -1) {
+          discardCard(1, lastDrawnIndex);
+          return;
+        }
+      }
+      discardCard(1, me.hand.length - 1);
+    }
+  } else {
+    logWarn('TIMEOUT', '超时但isMyTurn=false，检查是否需要兜底处理');
+    
+    if (gameState.isDrawing) {
+      logWarn('TIMEOUT', 'isDrawing卡住，强制完成摸牌');
+      gameState.isDrawing = false;
+    }
+    
+    const me = gameState.players[1];
+    if (gameState.currentPlayerIndex === 1 && me.hand.length > 0) {
+      logWarn('TIMEOUT', '当前玩家是人类但isMyTurn=false，强制出牌');
+      gameState.isMyTurn = true;
+      if (gameState.lastDrawnCard) {
+        const lastDrawnIndex = me.hand.findIndex(c => c.id === gameState.lastDrawnCard.id);
+        if (lastDrawnIndex !== -1) {
+          discardCard(1, lastDrawnIndex);
+          return;
+        }
+      }
+      discardCard(1, me.hand.length - 1);
+    } else if (me.hand.length > 0 && !gameState.isHandlingHu && !gameState.isLiuJuHandled) {
+      logWarn('TIMEOUT', '游戏可能卡死，尝试恢复：强制人类玩家出牌');
+      gameState.isMyTurn = true;
+      gameState.isDrawing = false;
+      gameState.waitingForResponse = false;
       if (gameState.lastDrawnCard) {
         const lastDrawnIndex = me.hand.findIndex(c => c.id === gameState.lastDrawnCard.id);
         if (lastDrawnIndex !== -1) {
@@ -2576,6 +2680,15 @@ function handleTimeout() {
 }
 
 function processAITurn() {
+  try {
+    _processAITurn();
+  } catch(e) {
+    logError('AI', 'processAITurn异常:', e.message, e.stack);
+    try { moveToNextPlayer(); } catch(e2) {}
+  }
+}
+
+function _processAITurn() {
   if (gameState.isDealing) {
     console.log('发牌中，跳过AI操作');
     return;
@@ -2585,7 +2698,6 @@ function processAITurn() {
     return;
   }
   
-  // 如果已经处理了胡牌，不再继续操作
   if (gameState.isHandlingHu) {
     return;
   }
@@ -4394,7 +4506,28 @@ function discardCard(playerIndex, cardIndex) {
   clearCaches();
   
   const player = gameState.players[playerIndex];
+  if (!player) {
+    logError('DISCARD', '无效的玩家索引:', playerIndex);
+    return;
+  }
+  
+  if (cardIndex < 0 || cardIndex >= player.hand.length) {
+    logError('DISCARD', '无效的牌索引:', cardIndex, '手牌数:', player.hand.length);
+    if (player.hand.length > 0) {
+      cardIndex = player.hand.length - 1;
+    } else {
+      logError('DISCARD', '手牌为空，无法出牌');
+      moveToNextPlayer();
+      return;
+    }
+  }
+  
   const card = player.hand[cardIndex];
+  if (!card) {
+    logError('DISCARD', '牌不存在，索引:', cardIndex);
+    moveToNextPlayer();
+    return;
+  }
   
   console.log('出牌:', card.character);
   
@@ -4445,52 +4578,80 @@ function animateDiscardCard(playerIndex, card) {
     return;
   }
   
-  const playerPos = getPlayerPosition(playerIndex);
-  const startX = playerPos.x;
-  const startY = playerPos.y;
+  let flyingCard = null;
+  const timerIds = [];
   
-  const centerPos = getCenterPosition();
-  const targetX = centerPos.x;
-  const targetY = centerPos.y;
-  
-  const flyingCard = document.createElement('div');
-  flyingCard.style.position = 'fixed';
-  flyingCard.style.left = startX + 'px';
-  flyingCard.style.top = startY + 'px';
-  flyingCard.style.width = '35px';
-  flyingCard.style.height = '147px';
-  flyingCard.style.borderRadius = '4px';
-  flyingCard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
-  flyingCard.style.zIndex = '9999';
-  flyingCard.style.pointerEvents = 'none';
-  
-  if (playerIndex === 1) {
-    const pinyin = CARD_PINYIN[card.character];
-    flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
-    flyingCard.style.backgroundSize = 'contain';
-    flyingCard.style.backgroundPosition = 'center';
-    flyingCard.style.backgroundRepeat = 'no-repeat';
-    flyingCard.style.backgroundColor = 'transparent';
-    flyingCard.style.border = 'none';
-  } else {
-    flyingCard.style.backgroundImage = `url('images/mcard.png')`;
-    flyingCard.style.backgroundSize = 'contain';
-    flyingCard.style.backgroundPosition = 'center';
-    flyingCard.style.backgroundRepeat = 'no-repeat';
+  function cleanup() {
+    for (const id of timerIds) clearTimeout(id);
+    timerIds.length = 0;
+    if (flyingCard) {
+      if (flyingCard.parentNode) flyingCard.remove();
+      flyingCard = null;
+    }
   }
   
-  document.body.appendChild(flyingCard);
-  
-  setTimeout(() => {
-    flyingCard.style.transition = 'all 0.3s ease-out';
-    flyingCard.style.left = targetX + 'px';
-    flyingCard.style.top = targetY + 'px';
-  }, 20);
-  
-  setTimeout(() => {
-    flyingCard.remove();
+  try {
+    const playerPos = getPlayerPosition(playerIndex);
+    if (!playerPos || typeof playerPos.x !== 'number') {
+      showDiscardedCard(playerIndex, card);
+      return;
+    }
+    const startX = playerPos.x;
+    const startY = playerPos.y;
+    
+    const centerPos = getCenterPosition();
+    if (!centerPos || typeof centerPos.x !== 'number') {
+      showDiscardedCard(playerIndex, card);
+      return;
+    }
+    const targetX = centerPos.x;
+    const targetY = centerPos.y;
+    
+    flyingCard = document.createElement('div');
+    flyingCard.style.position = 'fixed';
+    flyingCard.style.left = startX + 'px';
+    flyingCard.style.top = startY + 'px';
+    flyingCard.style.width = '35px';
+    flyingCard.style.height = '147px';
+    flyingCard.style.borderRadius = '4px';
+    flyingCard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
+    flyingCard.style.zIndex = '9999';
+    flyingCard.style.pointerEvents = 'none';
+    
+    if (playerIndex === 1) {
+      const pinyin = CARD_PINYIN[card.character];
+      flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
+      flyingCard.style.backgroundSize = 'contain';
+      flyingCard.style.backgroundPosition = 'center';
+      flyingCard.style.backgroundRepeat = 'no-repeat';
+      flyingCard.style.backgroundColor = 'transparent';
+      flyingCard.style.border = 'none';
+    } else {
+      flyingCard.style.backgroundImage = `url('images/mcard.png')`;
+      flyingCard.style.backgroundSize = 'contain';
+      flyingCard.style.backgroundPosition = 'center';
+      flyingCard.style.backgroundRepeat = 'no-repeat';
+    }
+    
+    document.body.appendChild(flyingCard);
+    
+    timerIds.push(setTimeout(() => {
+      if (flyingCard && flyingCard.parentNode) {
+        flyingCard.style.transition = 'all 0.3s ease-out';
+        flyingCard.style.left = targetX + 'px';
+        flyingCard.style.top = targetY + 'px';
+      }
+    }, 20));
+    
+    timerIds.push(setTimeout(() => {
+      cleanup();
+      showDiscardedCard(playerIndex, card);
+    }, 350));
+  } catch(e) {
+    logError('ANIM', 'animateDiscardCard异常:', e.message);
+    cleanup();
     showDiscardedCard(playerIndex, card);
-  }, 350);
+  }
 }
 
 function animateMeldCards(playerIndex, cards, meldType, callback) {
@@ -4500,159 +4661,177 @@ function animateMeldCards(playerIndex, cards, meldType, callback) {
     return;
   }
   
-  const centerPos = getCenterPosition();
-  const discardX = centerPos.x;
-  const discardY = centerPos.y;
-  
-  const actionButtons = document.getElementById('actionButtons');
-  const actionRect = actionButtons ? actionButtons.getBoundingClientRect() : { left: window.innerWidth / 2 - 100, top: window.innerHeight - 100, width: 200, height: 44 };
-  
-  const meldCenterX = actionRect.left + actionRect.width / 2;
-  const meldCenterY = actionRect.top - 30;
-  
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const centerX = w / 2;
-  const centerY = h / 2;
-  
-  let targetX, targetY;
-  if (playerIndex === 0) {
-    targetX = 10;
-    targetY = centerY + 50;
-  } else if (playerIndex === 1) {
-    targetX = centerX - 100;
-    targetY = h - 60;
-  } else {
-    targetX = w - 110;
-    targetY = centerY + 50;
-  }
-  
-  const flyingCards = [];
-  const cardWidth = 30;
-  const cardHeight = 42;
-  const gap = 2;
-  
-  const meldContainer = document.createElement('div');
-  meldContainer.style.position = 'fixed';
-  meldContainer.style.display = 'flex';
-  meldContainer.style.gap = gap + 'px';
-  meldContainer.style.zIndex = '10000';
-  meldContainer.style.pointerEvents = 'none';
-  
-  cards.forEach((card, index) => {
-    const flyingCard = document.createElement('div');
-    flyingCard.style.width = cardWidth + 'px';
-    flyingCard.style.height = cardHeight + 'px';
-    flyingCard.style.borderRadius = '4px';
-    flyingCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
-    flyingCard.style.display = 'flex';
-    flyingCard.style.alignItems = 'center';
-    flyingCard.style.justifyContent = 'center';
-    flyingCard.style.fontSize = '16px';
-    flyingCard.style.fontWeight = 'bold';
-    
-    const pinyin = CARD_PINYIN[card.character];
-    flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
-    flyingCard.style.backgroundSize = 'contain';
-    flyingCard.style.backgroundPosition = 'center';
-    flyingCard.style.backgroundRepeat = 'no-repeat';
-    flyingCard.style.backgroundColor = 'transparent';
-    flyingCard.style.border = '2px solid';
-    
-    if (card.character === '上' || card.character === '福') {
-      flyingCard.style.borderColor = '#FFD700';
-    } else {
-      flyingCard.style.borderColor = '#333';
-    }
-    
-    let startX, startY;
-    if (index === 0) {
-      startX = discardX;
-      startY = discardY;
-    } else {
-      if (playerIndex === 0) {
-        startX = 60;
-        startY = centerY - 73;
-      } else if (playerIndex === 1) {
-        startX = centerX - 17;
-        startY = window.innerHeight - 180;
-      } else {
-        startX = window.innerWidth - 95;
-        startY = centerY - 73;
-      }
-    }
-    
-    const singleFlyingCard = document.createElement('div');
-    singleFlyingCard.style.position = 'fixed';
-    singleFlyingCard.style.width = cardWidth + 'px';
-    singleFlyingCard.style.height = cardHeight + 'px';
-    singleFlyingCard.style.borderRadius = '4px';
-    singleFlyingCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
-    singleFlyingCard.style.zIndex = '10000';
-    singleFlyingCard.style.pointerEvents = 'none';
-    singleFlyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
-    singleFlyingCard.style.backgroundSize = 'contain';
-    singleFlyingCard.style.backgroundPosition = 'center';
-    singleFlyingCard.style.backgroundRepeat = 'no-repeat';
-    singleFlyingCard.style.backgroundColor = 'transparent';
-    singleFlyingCard.style.border = '2px solid';
-    
-    if (card.character === '上' || card.character === '福') {
-      singleFlyingCard.style.borderColor = '#FFD700';
-    } else {
-      singleFlyingCard.style.borderColor = '#333';
-    }
-    
-    singleFlyingCard.style.left = startX + 'px';
-    singleFlyingCard.style.top = startY + 'px';
-    
-    document.body.appendChild(singleFlyingCard);
-    flyingCards.push({ single: singleFlyingCard, meld: flyingCard, card });
-    meldContainer.appendChild(flyingCard);
-  });
-  
-  const playedCards = document.getElementById('playedCards');
-  if (playedCards) playedCards.innerHTML = '';
-  
-  setTimeout(() => {
-    flyingCards.forEach((item, index) => {
-      item.single.style.transition = 'all 0.4s ease-out';
-      item.single.style.left = (meldCenterX - cardWidth / 2 + (index - Math.floor(cards.length / 2)) * (cardWidth + gap)) + 'px';
-      item.single.style.top = (meldCenterY - cardHeight / 2) + 'px';
-    });
-  }, 20);
-  
-  setTimeout(() => {
-    flyingCards.forEach(item => item.single.remove());
-    
-    meldContainer.style.left = (meldCenterX - (cards.length * cardWidth + (cards.length - 1) * gap) / 2) + 'px';
-    meldContainer.style.top = (meldCenterY - cardHeight / 2) + 'px';
-    meldContainer.style.transition = 'all 0.3s ease-out';
-    
-    document.body.appendChild(meldContainer);
-  }, 500);
-  
   let callbackCalled = false;
-  const safeCallback = () => {
+  let flyingCards = [];
+  let meldContainer = null;
+  const timerIds = [];
+  
+  function safeCallback() {
     if (callbackCalled) return;
     callbackCalled = true;
+    cleanup();
     if (callback) callback();
-  };
+  }
   
-  setTimeout(() => {
-    meldContainer.style.transition = 'all 0.5s ease-in-out';
-    meldContainer.style.left = targetX + 'px';
-    meldContainer.style.top = targetY + 'px';
-  }, 900);
+  function cleanup() {
+    for (const id of timerIds) clearTimeout(id);
+    timerIds.length = 0;
+    for (const item of flyingCards) {
+      if (item.single && item.single.parentNode) item.single.remove();
+    }
+    flyingCards = [];
+    if (meldContainer) {
+      if (meldContainer.parentNode) meldContainer.remove();
+      meldContainer = null;
+    }
+  }
   
-  setTimeout(() => {
-    meldContainer.remove();
+  try {
+    const centerPos = getCenterPosition();
+    if (!centerPos || typeof centerPos.x !== 'number' || typeof centerPos.y !== 'number') {
+      safeCallback();
+      return;
+    }
+    const discardX = centerPos.x;
+    const discardY = centerPos.y;
+    
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const centerX = w / 2;
+    const centerY = h / 2;
+    
+    const actionButtons = document.getElementById('actionButtons');
+    const actionRect = actionButtons ? actionButtons.getBoundingClientRect() : null;
+    
+    let meldCenterX, meldCenterY;
+    if (actionRect && actionRect.width > 10 && actionRect.height > 10 && actionRect.top > 0) {
+      meldCenterX = actionRect.left + actionRect.width / 2;
+      meldCenterY = actionRect.top - 30;
+    } else {
+      meldCenterX = w / 2;
+      meldCenterY = h * 0.65;
+    }
+    
+    let targetX, targetY;
+    if (playerIndex === 0) {
+      targetX = 10;
+      targetY = centerY + 50;
+    } else if (playerIndex === 1) {
+      targetX = centerX - 100;
+      targetY = h - 60;
+    } else {
+      targetX = w - 110;
+      targetY = centerY + 50;
+    }
+    
+    const cardWidth = 30;
+    const cardHeight = 42;
+    const gap = 2;
+    
+    meldContainer = document.createElement('div');
+    meldContainer.style.position = 'fixed';
+    meldContainer.style.display = 'flex';
+    meldContainer.style.gap = gap + 'px';
+    meldContainer.style.zIndex = '10000';
+    meldContainer.style.pointerEvents = 'none';
+    
+    cards.forEach((card, index) => {
+      const pinyin = CARD_PINYIN[card.character];
+      const borderColor = (card.character === '上' || card.character === '福') ? '#FFD700' : '#333';
+      
+      const flyingCard = document.createElement('div');
+      flyingCard.style.width = cardWidth + 'px';
+      flyingCard.style.height = cardHeight + 'px';
+      flyingCard.style.borderRadius = '4px';
+      flyingCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
+      flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
+      flyingCard.style.backgroundSize = 'contain';
+      flyingCard.style.backgroundPosition = 'center';
+      flyingCard.style.backgroundRepeat = 'no-repeat';
+      flyingCard.style.backgroundColor = 'transparent';
+      flyingCard.style.border = '2px solid ' + borderColor;
+      
+      let startX, startY;
+      if (index === 0) {
+        startX = discardX;
+        startY = discardY;
+      } else {
+        if (playerIndex === 0) {
+          startX = 60;
+          startY = centerY - 73;
+        } else if (playerIndex === 1) {
+          startX = centerX - 17;
+          startY = h - 180;
+        } else {
+          startX = w - 95;
+          startY = centerY - 73;
+        }
+      }
+      
+      const singleFlyingCard = document.createElement('div');
+      singleFlyingCard.style.position = 'fixed';
+      singleFlyingCard.style.width = cardWidth + 'px';
+      singleFlyingCard.style.height = cardHeight + 'px';
+      singleFlyingCard.style.borderRadius = '4px';
+      singleFlyingCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
+      singleFlyingCard.style.zIndex = '10000';
+      singleFlyingCard.style.pointerEvents = 'none';
+      singleFlyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
+      singleFlyingCard.style.backgroundSize = 'contain';
+      singleFlyingCard.style.backgroundPosition = 'center';
+      singleFlyingCard.style.backgroundRepeat = 'no-repeat';
+      singleFlyingCard.style.backgroundColor = 'transparent';
+      singleFlyingCard.style.border = '2px solid ' + borderColor;
+      singleFlyingCard.style.left = startX + 'px';
+      singleFlyingCard.style.top = startY + 'px';
+      
+      document.body.appendChild(singleFlyingCard);
+      flyingCards.push({ single: singleFlyingCard, meld: flyingCard });
+      meldContainer.appendChild(flyingCard);
+    });
+    
+    const playedCards = document.getElementById('playedCards');
+    if (playedCards) playedCards.innerHTML = '';
+    
+    timerIds.push(setTimeout(() => {
+      for (let i = 0; i < flyingCards.length; i++) {
+        const item = flyingCards[i];
+        if (item.single && item.single.parentNode) {
+          item.single.style.transition = 'all 0.4s ease-out';
+          item.single.style.left = (meldCenterX - cardWidth / 2 + (i - Math.floor(cards.length / 2)) * (cardWidth + gap)) + 'px';
+          item.single.style.top = (meldCenterY - cardHeight / 2) + 'px';
+        }
+      }
+    }, 20));
+    
+    timerIds.push(setTimeout(() => {
+      for (const item of flyingCards) {
+        if (item.single && item.single.parentNode) item.single.remove();
+      }
+      
+      if (meldContainer) {
+        meldContainer.style.left = (meldCenterX - (cards.length * cardWidth + (cards.length - 1) * gap) / 2) + 'px';
+        meldContainer.style.top = (meldCenterY - cardHeight / 2) + 'px';
+        meldContainer.style.transition = 'all 0.3s ease-out';
+        document.body.appendChild(meldContainer);
+      }
+    }, 500));
+    
+    timerIds.push(setTimeout(() => {
+      if (meldContainer && meldContainer.parentNode) {
+        meldContainer.style.transition = 'all 0.5s ease-in-out';
+        meldContainer.style.left = targetX + 'px';
+        meldContainer.style.top = targetY + 'px';
+      }
+    }, 900));
+    
+    timerIds.push(setTimeout(() => {
+      safeCallback();
+    }, 1500));
+  } catch(e) {
+    logError('ANIM', 'animateMeldCards异常:', e.message);
     safeCallback();
-  }, 1500);
-  
-  setTimeout(() => {
-    safeCallback();
-  }, 3000);
+  }
 }
 
 function animateDrawCard(playerIndex, card, callback) {
@@ -4662,78 +4841,104 @@ function animateDrawCard(playerIndex, card, callback) {
     return;
   }
   
-  const deckPos = getDeckPosition();
-  const startX = deckPos.x;
-  const startY = deckPos.y;
-  
-  const playerPos = getPlayerPosition(playerIndex);
-  const targetX = playerPos.x;
-  const targetY = playerPos.y;
-  
-  const flyingCard = document.createElement('div');
-  flyingCard.style.position = 'fixed';
-  flyingCard.style.left = startX + 'px';
-  flyingCard.style.top = startY + 'px';
-  flyingCard.style.width = '35px';
-  flyingCard.style.height = '147px';
-  flyingCard.style.borderRadius = '4px';
-  flyingCard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
-  flyingCard.style.zIndex = '9999';
-  flyingCard.style.pointerEvents = 'none';
-  
-  const pinyin = CARD_PINYIN[card.character];
-  
-  const moLabel = document.createElement('div');
-  moLabel.textContent = '摸';
-  moLabel.style.position = 'absolute';
-  moLabel.style.top = '50%';
-  moLabel.style.left = '50%';
-  moLabel.style.transform = 'translate(-50%, -50%)';
-  moLabel.style.fontSize = '20px';
-  moLabel.style.fontWeight = 'bold';
-  moLabel.style.color = '#ffd700';
-  moLabel.style.textShadow = '0 0 10px rgba(255,215,0,0.8), 0 0 20px rgba(255,0,0,0.6)';
-  moLabel.style.background = 'rgba(0,0,0,0.7)';
-  moLabel.style.padding = '5px 10px';
-  moLabel.style.borderRadius = '8px';
-  moLabel.style.border = '2px solid #ffd700';
-  moLabel.style.zIndex = '10000';
-  
-  if (playerIndex === 1) {
-    flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
-    flyingCard.appendChild(moLabel);
-  } else {
-    flyingCard.style.backgroundImage = `url('images/mcard.png')`;
-  }
-  flyingCard.style.backgroundSize = 'contain';
-  flyingCard.style.backgroundPosition = 'center';
-  flyingCard.style.backgroundRepeat = 'no-repeat';
-  flyingCard.style.backgroundColor = 'transparent';
-  flyingCard.style.border = 'none';
-  
-  document.body.appendChild(flyingCard);
-  
   let callbackCalled = false;
-  const safeCallback = () => {
+  let flyingCard = null;
+  const timerIds = [];
+  
+  function safeCallback() {
     if (callbackCalled) return;
     callbackCalled = true;
+    cleanup();
     if (callback) callback();
-  };
+  }
   
-  setTimeout(() => {
-    flyingCard.style.transition = 'all 1s ease-out';
-    flyingCard.style.left = targetX + 'px';
-    flyingCard.style.top = targetY + 'px';
-  }, 1000);
+  function cleanup() {
+    for (const id of timerIds) clearTimeout(id);
+    timerIds.length = 0;
+    if (flyingCard) {
+      if (flyingCard.parentNode) flyingCard.remove();
+      flyingCard = null;
+    }
+  }
   
-  setTimeout(() => {
-    flyingCard.remove();
+  try {
+    const deckPos = getDeckPosition();
+    if (!deckPos || typeof deckPos.x !== 'number') {
+      safeCallback();
+      return;
+    }
+    const startX = deckPos.x;
+    const startY = deckPos.y;
+    
+    const playerPos = getPlayerPosition(playerIndex);
+    if (!playerPos || typeof playerPos.x !== 'number') {
+      safeCallback();
+      return;
+    }
+    const targetX = playerPos.x;
+    const targetY = playerPos.y;
+    
+    flyingCard = document.createElement('div');
+    flyingCard.style.position = 'fixed';
+    flyingCard.style.left = startX + 'px';
+    flyingCard.style.top = startY + 'px';
+    flyingCard.style.width = '35px';
+    flyingCard.style.height = '147px';
+    flyingCard.style.borderRadius = '4px';
+    flyingCard.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
+    flyingCard.style.zIndex = '9999';
+    flyingCard.style.pointerEvents = 'none';
+    
+    const pinyin = CARD_PINYIN[card.character];
+    
+    if (playerIndex === 1) {
+      flyingCard.style.backgroundImage = `url('images/${pinyin}.png')`;
+      flyingCard.style.backgroundSize = 'contain';
+      flyingCard.style.backgroundPosition = 'center';
+      flyingCard.style.backgroundRepeat = 'no-repeat';
+      flyingCard.style.backgroundColor = 'transparent';
+      flyingCard.style.border = 'none';
+      
+      const moLabel = document.createElement('div');
+      moLabel.textContent = '摸';
+      moLabel.style.position = 'absolute';
+      moLabel.style.top = '50%';
+      moLabel.style.left = '50%';
+      moLabel.style.transform = 'translate(-50%, -50%)';
+      moLabel.style.fontSize = '20px';
+      moLabel.style.fontWeight = 'bold';
+      moLabel.style.color = '#ffd700';
+      moLabel.style.textShadow = '0 0 10px rgba(255,215,0,0.8), 0 0 20px rgba(255,0,0,0.6)';
+      moLabel.style.background = 'rgba(0,0,0,0.7)';
+      moLabel.style.padding = '5px 10px';
+      moLabel.style.borderRadius = '8px';
+      moLabel.style.border = '2px solid #ffd700';
+      moLabel.style.zIndex = '10000';
+      flyingCard.appendChild(moLabel);
+    } else {
+      flyingCard.style.backgroundImage = `url('images/mcard.png')`;
+      flyingCard.style.backgroundSize = 'contain';
+      flyingCard.style.backgroundPosition = 'center';
+      flyingCard.style.backgroundRepeat = 'no-repeat';
+    }
+    
+    document.body.appendChild(flyingCard);
+    
+    timerIds.push(setTimeout(() => {
+      if (flyingCard && flyingCard.parentNode) {
+        flyingCard.style.transition = 'all 1s ease-out';
+        flyingCard.style.left = targetX + 'px';
+        flyingCard.style.top = targetY + 'px';
+      }
+    }, 1000));
+    
+    timerIds.push(setTimeout(() => {
+      safeCallback();
+    }, 2050));
+  } catch(e) {
+    logError('ANIM', 'animateDrawCard异常:', e.message);
     safeCallback();
-  }, 2050);
-  
-  setTimeout(() => {
-    safeCallback();
-  }, 3500);
+  }
 }
 
 function showDiscardedCard(playerIndex, card) {
@@ -4798,6 +5003,15 @@ function createSmallCardElement(card) {
 }
 
 function checkResponses() {
+  try {
+    _checkResponses();
+  } catch(e) {
+    logError('RESP', 'checkResponses异常:', e.message, e.stack);
+    try { moveToNextPlayer(); } catch(e2) {}
+  }
+}
+
+function _checkResponses() {
   const card = gameState.lastDiscardedCard;
   if (!card) {
     console.log('没有出牌');
@@ -5793,7 +6007,7 @@ function checkQingHuRemainingCards(hand) {
 
 function checkHalfKao(hand, melds, sentence) {
   const sentenceCards = hand.filter(c => c.sentence === sentence);
-  if (sentenceCards.length === 2) {
+  if (sentenceCards.length === 2 && sentenceCards[0].position !== sentenceCards[1].position) {
     return true;
   }
   
@@ -6119,15 +6333,18 @@ function performChi(playerIndex) {
     gameState.isMyTurn = false;
   }
   
-  animateMeldCards(playerIndex, chiCards, 'chi', () => {
+  let chiAnimDone = false;
+  const chiAnimCallback = () => {
+    if (chiAnimDone) return;
+    chiAnimDone = true;
     console.log('吃牌后手牌数:', player.hand.length);
     console.log('组合牌数量:', player.melds.length);
     
     if (playerIndex === 1) {
       const tingBadge = document.getElementById('tingBadge');
       const zimoBadge = document.getElementById('zimoBadge');
-      tingBadge.classList.add('hidden');
-      zimoBadge.classList.add('hidden');
+      if (tingBadge) tingBadge.classList.add('hidden');
+      if (zimoBadge) zimoBadge.classList.add('hidden');
     }
     
     updateUI();
@@ -6139,7 +6356,16 @@ function performChi(playerIndex) {
     } else {
       setTimeout(() => processAITurn(), 800 + Math.random() * 500);
     }
-  });
+  };
+  
+  animateMeldCards(playerIndex, chiCards, 'chi', chiAnimCallback);
+  
+  setTimeout(() => {
+    if (!chiAnimDone) {
+      logError('CHI', '吃牌动画回调超时(4s)，强制继续');
+      chiAnimCallback();
+    }
+  }, 4000);
 }
 
 function performPeng(playerIndex) {
@@ -6191,14 +6417,17 @@ function performPeng(playerIndex) {
     gameState.isMyTurn = false;
   }
   
-  animateMeldCards(playerIndex, pengCards, 'peng', () => {
+  let pengAnimDone = false;
+  const pengAnimCallback = () => {
+    if (pengAnimDone) return;
+    pengAnimDone = true;
     console.log('碰牌后手牌数:', player.hand.length);
     
     if (playerIndex === 1) {
       const tingBadge = document.getElementById('tingBadge');
       const zimoBadge = document.getElementById('zimoBadge');
-      tingBadge.classList.add('hidden');
-      zimoBadge.classList.add('hidden');
+      if (tingBadge) tingBadge.classList.add('hidden');
+      if (zimoBadge) zimoBadge.classList.add('hidden');
     }
     
     updateUI();
@@ -6210,7 +6439,16 @@ function performPeng(playerIndex) {
     } else {
       setTimeout(() => processAITurn(), 800 + Math.random() * 500);
     }
-  });
+  };
+  
+  animateMeldCards(playerIndex, pengCards, 'peng', pengAnimCallback);
+  
+  setTimeout(() => {
+    if (!pengAnimDone) {
+      logError('PENG', '碰牌动画回调超时(4s)，强制继续');
+      pengAnimCallback();
+    }
+  }, 4000);
 }
 
 function performZhao(playerIndex, char = null) {
@@ -6279,12 +6517,24 @@ function performZhao(playerIndex, char = null) {
     gameState.isMyTurn = false;
   }
   
-  logGame('ZHAO', '开始animateMeldCards动画，牌:', zhaoCards.map(c => c.character).join(''));
-  animateMeldCards(playerIndex, zhaoCards, 'zhao', () => {
+  let zhaoAnimDone = false;
+  const zhaoAnimCallback = () => {
+    if (zhaoAnimDone) return;
+    zhaoAnimDone = true;
     logGame('ZHAO', '招牌动画完成，渲染组合区，开始摸牌');
     updateUI();
     startZhaoDraw(playerIndex, player);
-  });
+  };
+  
+  logGame('ZHAO', '开始animateMeldCards动画，牌:', zhaoCards.map(c => c.character).join(''));
+  animateMeldCards(playerIndex, zhaoCards, 'zhao', zhaoAnimCallback);
+  
+  setTimeout(() => {
+    if (!zhaoAnimDone) {
+      logError('ZHAO', '招牌动画回调超时(4s)，强制继续');
+      zhaoAnimCallback();
+    }
+  }, 4000);
 }
 
 function startZhaoDraw(playerIndex, player) {
@@ -6385,6 +6635,23 @@ function finishZhao(playerIndex, player) {
 }
 
 function handleHu(playerIndex, method) {
+  try {
+    _handleHu(playerIndex, method);
+  } catch(e) {
+    logError('HU', 'handleHu异常:', e.message, e.stack);
+    gameState.isHandlingHu = true;
+    try {
+      stopCountdown();
+      gameState.isMyTurn = false;
+      gameState.waitingForResponse = false;
+      setTimeout(() => { startRound(); }, 2000);
+    } catch(e2) {
+      logError('HU', 'handleHu恢复失败:', e2.message);
+    }
+  }
+}
+
+function _handleHu(playerIndex, method) {
   if (gameState.isDealing) return;
   if (gameState.isHandlingHu) {
     console.log('handleHu: 已经在处理胡牌，跳过重复调用');
@@ -7087,10 +7354,19 @@ function huAction() {
 }
 
 function discardAction() {
-  // 必须等待摸牌动画完成后才能出牌
-  if (!gameState.isMyTurn || gameState.selectedCardIndex < 0 || gameState.isDrawing) {
-    console.log('不能出牌: isMyTurn=', gameState.isMyTurn, 'selectedCardIndex=', gameState.selectedCardIndex, 'isDrawing=', gameState.isDrawing);
+  if (gameState.selectedCardIndex < 0) {
     return;
+  }
+  if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
+    return;
+  }
+  if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
+    logWarn('DISCARD', 'isMyTurn=false但currentPlayerIndex=1，允许出牌并修复状态');
+    gameState.isMyTurn = true;
+  }
+  if (gameState.isDrawing) {
+    logWarn('DISCARD', 'isDrawing=true时尝试出牌，强制完成摸牌');
+    gameState.isDrawing = false;
   }
   
   const me = gameState.players[1];
@@ -7111,10 +7387,17 @@ function discardAction() {
 }
 
 function selectCard(index) {
-  // 必须等待摸牌动画完成后才能选择牌
-  if (!gameState.isMyTurn || gameState.isDrawing) {
-    console.log('不能选择牌: isMyTurn=', gameState.isMyTurn, 'isDrawing=', gameState.isDrawing);
+  if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
+    console.log('不能选择牌: isMyTurn=', gameState.isMyTurn, 'currentPlayerIndex=', gameState.currentPlayerIndex);
     return;
+  }
+  if (gameState.isDrawing) {
+    logWarn('SELECT', 'isDrawing=true时尝试选牌，强制完成摸牌');
+    gameState.isDrawing = false;
+  }
+  if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
+    logWarn('SELECT', 'isMyTurn=false但currentPlayerIndex=1，修复状态');
+    gameState.isMyTurn = true;
   }
   
   gameState.selectedCardIndex = index;
@@ -7380,9 +7663,9 @@ function updatePlayerArea(playerIndex, prefix) {
     updateMyHand();
     
     const tingBadge = document.getElementById('tingBadge');
-    const playerWithMelds = { ...player, melds: player.melds || [] };
-    const tingResult = checkTing(playerWithMelds);
-    tingBadge.classList.toggle('hidden', !tingResult.isTing);
+    if (tingBadge) {
+      tingBadge.classList.toggle('hidden', !player.isTing);
+    }
     
     const huBadge = document.getElementById('myHuBadge');
     const displayHuCount = calculateDisplayHuCount(player);
@@ -7398,36 +7681,7 @@ function updatePlayerArea(playerIndex, prefix) {
 }
 
 function calculateDisplayHuCount(player) {
-  let hu = 0;
-  
-  for (const meld of player.melds) {
-    if (meld.huValue) {
-      hu += meld.huValue;
-    }
-  }
-  
-  const hand = player.hand;
-  
-  const shangCount = hand.filter(c => c.character === '上').length;
-  const fuCount = hand.filter(c => c.character === '福').length;
-  hu += (shangCount + fuCount) * 4;
-  
-  const counts = {};
-  for (const card of hand) {
-    if (card.character !== '上' && card.character !== '福') {
-      counts[card.character] = (counts[card.character] || 0) + 1;
-    }
-  }
-  
-  for (const count of Object.values(counts)) {
-    if (count === 4) {
-      hu += 6;
-    } else if (count === 3) {
-      hu += 3;
-    }
-  }
-  
-  return hu;
+  return calculateHuCount(player.hand || [], player.melds || []);
 }
 
 function updateHuBadgeDisplay() {
@@ -7506,8 +7760,15 @@ function checkTingInternal(hand, melds) {
         tingCards.push(char);
       }
     }
+    if (tingCards.length === 0) {
+      for (const [char, count] of Object.entries(counts)) {
+        if (count === 2 || count === 4) {
+          tingCards.push(char);
+        }
+      }
+    }
     
-    return { isTing: tingCards.length > 0, tingCards: [...new Set(tingCards)] };
+    return { isTing: true, tingCards: [...new Set(tingCards)] };
   }
   
   if (basicTing.type === 'sixGroupsOneSingle') {
@@ -7642,7 +7903,7 @@ function checkBasicTingCondition(hand, melds) {
   
   for (const count of Object.values(counts)) {
     if (count === 2) pairCount++;
-    else if (count === 3) tripletCount++;
+    else if (count === 3) { tripletCount++; pairCount++; singleCount++; }
     else if (count === 4) { quartetCount++; pairCount += 2; }
     else if (count === 1) singleCount++;
   }
@@ -7657,7 +7918,7 @@ function checkBasicTingCondition(hand, melds) {
   if (pairCount >= 9 && singleCount <= 2) {
     let singleCard = null;
     for (const card of hand) {
-      if (counts[card.character] === 1) {
+      if (counts[card.character] === 1 || counts[card.character] === 3) {
         singleCard = card;
         break;
       }
