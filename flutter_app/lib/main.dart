@@ -40,6 +40,9 @@ class GamePage extends StatefulWidget {
 class _GamePageState extends State<GamePage> {
   late WebViewController _controller;
   bool _isLoading = true;
+  bool _pageLoaded = false;
+  static const _testChannel = MethodChannel('com.shangdaren.game/test');
+  bool _testTriggered = false;
 
   @override
   void initState() {
@@ -53,23 +56,90 @@ class _GamePageState extends State<GamePage> {
             setState(() {
               _isLoading = false;
             });
+            _pageLoaded = true;
+            Future.delayed(const Duration(seconds: 3), () {
+              _checkPendingTest();
+            });
           },
         ),
       )
       ..addJavaScriptChannel(
         'FlutterBridge',
         onMessageReceived: (message) {
-          if (message.message == 'exit') {
+          final msg = message.message;
+          if (msg == 'exit') {
             exit(0);
+          } else if (msg == 'runAutoTest') {
+            _controller.runJavaScript('runAutoTest(3);');
+          } else if (msg.startsWith('runAutoTest:')) {
+            final rounds = int.tryParse(msg.split(':')[1]) ?? 3;
+            _controller.runJavaScript('runAutoTest($rounds);');
+          } else if (msg.startsWith('SDR_LOG:')) {
+            debugPrint('SDR ${msg.substring(8)}');
+          } else if (msg.startsWith('TEST_DONE:')) {
+            if (false) {
+              const platform = MethodChannel('com.shangdaren.game/log');
+              platform.invokeMethod('log', {
+                'tag': 'AUTOTEST_RESULT',
+                'msg': msg.substring(10),
+              });
+            }
+          } else if (msg.startsWith('AUTOTEST_LOG:')) {
+            if (false) {
+              const platform = MethodChannel('com.shangdaren.game/log');
+              platform.invokeMethod('log', {
+                'tag': 'AUTOTEST',
+                'msg': msg.substring(13),
+              });
+            }
           }
         },
       )
       ..loadFlutterAsset('assets/html/index.html');
 
     if (_controller.platform is AndroidWebViewController) {
-      (_controller.platform as AndroidWebViewController)
-          .setMediaPlaybackRequiresUserGesture(false);
+      final androidController =
+          _controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+      AndroidWebViewController.enableDebugging(true);
     }
+
+    _pollPendingTest();
+  }
+
+  void _pollPendingTest() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted || !_pageLoaded) return;
+      _checkPendingTest();
+      _pollPendingTest();
+    });
+  }
+
+  void _checkPendingTest() {
+    return;
+    if (_testTriggered || !_pageLoaded) return;
+    _testChannel
+        .invokeMethod<int>('getPendingRounds')
+        .then((rounds) {
+          if (rounds != null && rounds > 0 && !_testTriggered) {
+            _testTriggered = true;
+            const logChannel = MethodChannel('com.shangdaren.game/log');
+            logChannel.invokeMethod('log', {
+              'tag': 'AUTOTEST',
+              'msg': 'Triggering runAutoTest($rounds)',
+            });
+            _controller.runJavaScript(
+              'try { runAutoTest($rounds); } catch(e) { FlutterBridge.postMessage("AUTOTEST_LOG:ERROR:" + e.message); }',
+            );
+          }
+        })
+        .catchError((e) {
+          const logChannel = MethodChannel('com.shangdaren.game/log');
+          logChannel.invokeMethod('log', {
+            'tag': 'AUTOTEST',
+            'msg': 'getPendingRounds error: $e',
+          });
+        });
   }
 
   @override
