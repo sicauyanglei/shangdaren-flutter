@@ -4700,29 +4700,8 @@ function animateMeldCards(playerIndex, cards, meldType, callback) {
     const centerX = w / 2;
     const centerY = h / 2;
     
-    const actionButtons = document.getElementById('actionButtons');
-    const actionRect = actionButtons ? actionButtons.getBoundingClientRect() : null;
-    
-    let meldCenterX, meldCenterY;
-    if (actionRect && actionRect.width > 10 && actionRect.height > 10 && actionRect.top > 0) {
-      meldCenterX = actionRect.left + actionRect.width / 2;
-      meldCenterY = actionRect.top - 30;
-    } else {
-      meldCenterX = w / 2;
-      meldCenterY = h * 0.65;
-    }
-    
-    let targetX, targetY;
-    if (playerIndex === 0) {
-      targetX = 10;
-      targetY = centerY + 50;
-    } else if (playerIndex === 1) {
-      targetX = centerX - 100;
-      targetY = h - 60;
-    } else {
-      targetX = w - 110;
-      targetY = centerY + 50;
-    }
+    const meldCenterX = centerX;
+    const meldCenterY = h * 0.32;
     
     const cardWidth = 30;
     const cardHeight = 42;
@@ -4812,22 +4791,20 @@ function animateMeldCards(playerIndex, cards, meldType, callback) {
       if (meldContainer) {
         meldContainer.style.left = (meldCenterX - (cards.length * cardWidth + (cards.length - 1) * gap) / 2) + 'px';
         meldContainer.style.top = (meldCenterY - cardHeight / 2) + 'px';
-        meldContainer.style.transition = 'all 0.3s ease-out';
         document.body.appendChild(meldContainer);
       }
-    }, 500));
+    }, 450));
     
     timerIds.push(setTimeout(() => {
       if (meldContainer && meldContainer.parentNode) {
-        meldContainer.style.transition = 'all 0.5s ease-in-out';
-        meldContainer.style.left = targetX + 'px';
-        meldContainer.style.top = targetY + 'px';
+        meldContainer.style.transition = 'opacity 0.3s ease-out';
+        meldContainer.style.opacity = '0';
       }
     }, 900));
     
     timerIds.push(setTimeout(() => {
       safeCallback();
-    }, 1500));
+    }, 1200));
   } catch(e) {
     logError('ANIM', 'animateMeldCards异常:', e.message);
     safeCallback();
