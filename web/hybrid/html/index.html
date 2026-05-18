@@ -308,7 +308,7 @@
         overflow: visible;
         align-items: flex-start;
         display: flex;
-        flex-direction: row;
+        flex-direction: row-reverse;
         flex-wrap: wrap;
         column-gap: 1px;
         row-gap: 0;
@@ -743,7 +743,7 @@
       max-width: 9.2rem;
       height: auto;
       display: flex;
-      flex-direction: row;
+      flex-direction: row-reverse;
       flex-wrap: wrap;
       gap: 1px;
       align-items: flex-start;
@@ -1691,6 +1691,26 @@
       50% { box-shadow: 0 5px 20px rgba(78, 205, 196, 0.6); }
     }
     
+    .last-discard {
+      position: relative;
+      z-index: 5;
+      border: 2px solid #ffd700 !important;
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 16px rgba(255, 215, 0, 0.4) !important;
+      animation: last-discard-pulse 1.5s infinite ease-in-out;
+      border-radius: 3px;
+      height: 29px !important;
+    }
+    
+    @keyframes last-discard-pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 16px rgba(255, 215, 0, 0.4); }
+      50% { transform: scale(1.1); box-shadow: 0 0 12px rgba(255, 215, 0, 1), 0 0 24px rgba(255, 215, 0, 0.6); }
+    }
+    
+    @keyframes hu-glow {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+    
     .card.red {
       background: linear-gradient(145deg, #cc0000, #990000);
       color: #fff;
@@ -2187,7 +2207,9 @@
     }
     
     .dealing-overlay.hidden {
-      display: none;
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
     }
     
     .dealing-mask {
@@ -2202,7 +2224,50 @@
     }
     
     .dealing-mask.hidden {
-      display: none;
+      display: none !important;
+    }
+    
+    .hu-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 4000;
+      pointer-events: auto;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    
+    .hu-overlay.hidden {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    
+    .hu-mask {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 3999;
+      pointer-events: auto;
+    }
+    
+    .hu-mask.hidden {
+      display: none !important;
+    }
+    
+    .hu-content {
+      position: relative;
+      z-index: 4001;
+      max-height: 90vh;
+      overflow-y: auto;
     }
     
     .dealing-card {
@@ -2819,6 +2884,11 @@
   </div>
   
   <div id="dealingMask" class="dealing-mask hidden"></div>
+
+  <div id="huOverlay" class="hu-overlay hidden">
+    <div id="huMask" class="hu-mask hidden"></div>
+    <div id="huContent" class="hu-content"></div>
+  </div>
 
   <div id="messageArea" class="message-area">
     <button class="close-btn" onclick="closeMessage()">×</button>

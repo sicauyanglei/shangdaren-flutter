@@ -220,6 +220,17 @@ function addLog(level, ...args) {
 
 function logGame(tag, ...args) {
   addLog('INFO', '[' + tag + ']', ...args);
+  if (tag === 'HU_CLOSE' || tag === 'HU_SHOW' || tag === 'RESUME' || tag === 'RESP' ||
+      tag === 'ROUND' || tag === 'DEAL_ANIM' || tag === 'PIAO' || tag === 'UI' ||
+      tag === 'AI' || tag === 'AI_DRAW' || tag === 'LIUJU_CLOSE' || tag === 'LIUJU_SHOW' ||
+      tag === 'ZHAO' || tag === 'HU' || tag === 'SETTLE' || tag === 'OVERLAY_MUTATION' ||
+      tag === 'RESOURCE') {
+    try {
+      if (typeof FlutterBridge !== 'undefined') {
+        FlutterBridge.postMessage('SDR_LOG:[INFO] [' + tag + '] ' + args.join(' '));
+      }
+    } catch(e) {}
+  }
 }
 
 function logError(tag, ...args) {
@@ -379,6 +390,12 @@ function setupSwipeToClose(element, onCloseCallback) {
     if (!isDragging) return;
     isDragging = false;
     
+    const overlayEl = document.getElementById('dealingOverlay');
+    if (overlayEl && overlayEl.classList.contains('hidden')) {
+      logGame('HU_CLOSE', 'swipe touchend: overlay已hidden, 忽略swipe操作');
+      return;
+    }
+    
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
@@ -386,6 +403,11 @@ function setupSwipeToClose(element, onCloseCallback) {
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
+        const overlayCheck = document.getElementById('dealingOverlay');
+        if (overlayCheck && overlayCheck.classList.contains('hidden')) {
+          logGame('HU_CLOSE', 'swipe setTimeout: overlay已hidden, 跳过样式重置和回调');
+          return;
+        }
         element.style.transform = '';
         element.style.opacity = '';
         if (onCloseCallback) onCloseCallback();
@@ -419,6 +441,12 @@ function setupSwipeToClose(element, onCloseCallback) {
     if (!isDragging) return;
     isDragging = false;
     
+    const overlayEl = document.getElementById('dealingOverlay');
+    if (overlayEl && overlayEl.classList.contains('hidden')) {
+      logGame('HU_CLOSE', 'swipe mouseup: overlay已hidden, 忽略swipe操作');
+      return;
+    }
+    
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
@@ -426,6 +454,11 @@ function setupSwipeToClose(element, onCloseCallback) {
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
+        const overlayCheck = document.getElementById('dealingOverlay');
+        if (overlayCheck && overlayCheck.classList.contains('hidden')) {
+          logGame('HU_CLOSE', 'swipe mouseup setTimeout: overlay已hidden, 跳过样式重置和回调');
+          return;
+        }
         element.style.transform = '';
         element.style.opacity = '';
         if (onCloseCallback) onCloseCallback();
@@ -574,7 +607,7 @@ function preloadAudioFiles() {
   const voiceTypes = ['male', 'female'];
   const commonSounds = ['吃', '碰', '招', '胡', '自摸', '流局', '快点吧'];
   const allChars = Object.keys(audioFileMap).filter(k => !commonSounds.includes(k));
-  const preloadList = [...commonSounds, ...allChars.slice(0, 10)];
+  const preloadList = [...commonSounds, ...allChars];
   for (const text of preloadList) {
     const fileName = audioFileMap[text];
     if (!fileName) continue;
@@ -629,7 +662,16 @@ async function playLocalAudio(text, playerIndex = -1, volumeMultiplier = 1.0) {
         safeResolve();
       }
     } else {
-      safeResolve();
+      try {
+        const audio = new Audio(audioPath);
+        audio.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
+        audio.onended = () => { clearTimeout(timeout); safeResolve(); };
+        audio.onerror = () => { clearTimeout(timeout); safeResolve(); };
+        audio.play().then(() => {}).catch(() => { clearTimeout(timeout); safeResolve(); });
+      } catch(e) {
+        clearTimeout(timeout);
+        safeResolve();
+      }
     }
   });
 }
@@ -992,6 +1034,12 @@ function pauseGame() {
   
   console.log('游戏已暂停');
   gameState.isPaused = true;
+  pauseStartTime = Date.now();
+  
+  // 清理残留的飞行动画元素
+  document.querySelectorAll('body > div[style*="position: fixed"][style*="z-index: 9999"]').forEach(el => {
+    if (el.id !== 'pauseOverlay') el.remove();
+  });
   
   // 保存并暂停出牌倒计时
   if (gameState.countdownTimer) {
@@ -1060,7 +1108,60 @@ function resumeGame() {
     gameState.isPiaoPhase = false;
     gameState.pausedPiaoCountdown = 0;
     gameState.pausedPiaoPlayerIndex = -1;
-    return; // 飘分阶段不恢复出牌倒计时
+    return;
+  }
+  
+  // 处理isDrawing状态：后台时摸牌动画可能已完成但回调未正确执行
+  if (gameState.isDrawing) {
+    logGame('RESUME', '恢复时isDrawing=true，强制完成摸牌');
+    gameState.isDrawing = false;
+    
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer && gameState.lastDrawnCard) {
+      const drawnCard = gameState.lastDrawnCard;
+      const alreadyInHand = currentPlayer.hand.some(c => c.id === drawnCard.id);
+      if (!alreadyInHand) {
+        currentPlayer.hand.push(drawnCard);
+        currentPlayer.hand = sortHand(currentPlayer.hand);
+      }
+      
+      if (currentPlayer.type === 'human') {
+        gameState.isMyTurn = true;
+        renderMyHand();
+        updateHandCount('myHandCount', currentPlayer.hand.length);
+        
+        const huResult = checkHu(currentPlayer);
+        const canZimo = huResult.canHu;
+        const tingResult = checkTing(currentPlayer);
+        currentPlayer.isTing = tingResult.isTing;
+        updateHuBadgeDisplay();
+        
+        if (canZimo) {
+          const zimoBadge = document.getElementById('zimoBadge');
+          if (zimoBadge) zimoBadge.classList.remove('hidden');
+        }
+        
+        startCountdown();
+        updateActionButtons();
+        recordActivity();
+        return;
+      } else {
+        updateUI();
+        setTimeout(() => {
+          if (!gameState.isPaused && !gameState.isHandlingHu && !gameState.isDealing) {
+            continueAITurn(currentPlayer);
+          }
+        }, 500);
+        recordActivity();
+        return;
+      }
+    } else {
+      gameState.isMyTurn = true;
+      startCountdown();
+      updateActionButtons();
+      recordActivity();
+      return;
+    }
   }
   
   // 恢复出牌倒计时
@@ -1079,6 +1180,17 @@ function resumeGame() {
       }
     }, 500);
   }
+  
+  // 如果当前是人类玩家的回合，确保UI状态正确
+  if (currentPlayer && currentPlayer.type === 'human' && gameState.isMyTurn) {
+    renderMyHand();
+    updateActionButtons();
+    if (!gameState.countdownTimer && gameState.countdown <= 0) {
+      startCountdown();
+    }
+  }
+  
+  recordActivity();
 }
 
 // 显示暂停遮罩
@@ -1259,6 +1371,8 @@ let gameState = {
   canHu: false,
   skipDraw: false,
   isDrawing: false,
+  isDiscarding: false,
+  autoDiscardAfterDraw: false,
   hasDealerPlayedFirstTurn: false,
   isDealing: false,
   baseScore: 5,
@@ -1284,14 +1398,25 @@ function stopTestMode() {
 }
 
 let lastActivityTime = Date.now();
+let pauseStartTime = 0;
 
 function recordActivity() {
   lastActivityTime = Date.now();
 }
 
 setInterval(() => {
-  if (!gameState.gameStarted || gameState.isPaused || gameState.isHandlingHu || gameState.isDealing) return;
+  if (!gameState.gameStarted || gameState.isPaused || gameState.isHandlingHu || gameState.isDealing) {
+    if (gameState.isPaused && pauseStartTime === 0) {
+      pauseStartTime = Date.now();
+    }
+    return;
+  }
   if (autoTestRunning) return;
+  
+  if (pauseStartTime > 0) {
+    lastActivityTime += (Date.now() - pauseStartTime);
+    pauseStartTime = 0;
+  }
   
   const elapsed = Date.now() - lastActivityTime;
   
@@ -1582,12 +1707,10 @@ let currentPiaoPlayerIndex = 0;
 let piaoSetCount = 0;
 
 function showPiaoScreen() {
-  console.log('====== showPiaoScreen 开始 ======');
-  console.log('庄家索引:', gameState.dealerIndex);
-  console.log('飘分设置开关:', gameSettings.piaoEnabled);
+  logGame('PIAO', 'showPiaoScreen开始, piaoEnabled=', gameSettings.piaoEnabled, 'roundNumber=', gameState.roundNumber, 'isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage);
   
   if (!gameSettings.piaoEnabled) {
-    console.log('飘分设置已关闭，所有玩家飘分设为0，直接开始发牌');
+    logGame('PIAO', '飘分关闭, 直接调用startDealingAnimation');
     for (const player of gameState.players) {
       player.piao = 0;
     }
@@ -1821,10 +1944,12 @@ function moveToNextPiaoPlayer() {
 function startRound() {
   
   if (gameState.isStartingRound) {
-    console.log('警告: startRound 已经在执行中，跳过重复调用');
+    logGame('ROUND', 'startRound防重入拦截: isStartingRound=true, roundNumber=', gameState.roundNumber);
     return;
   }
   gameState.isStartingRound = true;
+  
+  logGame('ROUND', '>>> startRound开始 <<< roundNumber=', gameState.roundNumber + 1, 'isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage, 'skipDealAnimation=', gameState.skipDealAnimation);
   
   gameState.isHandlingHu = false;
   gameState.isLiuJuHandled = false;
@@ -1864,6 +1989,7 @@ function startRound() {
   gameState.canHu = false;
   gameState.skipDraw = false;
   gameState.isDrawing = false;
+  gameState.isDiscarding = false;
   gameState.hasDealerPlayedFirstTurn = false;
   gameState.isDealing = false;
   
@@ -1904,6 +2030,7 @@ function startRound() {
   
   updateAvatars();
   document.getElementById('roundNum').textContent = `${gameState.roundNumber}/8`;
+  updateUI();
   updateDeckStack();
   
   // 每一局都显示飘分页面
@@ -1932,8 +2059,36 @@ function startDealingAnimation() {
   
   const overlay = document.getElementById('dealingOverlay');
   const mask = document.getElementById('dealingMask');
-  overlay.style.display = 'flex';
-  mask.style.display = 'block';
+  
+  const dealingText = overlay ? overlay.querySelector('.dealing-text') : null;
+  if (dealingText) dealingText.innerHTML = '';
+  
+  logGame('DEAL_ANIM', 'startDealingAnimation开始, skipDealAnimation=', gameState.skipDealAnimation, 'overlay display=', overlay?.style.display);
+  
+  if (gameState.skipDealAnimation) {
+    gameState.skipDealAnimation = false;
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.style.visibility = 'hidden';
+      overlay.style.opacity = '0';
+      overlay.classList.add('hidden');
+    }
+    if (mask) {
+      mask.style.display = 'none';
+      mask.classList.add('hidden');
+    }
+    logGame('DEAL_ANIM', '跳过发牌动画, 强制确保overlay隐藏');
+  } else {
+    overlay.style.visibility = '';
+    overlay.style.opacity = '';
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+    mask.style.display = 'block';
+    mask.classList.remove('hidden');
+    logGame('DEAL_ANIM', '显示发牌动画overlay');
+  }
+  
+  logGame('DEAL_ANIM', 'overlay状态确认, display=', overlay?.style.display, 'classList hidden=', overlay?.classList.contains('hidden'));
   
   updateDeckStack();
   
@@ -2031,7 +2186,7 @@ function createFlyingCard(startX, startY, target, reveal, cardData) {
 }
 
 function finishDealing() {
-  console.log('完成发牌，整理手牌');
+  logGame('DEAL_ANIM', 'finishDealing开始, isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
   
   gameState.isDealing = false;
   
@@ -2058,8 +2213,14 @@ function finishDealing() {
   
   const overlay = document.getElementById('dealingOverlay');
   const mask = document.getElementById('dealingMask');
+  logGame('DEAL_ANIM', '发牌动画完成, 隐藏overlay');
   overlay.style.display = 'none';
+  overlay.style.visibility = 'hidden';
+  overlay.style.opacity = '0';
+  overlay.classList.add('hidden');
   mask.style.display = 'none';
+  mask.classList.add('hidden');
+  logGame('DEAL_ANIM', 'finishDealing: 发牌动画完成, overlay已隐藏');
   
   const centerArea = document.querySelector('.center-area');
   if (centerArea) {
@@ -2125,6 +2286,10 @@ function updateDeckStack() {
 }
 
 function renderMyHand() {
+  if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+    logGame('UI', 'renderMyHand跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
+    return;
+  }
   const me = gameState.players[1];
   const handEl = document.getElementById('myHand');
   handEl.innerHTML = '';
@@ -2168,16 +2333,14 @@ function renderMyHand() {
       cardEl.onclick = function() { selectCard(cards[0].index); };
       
       function startDrag(clientX, clientY) {
-        if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
+        if (!gameState.isMyTurn) {
           return;
         }
-        if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
-          logWarn('DRAG', 'isMyTurn=false但currentPlayerIndex=1，允许拖拽并修复状态');
-          gameState.isMyTurn = true;
-        }
         if (gameState.isDrawing) {
-          logWarn('DRAG', 'isDrawing=true时尝试拖拽，强制完成摸牌');
-          gameState.isDrawing = false;
+          return;
+        }
+        if (gameState.isDiscarding) {
+          return;
         }
         
         const cardIndex = cards[0].index;
@@ -2220,41 +2383,52 @@ function renderMyHand() {
         dragCard.style.top = (clientY - offsetY) + 'px';
       }
       
-      function endDrag(dragCard, clientX, clientY) {
-        const handRect = handEl.getBoundingClientRect();
-        const isOutside = clientY < handRect.top || 
-                         clientY > handRect.bottom ||
-                         clientX < handRect.left || 
-                         clientX > handRect.right;
-        
-        dragCard.remove();
-        cardEl.style.opacity = '';
-        
-        if (isOutside) {
-          gameState.selectedCardIndex = cardIndex;
-          discardAction();
-        } else {
-          renderMyHand();
+      function endDrag(dragCard, clientX, clientY, dragCardIndex) {
+        try {
+          const handRect = handEl.getBoundingClientRect();
+          const isOutside = clientY < handRect.top || 
+                           clientY > handRect.bottom ||
+                           clientX < handRect.left || 
+                           clientX > handRect.right;
+          
+          if (dragCard && dragCard.parentNode) {
+            dragCard.remove();
+          }
+          cardEl.style.opacity = '';
+          
+          if (isOutside && dragCardIndex != null) {
+            gameState.selectedCardIndex = dragCardIndex;
+            discardAction();
+          } else {
+            renderMyHand();
+          }
+        } catch(err) {
+          logError('DRAG', 'endDrag异常:', err);
+          if (dragCard && dragCard.parentNode) {
+            dragCard.remove();
+          }
+          try { cardEl.style.opacity = ''; } catch(e) {}
+          try { renderMyHand(); } catch(e) {}
         }
       }
       
       let dragState = null;
-      let cardIndex = null;
       
       cardEl.onmousedown = function(e) {
         e.preventDefault();
         dragState = startDrag(e.clientX, e.clientY);
         if (!dragState) return;
-        cardIndex = dragState.cardIndex;
+        
+        const ds = dragState;
         
         function onMouseMove(ev) {
-          moveDrag(dragState.dragCard, ev.clientX, ev.clientY, dragState.offsetX, dragState.offsetY);
+          moveDrag(ds.dragCard, ev.clientX, ev.clientY, ds.offsetX, ds.offsetY);
         }
         
         function onMouseUp(ev) {
           document.removeEventListener('mousemove', onMouseMove);
           document.removeEventListener('mouseup', onMouseUp);
-          endDrag(dragState.dragCard, ev.clientX, ev.clientY);
+          endDrag(ds.dragCard, ev.clientX, ev.clientY, ds.cardIndex);
           dragState = null;
         }
         
@@ -2263,36 +2437,51 @@ function renderMyHand() {
       };
       
       cardEl.ontouchstart = function(e) {
+        if (gameState.isDrawing) return;
         e.preventDefault();
         const touch = e.touches[0];
+        if (!touch) return;
         dragState = startDrag(touch.clientX, touch.clientY);
         if (!dragState) return;
-        cardIndex = dragState.cardIndex;
-      };
-      
-      cardEl.ontouchmove = function(e) {
-        e.preventDefault();
-        if (dragState) {
-          const touch = e.touches[0];
-          moveDrag(dragState.dragCard, touch.clientX, touch.clientY, dragState.offsetX, dragState.offsetY);
+        
+        const ds = dragState;
+        
+        function onTouchMove(ev) {
+          ev.preventDefault();
+          const t = ev.touches[0];
+          if (t) {
+            moveDrag(ds.dragCard, t.clientX, t.clientY, ds.offsetX, ds.offsetY);
+          }
         }
-      };
-      
-      cardEl.ontouchend = function(e) {
-        e.preventDefault();
-        if (dragState) {
-          const touch = e.changedTouches[0];
-          endDrag(dragState.dragCard, touch.clientX, touch.clientY);
+        
+        function onTouchEnd(ev) {
+          ev.preventDefault();
+          document.removeEventListener('touchmove', onTouchMove, { passive: false });
+          document.removeEventListener('touchend', onTouchEnd);
+          document.removeEventListener('touchcancel', onTouchCancel);
+          const t = ev.changedTouches[0];
+          if (t) {
+            endDrag(ds.dragCard, t.clientX, t.clientY, ds.cardIndex);
+          } else {
+            if (ds.dragCard && ds.dragCard.parentNode) ds.dragCard.remove();
+            try { cardEl.style.opacity = ''; } catch(e) {}
+            try { renderMyHand(); } catch(e) {}
+          }
           dragState = null;
         }
-      };
-      
-      cardEl.ontouchcancel = function(e) {
-        if (dragState) {
-          dragState.dragCard.remove();
-          cardEl.style.opacity = '';
+        
+        function onTouchCancel(ev) {
+          document.removeEventListener('touchmove', onTouchMove, { passive: false });
+          document.removeEventListener('touchend', onTouchEnd);
+          document.removeEventListener('touchcancel', onTouchCancel);
+          if (ds.dragCard && ds.dragCard.parentNode) ds.dragCard.remove();
+          try { cardEl.style.opacity = ''; } catch(e) {}
           dragState = null;
         }
+        
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
+        document.addEventListener('touchcancel', onTouchCancel);
       };
       
       stackEl.appendChild(cardEl);
@@ -2400,6 +2589,17 @@ function _startTurn() {
           playZimoAnnouncement();
         }
         
+        if (gameState.autoDiscardAfterDraw) {
+          gameState.autoDiscardAfterDraw = false;
+          const lastDrawnIndex = currentPlayer.hand.findIndex(c => c.id === drawnCard.id);
+          if (lastDrawnIndex !== -1) {
+            discardCard(1, lastDrawnIndex);
+          } else {
+            discardCard(1, currentPlayer.hand.length - 1);
+          }
+          return;
+        }
+        
         startCountdown();
         updateActionButtons();
       };
@@ -2453,6 +2653,8 @@ function updateTingBadge() {
     zimoBadge.classList.remove('hidden');
     zimoAnnounced = false;
     playZimoAnnouncement();
+  } else if (me.isTing) {
+    tingBadge.classList.remove('hidden');
   }
 }
 
@@ -2626,8 +2828,8 @@ function _handleTimeout() {
     passAction();
   } else if (gameState.isMyTurn) {
     if (gameState.isDrawing) {
-      logWarn('TIMEOUT', '超时时isDrawing=true，强制完成摸牌');
-      gameState.isDrawing = false;
+      gameState.autoDiscardAfterDraw = true;
+      return;
     }
     
     const me = gameState.players[1];
@@ -2646,8 +2848,8 @@ function _handleTimeout() {
     logWarn('TIMEOUT', '超时但isMyTurn=false，检查是否需要兜底处理');
     
     if (gameState.isDrawing) {
-      logWarn('TIMEOUT', 'isDrawing卡住，强制完成摸牌');
-      gameState.isDrawing = false;
+      gameState.autoDiscardAfterDraw = true;
+      return;
     }
     
     const me = gameState.players[1];
@@ -2690,7 +2892,7 @@ function processAITurn() {
 
 function _processAITurn() {
   if (gameState.isDealing) {
-    console.log('发牌中，跳过AI操作');
+    logGame('AI', '_processAITurn跳过: isDealing=true');
     return;
   }
   
@@ -2698,7 +2900,13 @@ function _processAITurn() {
     return;
   }
   
+  if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+    logGame('AI', '_processAITurn跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
+    return;
+  }
+  
   if (gameState.isHandlingHu) {
+    logGame('AI', '_processAITurn跳过: isHandlingHu=true');
     return;
   }
   
@@ -2713,7 +2921,12 @@ function _processAITurn() {
     let aiDrawCalled = false;
     const aiDrawTimeout = setTimeout(() => {
       if (aiDrawCalled) return;
+      if (gameState.isClosingHuMessage || gameState.isClosingMessage || gameState.isHandlingHu) {
+        logGame('AI_DRAW', 'AI摸牌超时跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage, 'isHandlingHu=', gameState.isHandlingHu);
+        return;
+      }
       aiDrawCalled = true;
+      logGame('AI_DRAW', 'AI摸牌超时回调执行, player=', player.name, 'card=', drawnCard.character);
       player.hand.push(drawnCard);
       player.hand = sortHand(player.hand);
       gameState.lastDrawnCard = drawnCard;
@@ -2724,8 +2937,13 @@ function _processAITurn() {
     
     animateDrawCard(gameState.currentPlayerIndex, drawnCard, () => {
       if (aiDrawCalled) return;
+      if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+        logGame('AI_DRAW', 'AI摸牌动画回调跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
+        return;
+      }
       aiDrawCalled = true;
       clearTimeout(aiDrawTimeout);
+      logGame('AI_DRAW', 'AI摸牌动画回调执行, player=', player.name, 'card=', drawnCard.character);
       player.hand.push(drawnCard);
       player.hand = sortHand(player.hand);
       gameState.lastDrawnCard = drawnCard;
@@ -2746,6 +2964,7 @@ function _processAITurn() {
 
 function continueAITurn(player) {
   if (gameState.isDealing) {
+    logGame('AI', 'continueAITurn跳过: isDealing=true');
     return;
   }
   
@@ -2753,8 +2972,8 @@ function continueAITurn(player) {
     return;
   }
   
-  // 如果已经处理了胡牌，不再继续操作
-  if (gameState.isHandlingHu) {
+  if (gameState.isHandlingHu || gameState.isClosingHuMessage || gameState.isClosingMessage) {
+    logGame('AI', 'continueAITurn跳过: isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
     return;
   }
   
@@ -3336,6 +3555,95 @@ function predictOpponentTing(opponent) {
   const melds = opponent.melds || [];
   const meldCount = melds.length;
   
+  if (gameSettings.difficulty === 'hard') {
+    const predictedChars = new Set();
+    const meldSentences = new Set();
+    for (const meld of melds) {
+      meldSentences.add(meld.cards[0].sentence);
+    }
+    
+    const discardChars = {};
+    if (opponent.discards) {
+      for (const d of opponent.discards) {
+        discardChars[d.character] = (discardChars[d.character] || 0) + 1;
+      }
+    }
+    
+    const totalCardsInGame = 4;
+    for (const meld of melds) {
+      for (const c of meld.cards) {
+        discardChars[c.character] = (discardChars[c.character] || 0) + 1;
+      }
+    }
+    
+    const allDiscardedChars = {};
+    for (const p of gameState.players) {
+      if (p.discards) {
+        for (const d of p.discards) {
+          allDiscardedChars[d.character] = (allDiscardedChars[d.character] || 0) + 1;
+        }
+      }
+      if (p.melds) {
+        for (const meld of p.melds) {
+          for (const c of meld.cards) {
+            allDiscardedChars[c.character] = (allDiscardedChars[c.character] || 0) + 1;
+          }
+        }
+      }
+    }
+    
+    for (let sentence = 1; sentence <= 8; sentence++) {
+      if (meldSentences.has(sentence)) continue;
+      
+      const sentenceChars = getSentenceCharacters(sentence);
+      let keptCount = 0;
+      for (const ch of sentenceChars) {
+        const discarded = allDiscardedChars[ch] || 0;
+        if (discarded < totalCardsInGame) {
+          const opponentDiscarded = discardChars[ch] || 0;
+          if (opponentDiscarded === 0) {
+            keptCount++;
+          }
+        }
+      }
+      
+      if (keptCount >= 2 && handSize <= 8) {
+        for (const ch of sentenceChars) {
+          if (!discardChars[ch]) {
+            predictedChars.add(ch);
+          }
+        }
+      }
+    }
+    
+    if (handSize <= 5 && meldCount >= 3) {
+      return {
+        isTing: false,
+        tingCards: [...predictedChars],
+        probability: 0.8,
+        dangerLevel: 'high'
+      };
+    }
+    
+    if (handSize <= 8 && meldCount >= 2) {
+      return {
+        isTing: false,
+        tingCards: [...predictedChars],
+        probability: 0.5,
+        dangerLevel: 'medium'
+      };
+    }
+    
+    if (predictedChars.size > 0) {
+      return {
+        isTing: false,
+        tingCards: [...predictedChars],
+        probability: 0.3,
+        dangerLevel: 'medium'
+      };
+    }
+  }
+  
   if (handSize <= 5 && meldCount >= 3) {
     return {
       isTing: false,
@@ -3390,8 +3698,35 @@ function calculateCardDangerScore(card, player) {
       if (card.character === '上' || card.character === '福') {
         dangerScore += 100;
       }
+      
+      if (gameSettings.difficulty === 'hard' && prediction.tingCards && prediction.tingCards.includes(card.character)) {
+        dangerScore += 400;
+      }
     } else if (prediction.dangerLevel === 'medium') {
       dangerScore += 50;
+      
+      if (gameSettings.difficulty === 'hard' && prediction.tingCards && prediction.tingCards.includes(card.character)) {
+        dangerScore += 200;
+      }
+    }
+    
+    if (gameSettings.difficulty === 'hard' && !prediction.isTing) {
+      const opponentMelds = opponent.melds || [];
+      const meldCount = opponentMelds.length;
+      const handSize = opponent.hand ? opponent.hand.length : 0;
+      
+      if (meldCount >= 3 && handSize <= 5) {
+        const cardRemaining = countRemainingCards(card.character);
+        if (cardRemaining <= 1) {
+          dangerScore += 300;
+        } else if (cardRemaining <= 2) {
+          dangerScore += 150;
+        }
+      }
+      
+      if (opponent.isTing) {
+        dangerScore += 800;
+      }
     }
   }
   
@@ -3703,6 +4038,42 @@ function evaluateCardExtreme(card, hand, player) {
   }
   if (isCardInHalfKao) {
     score -= 350;
+  }
+  
+  if (gameSettings.difficulty === 'hard') {
+    if (afterDiscardHuCount >= 11 && currentHuCount < 11) {
+      score -= 800;
+    } else if (afterDiscardHuCount > currentHuCount) {
+      score -= (afterDiscardHuCount - currentHuCount) * 50;
+    } else if (afterDiscardHuCount < currentHuCount) {
+      score += (currentHuCount - afterDiscardHuCount) * 80;
+    }
+    
+    const shangCount = hand.filter(c => c.character === '上').length;
+    const fuCount = hand.filter(c => c.character === '福').length;
+    const totalJing = shangCount + fuCount;
+    
+    if (totalJing >= 3 && (card.character === '上' || card.character === '福')) {
+      const tempShang = tempHand.filter(c => c.character === '上').length;
+      const tempFu = tempHand.filter(c => c.character === '福').length;
+      const tempTotalJing = tempShang + tempFu;
+      if (tempTotalJing < totalJing) {
+        score += 2000;
+      }
+    }
+    
+    if (totalJing >= 5) {
+      const allCards = [...hand, ...melds.flatMap(m => m.cards)];
+      const uniqueChars = new Set(allCards.map(c => c.character));
+      if (uniqueChars.size <= 5) {
+        if (card.character !== '上' && card.character !== '福') {
+          const tempUniqueChars = new Set([...tempHand, ...melds.flatMap(m => m.cards)].map(c => c.character));
+          if (tempUniqueChars.size < uniqueChars.size) {
+            score += 800;
+          }
+        }
+      }
+    }
   }
   
   return score;
@@ -4500,6 +4871,7 @@ function discardCard(playerIndex, cardIndex) {
   recordActivity();
   if (gameState.isDealing) {
     console.log('发牌中，跳过出牌');
+    gameState.isDiscarding = false;
     return;
   }
   
@@ -4508,6 +4880,7 @@ function discardCard(playerIndex, cardIndex) {
   const player = gameState.players[playerIndex];
   if (!player) {
     logError('DISCARD', '无效的玩家索引:', playerIndex);
+    gameState.isDiscarding = false;
     return;
   }
   
@@ -4546,6 +4919,7 @@ function discardCard(playerIndex, cardIndex) {
   if (playerIndex === 1) {
     stopCountdown();
     gameState.isMyTurn = false;
+    gameState.isDiscarding = false;
     gameState.selectedCardIndex = -1;
   }
   
@@ -4938,6 +5312,8 @@ function showDiscardedCard(playerIndex, card) {
     playedCardsEl.appendChild(cardEl);
   }
   
+  document.querySelectorAll('.last-discard').forEach(el => el.classList.remove('last-discard'));
+  
   let discardEl;
   if (playerIndex === 0) {
     discardEl = document.getElementById('player1Discard');
@@ -4948,14 +5324,14 @@ function showDiscardedCard(playerIndex, card) {
   }
   
   if (discardEl) {
-    // 检查是否已经添加过相同的牌（避免重复添加）
     const lastCard = discardEl.lastElementChild;
     if (lastCard && lastCard.dataset.cardId === card.id) {
-      console.log('跳过重复添加:', card.character, card.id);
+      lastCard.classList.add('last-discard');
       return;
     }
     
     const cardEl = createSmallCardElement(card);
+    cardEl.classList.add('last-discard');
     discardEl.appendChild(cardEl);
     
     if (discardEl.children.length > 8) {
@@ -4980,6 +5356,10 @@ function createSmallCardElement(card) {
 }
 
 function checkResponses() {
+  if (gameState.isHandlingHu || gameState.isClosingHuMessage) {
+    logGame('RESP', 'checkResponses跳过: isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage);
+    return;
+  }
   try {
     _checkResponses();
   } catch(e) {
@@ -4989,6 +5369,10 @@ function checkResponses() {
 }
 
 function _checkResponses() {
+  if (gameState.isHandlingHu || gameState.isClosingHuMessage) {
+    logGame('RESP', '_checkResponses跳过: isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage);
+    return;
+  }
   const card = gameState.lastDiscardedCard;
   if (!card) {
     console.log('没有出牌');
@@ -6042,26 +6426,16 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
   melds = melds || [];
   let hu = 0;
   
-  // 组合牌胡数计算
   for (const meld of melds) {
     hu += meld.huValue;
-    // console.log(`组合牌(${meld.type}): ${meld.huValue}胡`);
   }
   
-  // 手牌胡数计算
-  // 先对手牌所有的卡牌进行编号
   const cards = [...hand];
   if (huCard) cards.push(huCard);
   
   const usedCardIds = new Set();
+  const aSetCharCount = {};
   
-  // console.log('=== 手牌胡数计算过程 ===');
-  // console.log('手牌:', cards.map(c => c.character).join(''));
-  if (isDianPao && huCard) {
-    // console.log('点炮牌:', huCard.character);
-  }
-  
-  // 1. 移除所有的"句"/"精句"（完整句子）
   let foundSentence = true;
   while (foundSentence) {
     foundSentence = false;
@@ -6081,9 +6455,11 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
         
         if (isJingJu && (hasShang || hasFu)) {
           hu += 4;
-          // console.log(`精句(${pos0Cards[0].character}${pos1Cards[0].character}${pos2Cards[0].character}): 4胡`);
-        } else {
-          // console.log(`句(${pos0Cards[0].character}${pos1Cards[0].character}${pos2Cards[0].character}): 0胡`);
+        }
+        
+        const juChars = [pos0Cards[0].character, pos1Cards[0].character, pos2Cards[0].character];
+        for (const ch of juChars) {
+          aSetCharCount[ch] = (aSetCharCount[ch] || 0) + 1;
         }
         
         usedCardIds.add(pos0Cards[0].id);
@@ -6093,7 +6469,6 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
     }
   }
   
-  // 2. 移除所有的"招"/"精招"（4张相同）
   const remainingAfterJu = cards.filter(c => !usedCardIds.has(c.id));
   const countsAfterJu = {};
   for (const card of remainingAfterJu) {
@@ -6105,10 +6480,8 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
       const isJingZhao = char === '上' || char === '福';
       if (isJingZhao) {
         hu += 16;
-        // console.log(`精招(${char}${count}张): 16胡`);
       } else {
         hu += 6;
-        // console.log(`招(${char}${count}张): 6胡`);
       }
       
       const zhaoCards = remainingAfterJu.filter(c => c.character === char);
@@ -6116,7 +6489,6 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
     }
   }
   
-  // 3. 移除所有的"坎"/"精坎"（3张相同）
   const remainingAfterZhao = cards.filter(c => !usedCardIds.has(c.id));
   const countsAfterZhao = {};
   for (const card of remainingAfterZhao) {
@@ -6129,8 +6501,6 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
       if (isJingKan) {
         hu += 12;
       } else {
-        // 点炮胡牌时，如果坎包含点炮牌，算2胡（组合牌）
-        // 否则算3胡（手牌坎）
         const kanCards = remainingAfterZhao.filter(c => c.character === char);
         const containsHuCard = isDianPao && huCard && huCard.character === char;
         if (containsHuCard) {
@@ -6145,23 +6515,24 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
     }
   }
   
-  // 4. 移除所有的"对"/"金对"/"靠"/"精靠"/"银靠"
   const remainingAfterKan = cards.filter(c => !usedCardIds.has(c.id));
   
-  // 4.1 先处理对子/金对（2张相同）
   const countsAfterKan = {};
   for (const card of remainingAfterKan) {
     countsAfterKan[card.character] = (countsAfterKan[card.character] || 0) + 1;
   }
   
+  const dSetPairs = [];
+  const dSetKaos = [];
+  
   for (const [char, count] of Object.entries(countsAfterKan)) {
     if (count >= 2) {
       const isJinDui = char === '上' || char === '福';
+      const isYinDui = char === '大' || char === '人' || char === '禄' || char === '寿';
       if (isJinDui) {
         hu += 8;
-        // console.log(`金对(${char}${count}张): 8胡`);
       } else {
-        // console.log(`对(${char}${count}张): 0胡`);
+        dSetPairs.push({ char, isYinDui });
       }
       
       const duiCards = remainingAfterKan.filter(c => c.character === char);
@@ -6169,7 +6540,6 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
     }
   }
   
-  // 4.2 处理靠/精靠/银靠（2张不同但同组）
   let foundKao = true;
   while (foundKao) {
     foundKao = false;
@@ -6182,40 +6552,58 @@ function calculateHuCount(hand, melds, huCard = null, isDianPao = false) {
         foundKao = true;
         const hasShang = sentenceCards.some(c => c.character === '上');
         const hasFu = sentenceCards.some(c => c.character === '福');
+        const isJingKao = (sentence === 1 || sentence === 8) && (hasShang || hasFu);
         const isDaRen = sentenceCards.some(c => c.character === '大') && sentenceCards.some(c => c.character === '人');
         const isLuShou = sentenceCards.some(c => c.character === '禄') && sentenceCards.some(c => c.character === '寿');
+        const isYinKao = isDaRen || isLuShou;
         
-        if ((sentence === 1 || sentence === 8) && (hasShang || hasFu)) {
-          // 精靠：组1/组8且含上/福
+        if (isJingKao) {
           hu += 4;
-          // console.log(`精靠(${sentenceCards.map(c => c.character).join('')}): 4胡`);
-        } else if (isDaRen || isLuShou) {
-          // 银靠：大人、禄寿
-          // console.log(`银靠(${sentenceCards.map(c => c.character).join('')}): 0胡`);
-        } else {
-          // 靠：其他
-          // console.log(`靠(${sentenceCards.map(c => c.character).join('')}): 0胡`);
         }
+        
+        dSetKaos.push({
+          chars: sentenceCards.map(c => c.character),
+          isJingKao,
+          isYinKao
+        });
         
         sentenceCards.forEach(c => usedCardIds.add(c.id));
       }
     }
   }
   
-  // 5. 处理单字/精单
   const remainingCards = cards.filter(c => !usedCardIds.has(c.id));
+  const eSetSingles = [];
   
   for (const card of remainingCards) {
-    if (card.character === '上' || card.character === '福') {
+    const isJingDan = card.character === '上' || card.character === '福';
+    const isYinDan = card.character === '大' || card.character === '人' || card.character === '禄' || card.character === '寿';
+    if (isJingDan) {
       hu += 4;
-      // console.log(`精单(${card.character}): 4胡`);
-    } else {
-      // console.log(`单(${card.character}): 0胡`);
+    }
+    eSetSingles.push({ char: card.character, isJingDan, isYinDan });
+  }
+  
+  for (const pair of dSetPairs) {
+    if (!pair.isYinDui && aSetCharCount[pair.char] === 1) {
+      hu += 3;
     }
   }
   
-  // console.log(`总胡数: ${hu}胡`);
-  // console.log('==================');
+  for (const kao of dSetKaos) {
+    if (!kao.isJingKao && !kao.isYinKao) {
+      const anyInASet2 = kao.chars.some(ch => aSetCharCount[ch] === 2);
+      if (anyInASet2) {
+        hu += 6;
+      }
+    }
+  }
+  
+  for (const single of eSetSingles) {
+    if (!single.isJingDan && !single.isYinDan && aSetCharCount[single.char] === 2) {
+      hu += 3;
+    }
+  }
   
   return hu;
 }
@@ -6525,8 +6913,12 @@ function startZhaoDraw(playerIndex, player) {
     let zhaoDrawCalled = false;
     const zhaoDrawTimeout = setTimeout(() => {
       if (zhaoDrawCalled) return;
+      if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+        logGame('ZHAO', '招摸牌超时跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
+        return;
+      }
       zhaoDrawCalled = true;
-      logWarn('ZHAO', '摸牌动画超时，强制补牌');
+      logGame('ZHAO', '招摸牌超时回调执行, playerIndex=', playerIndex, 'card=', drawnCard.character);
       player.hand.push(drawnCard);
       player.hand = sortHand(player.hand);
       gameState.lastDrawnCard = drawnCard;
@@ -6538,9 +6930,13 @@ function startZhaoDraw(playerIndex, player) {
     
     animateDrawCard(playerIndex, drawnCard, () => {
       if (zhaoDrawCalled) return;
+      if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+        logGame('ZHAO', '招摸牌动画回调跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
+        return;
+      }
       zhaoDrawCalled = true;
       clearTimeout(zhaoDrawTimeout);
-      logGame('ZHAO', '摸牌动画完成，补牌:', drawnCard.character);
+      logGame('ZHAO', '招摸牌动画回调执行, playerIndex=', playerIndex, 'card=', drawnCard.character);
       player.hand.push(drawnCard);
       player.hand = sortHand(player.hand);
       gameState.lastDrawnCard = drawnCard;
@@ -6574,8 +6970,12 @@ function finishZhao(playerIndex, player) {
   }
   
   if (canContinueZhao && zhaoChar) {
-    performZhao(playerIndex, zhaoChar);
-    return;
+    if (playerIndex === 1) {
+      logGame('ZHAO', '人类玩家还有可招字牌:', zhaoChar, '回到回合让用户选择, isShiDuiTing=', isShiDuiTing(player), 'canZimo=', checkHu(player).canHu);
+    } else {
+      performZhao(playerIndex, zhaoChar);
+      return;
+    }
   }
   
   if (playerIndex === 1) {
@@ -6621,6 +7021,7 @@ function handleHu(playerIndex, method) {
       stopCountdown();
       gameState.isMyTurn = false;
       gameState.waitingForResponse = false;
+      logGame('HU', 'handleHu异常恢复: 2秒后调用startRound');
       setTimeout(() => { startRound(); }, 2000);
     } catch(e2) {
       logError('HU', 'handleHu恢复失败:', e2.message);
@@ -6631,15 +7032,14 @@ function handleHu(playerIndex, method) {
 function _handleHu(playerIndex, method) {
   if (gameState.isDealing) return;
   if (gameState.isHandlingHu) {
-    console.log('handleHu: 已经在处理胡牌，跳过重复调用');
+    logGame('HU', 'handleHu跳过: isHandlingHu=true, playerIndex=', playerIndex, 'method=', method);
     return;
   }
   gameState.isHandlingHu = true;
   
   clearCaches();
   
-  console.log('=== handleHu 被调用 ===');
-  console.log('玩家索引:', playerIndex, '胡牌方式:', method);
+  logGame('HU', '=== handleHu被调用 === playerIndex=', playerIndex, 'method=', method, 'roundNumber=', gameState.roundNumber, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
   
   stopCountdown();
   
@@ -6687,6 +7087,7 @@ function _handleHu(playerIndex, method) {
   
   // 获取对应胡牌方式的倍数
   const baseMultiplier = method === 'zimo' ? huResult.huType.multiplier.zimo : huResult.huType.multiplier.dianpao;
+  const dianpaoMultiplier = huResult.huType.multiplier.dianpao;
   const displayMultiplier = baseMultiplier;
   
   const winner = player;
@@ -6696,10 +7097,6 @@ function _handleHu(playerIndex, method) {
   let score = 0;
   
   if (method === 'zimo') {
-    // 自摸：
-    // 每个输家输的分数 = 底分 + 倍数 × 倍数基数分 + 飘分(输家飘分 + 赢家飘分)
-    // 赢家分数 = 2 ×（底分 + 倍数 × 倍数基数分）+ 飘分(赢家飘分*2 + 其它两个玩家飘分之和)
-    
     const otherPiaoSum = gameState.players.reduce((sum, p, i) => {
       return i !== playerIndex ? sum + p.piao : sum;
     }, 0);
@@ -6709,7 +7106,7 @@ function _handleHu(playerIndex, method) {
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
         loser.score -= loserScore;
       }
     }
@@ -6777,16 +7174,14 @@ function _handleHu(playerIndex, method) {
   // 计算输家的分数
   const loserScores = [];
   if (method === 'zimo') {
-    // 自摸：两家都输
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
         loserScores.push({ name: loser.name, score: loserScore });
       }
     }
   } else {
-    // 点炮：只有点炮人输
     if (dianPaoPlayer) {
       const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + dianPaoPlayer.piao + winnerPiao;
       loserScores.push({ name: dianPaoPlayer.name, score: loserScore });
@@ -6830,29 +7225,25 @@ function _handleHu(playerIndex, method) {
 }
 
 function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoPlayer, method, huCard, multiplier, loserScores, scoresBefore) {
-  // 隐藏听牌徽章和自摸徽章
+  logGame('HU_SHOW', 'showHuMessage被调用, player=', player.name, 'isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
+  
   const tingBadge = document.getElementById('tingBadge');
   const zimoBadge = document.getElementById('zimoBadge');
   if (tingBadge) tingBadge.classList.add('hidden');
   if (zimoBadge) zimoBadge.classList.add('hidden');
   
-  const overlay = document.getElementById('dealingOverlay');
-  const mask = document.getElementById('dealingMask');
+  const huOverlay = document.getElementById('huOverlay');
+  const huMask = document.getElementById('huMask');
+  const huContent = document.getElementById('huContent');
   
-  if (!overlay || !mask) {
-    console.error('showHuMessage: 找不到必要的DOM元素');
+  if (!huOverlay || !huMask || !huContent) {
+    console.error('showHuMessage: 找不到huOverlay相关DOM元素');
     return;
   }
-  
-  overlay.classList.remove('hidden');
-  mask.classList.remove('hidden');
-  overlay.style.display = 'flex';
-  mask.style.display = 'block';
   
   const playedCardsEl = document.getElementById('playedCards');
   if (playedCardsEl) playedCardsEl.style.display = 'none';
   
-  // 触发分数变化动画（在弹窗显示后）
   if (scoresBefore) {
     setTimeout(() => {
       for (let i = 0; i < gameState.players.length; i++) {
@@ -6886,6 +7277,29 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
       sentenceGroups[card.sentence][card.position] = [];
     }
     sentenceGroups[card.sentence][card.position].push(card);
+  }
+  
+  if (displayHuCard && sentenceGroups[displayHuCard.sentence]) {
+    const group = sentenceGroups[displayHuCard.sentence];
+    const huPos = displayHuCard.position;
+    if (group[huPos]) {
+      const huIdx = group[huPos].findIndex(c => c.id === displayHuCard.id);
+      if (huIdx >= 0) {
+        group[huPos].splice(huIdx, 1);
+        const newPositions = {};
+        let posIdx = 0;
+        for (let p = 0; p <= 2; p++) {
+          if (p === huPos) continue;
+          if (group[p] && group[p].length > 0) {
+            newPositions[posIdx] = [...group[p]];
+            posIdx++;
+          }
+        }
+        const huCards = [displayHuCard, ...group[huPos]];
+        newPositions[posIdx] = huCards;
+        sentenceGroups[displayHuCard.sentence] = newPositions;
+      }
+    }
   }
   
   let handHtml = '';
@@ -6923,75 +7337,81 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   
   let meldsHtml = '';
   if (player.melds.length > 0) {
-    meldsHtml = '<div style="margin-top: 25px;"><div style="font-size: 16px; color: #ffd700; margin-bottom: 12px;">组合牌:</div><div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 10px;">';
+    meldsHtml = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 10px; margin-top: 8px;">';
     
     for (const meld of player.melds) {
+      meldsHtml += '<div style="display: flex; gap: 1px; padding: 2px; background: rgba(255,215,0,0.1); border-radius: 4px; margin: 1px;">';
       for (const card of meld.cards) {
         const pinyin = CARD_PINYIN[card.character];
         meldsHtml += `<div style="background-image: url('images/s/${pinyin}.png'); background-size: contain; background-position: center; background-repeat: no-repeat; width: 20px; height: 84px;"></div>`;
       }
+      meldsHtml += '</div>';
     }
     
-    meldsHtml += '</div></div>';
+    meldsHtml += '</div>';
   }
   
-  let losersHandHtml = '';
+  let losersHtml = '';
   const winnerIndex = gameState.players.findIndex(p => p === player);
-  for (let i = 0; i < gameState.players.length; i++) {
-    if (i === winnerIndex) continue;
-    
-    const loser = gameState.players[i];
-    if (loser.hand.length === 0) continue;
-    
-    losersHandHtml += `<div style="margin-top: 20px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 10px;">`;
-    losersHandHtml += `<div style="font-size: 14px; color: #aaa; margin-bottom: 8px;">${loser.name}的手牌:</div>`;
-    losersHandHtml += `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 2px;">`;
-    
-    const sortedHand = sortHand([...loser.hand]);
-    for (const card of sortedHand) {
-      const pinyin = CARD_PINYIN[card.character];
-      losersHandHtml += `<div style="background-image: url('images/s/${pinyin}.png'); background-size: contain; background-position: center; background-repeat: no-repeat; width: 18px; height: 60px;"></div>`;
-    }
-    
-    losersHandHtml += `</div></div>`;
-  }
-  
-  let loserScoresHtml = '';
   if (loserScores && loserScores.length > 0) {
-    loserScoresHtml = '<div style="margin-top: 15px; display: flex; justify-content: center; gap: 20px;">';
-    for (const ls of loserScores) {
-      loserScoresHtml += `<span style="color: #ff6b6b; font-size: 14px;">${ls.name}: -${ls.score}</span>`;
+    losersHtml = '<div style="display: flex; justify-content: center; gap: 12px; margin-top: 10px;">';
+    for (let i = 0; i < gameState.players.length; i++) {
+      if (i === winnerIndex) continue;
+      const loser = gameState.players[i];
+      const ls = loserScores.find(l => l.name === loser.name);
+      
+      losersHtml += '<div style="text-align: center; padding: 4px 10px; background: rgba(255,107,107,0.1); border-radius: 6px;">';
+      losersHtml += `<div style="font-size: 11px; color: #aaa;">${loser.name}</div>`;
+      
+      if (loser.hand && loser.hand.length > 0) {
+        losersHtml += '<div style="display: flex; gap: 1px; justify-content: center; margin: 3px 0;">';
+        const sortedLoserHand = sortHand([...loser.hand]);
+        for (const card of sortedLoserHand) {
+          const pinyin = CARD_PINYIN[card.character];
+          losersHtml += `<div style="background-image: url('images/s/${pinyin}.png'); background-size: contain; background-position: center; background-repeat: no-repeat; width: 16px; height: 36px;"></div>`;
+        }
+        losersHtml += '</div>';
+      }
+      
+      if (ls) {
+        losersHtml += `<div style="font-size: 14px; color: #ff6b6b; font-weight: bold;">-${ls.score}</div>`;
+      }
+      losersHtml += '</div>';
     }
-    loserScoresHtml += '</div>';
+    losersHtml += '</div>';
   }
   
   const html = `
-    <div style="text-align: center; padding: 20px; position: relative;">
-      <div id="huCloseBtn" style="position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); border-radius: 50%; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.4)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <div style="text-align: center; padding: 16px; position: relative; background: linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.3)); border: 2px solid rgba(255,215,0,0.4); border-radius: 12px; overflow: hidden;">
+      <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,215,0,0.05) 0%, transparent 70%); animation: hu-glow 3s ease-in-out infinite; pointer-events: none;"></div>
+      <div id="huCloseBtn" style="position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.15); border-radius: 50%; transition: background 0.2s; z-index: 10;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </div>
-      <div style="font-size: 24px; color: #ffd700; margin-bottom: 15px;">${player.name} 胡牌!</div>
-      <div style="display: flex; justify-content: center; align-items: center; gap: 14px; font-size: 10px; margin-bottom: 15px;">
-        <span style="color: #fff;">${methodName}${dianPaoPlayer ? ` - ${dianPaoPlayer.name}点炮` : ''}</span>
-        <span style="color: #4ecdc4;">${huTypeName}</span>
-        <span style="color: #ffd700;">胡数: ${huResult.huCount}</span>
-        <span style="color: #ff6b6b;">倍数: ${multiplier}倍</span>
-        <span style="color: #4ecdc4;">得分: +${score}</span>
+      <div style="font-size: 22px; color: #ffd700; margin-bottom: 8px; text-shadow: 0 0 15px rgba(255,215,0,0.5); position: relative;">🎉 ${player.name} 胡牌!</div>
+      <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; position: relative;">
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.15); color: #fff;">${methodName}${dianPaoPlayer ? ` - ${dianPaoPlayer.name}点炮` : ''}</span>
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(78,205,196,0.2); color: #4ecdc4;">${huTypeName}</span>
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,215,0,0.2); color: #ffd700;">胡数: ${huResult.huCount}</span>
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,107,107,0.2); color: #ff6b6b;">${multiplier}倍</span>
       </div>
-      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 15px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 10px; min-height: ${handAreaHeight}px;">
+      <div style="font-size: 32px; color: #ffd700; font-weight: bold; margin: 8px 0; position: relative; text-shadow: 0 0 20px rgba(255,215,0,0.4);">+${score} <span style="font-size: 13px; color: rgba(255,215,0,0.7); font-weight: normal;">分</span></div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 10px; min-height: ${handAreaHeight}px; position: relative;">
         ${handHtml}
       </div>
       ${meldsHtml}
-      ${losersHandHtml}
-      ${loserScoresHtml}
-      <button id="huConfirmBtn" class="btn btn-primary" style="margin-top: 15px; pointer-events: auto; z-index: 3001;">确定</button>
+      ${losersHtml}
+      <button id="huConfirmBtn" style="margin-top: 12px; padding: 8px 40px; background: linear-gradient(135deg, #ffd700, #f0c000); color: #1a472a; border: none; border-radius: 20px; font-size: 14px; font-weight: bold; cursor: pointer; pointer-events: auto; z-index: 4002;">确定</button>
     </div>
   `;
   
-  overlay.querySelector('.dealing-text').innerHTML = html;
+  huContent.innerHTML = html;
+  
+  huOverlay.classList.remove('hidden');
+  huMask.classList.remove('hidden');
+  logGame('HU_SHOW', 'huOverlay已显示, hidden=', huOverlay.classList.contains('hidden'), 'computedDisplay=', getComputedStyle(huOverlay).display);
   
   const confirmBtn = document.getElementById('huConfirmBtn');
   if (confirmBtn) {
@@ -7007,26 +7427,20 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
     newCloseBtn.addEventListener('click', closeHuMessage);
   }
   
-  // 添加滑动关闭功能
-  const dealingText = overlay.querySelector('.dealing-text');
-  if (dealingText) {
-    // 移除之前的滑动事件监听器，防止重复添加
-    if (dealingText._swipeHandler) {
-      dealingText.removeEventListener('touchstart', dealingText._swipeHandler.touchstart);
-      dealingText.removeEventListener('touchmove', dealingText._swipeHandler.touchmove);
-      dealingText.removeEventListener('touchend', dealingText._swipeHandler.touchend);
-      dealingText.removeEventListener('mousedown', dealingText._swipeHandler.mousedown);
-      dealingText.removeEventListener('mousemove', dealingText._swipeHandler.mousemove);
-      dealingText.removeEventListener('mouseup', dealingText._swipeHandler.mouseup);
-      dealingText.removeEventListener('mouseleave', dealingText._swipeHandler.mouseleave);
-    }
-    setupSwipeToClose(dealingText, closeHuMessage);
+  if (huContent._swipeHandler) {
+    huContent.removeEventListener('touchstart', huContent._swipeHandler.touchstart);
+    huContent.removeEventListener('touchmove', huContent._swipeHandler.touchmove);
+    huContent.removeEventListener('touchend', huContent._swipeHandler.touchend);
+    huContent.removeEventListener('mousedown', huContent._swipeHandler.mousedown);
+    huContent.removeEventListener('mousemove', huContent._swipeHandler.mousemove);
+    huContent.removeEventListener('mouseup', huContent._swipeHandler.mouseup);
+    huContent.removeEventListener('mouseleave', huContent._swipeHandler.mouseleave);
   }
+  setupSwipeToClose(huContent, closeHuMessage);
   
-  // 测试模式下自动2秒后关闭胡牌弹窗
   if (gameState.testMode) {
     setTimeout(() => {
-      if (overlay.style.display !== 'none') {
+      if (!huOverlay.classList.contains('hidden')) {
         closeHuMessage();
       }
     }, 2000);
@@ -7035,96 +7449,60 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
 
 function closeHuMessage() {
   if (gameState.isClosingHuMessage) {
-    console.log('closeHuMessage: 已经在关闭中，跳过');
+    logGame('HU_CLOSE', 'closeHuMessage防重入拦截');
     return;
   }
   gameState.isClosingHuMessage = true;
-  console.log('closeHuMessage: 开始关闭');
   
-  gameState.isHandlingHu = false;
+  logGame('HU_CLOSE', '>>> closeHuMessage开始 <<< isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
   
-  const overlay = document.getElementById('dealingOverlay');
-  const mask = document.getElementById('dealingMask');
+  const huOverlay = document.getElementById('huOverlay');
+  const huMask = document.getElementById('huMask');
+  const huContent = document.getElementById('huContent');
   
-  if (overlay) {
-    overlay.style.display = 'none';
-    overlay.classList.add('hidden');
-    const dealingText = overlay.querySelector('.dealing-text');
-    if (dealingText) dealingText.innerHTML = '';
+  if (huContent && huContent._swipeHandler) {
+    huContent.removeEventListener('touchstart', huContent._swipeHandler.touchstart);
+    huContent.removeEventListener('touchmove', huContent._swipeHandler.touchmove);
+    huContent.removeEventListener('touchend', huContent._swipeHandler.touchend);
+    huContent.removeEventListener('mousedown', huContent._swipeHandler.mousedown);
+    huContent.removeEventListener('mousemove', huContent._swipeHandler.mousemove);
+    huContent.removeEventListener('mouseup', huContent._swipeHandler.mouseup);
+    huContent.removeEventListener('mouseleave', huContent._swipeHandler.mouseleave);
+    huContent._swipeHandler = null;
   }
-  if (mask) {
-    mask.style.display = 'none';
-    mask.classList.add('hidden');
+  
+  if (huOverlay) {
+    huOverlay.classList.add('hidden');
+    huContent.innerHTML = '';
   }
+  if (huMask) {
+    huMask.classList.add('hidden');
+  }
+  logGame('HU_CLOSE', 'huOverlay已隐藏, hidden=', huOverlay?.classList.contains('hidden'));
   
   const playedCardsEl = document.getElementById('playedCards');
   if (playedCardsEl) playedCardsEl.style.display = '';
   
   stopCountdown();
-  
   gameState.isMyTurn = false;
   gameState.waitingForResponse = false;
-  gameState.selectedCardIndex = -1;
-  gameState.canHu = false;
-  gameState.canZhao = false;
-  gameState.canPeng = false;
-  gameState.canChi = false;
   gameState.isDrawing = false;
-  gameState.skipDraw = false;
   
   const container = document.getElementById('actionButtons');
   if (container) container.innerHTML = '';
   
-  const elementIds = ['myHand', 'player1Discard', 'myDiscard', 'player2Discard', 
-                      'player1Melds', 'myMelds', 'player2Melds', 'playedCards'];
-  elementIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = '';
-  });
-  
-  document.querySelectorAll('body > div[style*="position: fixed"][style*="z-index: 9999"]').forEach(el => el.remove());
-  document.querySelectorAll('body > div[style*="position: fixed"][style*="z-index: 10000"]').forEach(el => el.remove());
-  
-  const zimoBadge = document.getElementById('zimoBadge');
-  if (zimoBadge) zimoBadge.classList.add('hidden');
-  
-  updateHandCount('player1HandCount', 0);
-  updateHandCount('myHandCount', 0);
-  updateHandCount('player2HandCount', 0);
-  
-  // 更新分数显示（不需要动画，直接更新）
-  const scoreIds = ['player1Score', 'myScore', 'player2Score'];
-  for (let i = 0; i < 3; i++) {
-    const scoreEl = document.getElementById(scoreIds[i]);
-    if (scoreEl) scoreEl.textContent = gameState.players[i].score;
-  }
-  
-  const huBadge = document.getElementById('myHuBadge');
-  if (huBadge) huBadge.classList.add('hidden');
-  
-  updateHuBadgeDisplay();
-  
-  const tingBadge = document.getElementById('tingBadge');
-  tingBadge.classList.add('hidden');
-  
-  console.log('当前局数:', gameState.roundNumber);
-  
   if (gameState.roundNumber >= 8) {
-    console.log('已满8局，显示结算页面');
+    logGame('HU_CLOSE', '第8局结束, 显示结算页面');
+    gameState.isClosingHuMessage = false;
     showSettlementPage();
-    setTimeout(() => {
-      gameState.isClosingHuMessage = false;
-    }, 500);
     return;
   }
   
-  console.log('准备调用 startRound()');
+  gameState.skipDealAnimation = true;
+  logGame('HU_CLOSE', '设置skipDealAnimation=true, 直接调用startRound');
+  gameState.isClosingHuMessage = false;
   startRound();
-  
-  setTimeout(() => {
-    gameState.isClosingHuMessage = false;
-    console.log('isClosingHuMessage 已重置');
-  }, 1000);
+  logGame('HU_CLOSE', '<<< closeHuMessage完成 >>>');
 }
 
 function removeLastDiscard() {
@@ -7334,17 +7712,18 @@ function discardAction() {
   if (gameState.selectedCardIndex < 0) {
     return;
   }
-  if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
+  if (!gameState.isMyTurn) {
+    logGame('DISCARD', 'discardAction被拒绝: isMyTurn=false, currentPlayerIndex=', gameState.currentPlayerIndex);
     return;
   }
-  if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
-    logWarn('DISCARD', 'isMyTurn=false但currentPlayerIndex=1，允许出牌并修复状态');
-    gameState.isMyTurn = true;
-  }
   if (gameState.isDrawing) {
-    logWarn('DISCARD', 'isDrawing=true时尝试出牌，强制完成摸牌');
-    gameState.isDrawing = false;
+    return;
   }
+  if (gameState.isDiscarding) {
+    logGame('DISCARD', 'discardAction防重入: isDiscarding=true');
+    return;
+  }
+  gameState.isDiscarding = true;
   
   const me = gameState.players[1];
   
@@ -7352,6 +7731,7 @@ function discardAction() {
   
   if (huResult.canHu) {
     hideAllActionButtons();
+    gameState.isDiscarding = false;
     handleHu(1, 'zimo');
     return;
   }
@@ -7364,17 +7744,15 @@ function discardAction() {
 }
 
 function selectCard(index) {
-  if (!gameState.isMyTurn && gameState.currentPlayerIndex !== 1) {
+  if (!gameState.isMyTurn) {
     console.log('不能选择牌: isMyTurn=', gameState.isMyTurn, 'currentPlayerIndex=', gameState.currentPlayerIndex);
     return;
   }
   if (gameState.isDrawing) {
-    logWarn('SELECT', 'isDrawing=true时尝试选牌，强制完成摸牌');
-    gameState.isDrawing = false;
+    return;
   }
-  if (!gameState.isMyTurn && gameState.currentPlayerIndex === 1) {
-    logWarn('SELECT', 'isMyTurn=false但currentPlayerIndex=1，修复状态');
-    gameState.isMyTurn = true;
+  if (gameState.isDiscarding) {
+    return;
   }
   
   gameState.selectedCardIndex = index;
@@ -7411,13 +7789,11 @@ function updateActionButtons() {
     if (gameState.canPeng) {
       createButton(container, '碰', 'btn-primary', pengAction);
     }
-    if (gameState.canZhao) {
+    if (gameState.canZhao && !gameState.canHu) {
       createButton(container, '招', 'btn-warning', zhaoAction);
     }
     createButton(container, '过', 'btn-secondary', passAction);
   } else if (gameState.isMyTurn) {
-    logGame('BTN', '显示我的回合按钮');
-    
     const counts = {};
     for (const card of me.hand) {
       counts[card.character] = (counts[card.character] || 0) + 1;
@@ -7431,16 +7807,34 @@ function updateActionButtons() {
       }
     }
     
-    if (hasFourOfAKind && !isShiDuiTing(me)) {
-      createButton(container, '招', 'btn-warning', () => {
-        hideAllActionButtons();
-        for (const [char, count] of Object.entries(counts)) {
-          if (count >= 4) {
-            performZhao(1, char);
-            break;
-          }
+    const huResult = checkHu(me);
+    const canZimo = me.isTing && huResult.canHu;
+    
+    logGame('ZHAO', 'updateActionButtons(我的回合): hasFourOfAKind=', hasFourOfAKind, 'isShiDuiTing=', isShiDuiTing(me), 'canZimo=', canZimo, 'isTing=', me.isTing, 'huResult.canHu=', huResult.canHu, 'handCounts=', JSON.stringify(counts));
+    
+    if (hasFourOfAKind && !isShiDuiTing(me) && !canZimo) {
+      const zhaoChars = [];
+      for (const [char, count] of Object.entries(counts)) {
+        if (count >= 4) {
+          zhaoChars.push(char);
         }
-      });
+      }
+      logGame('ZHAO', 'updateActionButtons: 显示招按钮, zhaoChars=', zhaoChars.join(','));
+      if (zhaoChars.length === 1) {
+        createButton(container, '招', 'btn-warning', () => {
+          hideAllActionButtons();
+          performZhao(1, zhaoChars[0]);
+        });
+      } else {
+        for (const char of zhaoChars) {
+          createButton(container, '招' + char, 'btn-warning', () => {
+            hideAllActionButtons();
+            performZhao(1, char);
+          });
+        }
+      }
+    } else if (hasFourOfAKind) {
+      logGame('ZHAO', 'updateActionButtons: 有4张同字但不显示招按钮, isShiDuiTing=', isShiDuiTing(me), 'canZimo=', canZimo, 'isTing=', me.isTing, 'huResult.canHu=', huResult.canHu);
     }
     
     if (gameState.selectedCardIndex >= 0) {
@@ -7569,6 +7963,10 @@ function animateScoreChange(playerIndex, newScore, oldScore) {
 }
 
 function updateUI() {
+  if (gameState.isClosingHuMessage || gameState.isClosingMessage) {
+    logGame('UI', 'updateUI跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage, 'isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
+    return;
+  }
   updatePlayerArea(0, 'player1');
   updatePlayerArea(1, 'my');
   updatePlayerArea(2, 'player2');
@@ -7634,6 +8032,10 @@ function updatePlayerArea(playerIndex, prefix) {
     for (const card of player.discards) {
       discardsEl.appendChild(createSmallCardElement(card));
     }
+    if (player.discards.length > 0 && gameState.lastDiscardPlayerIndex === playerIndex) {
+      const lastEl = discardsEl.lastElementChild;
+      if (lastEl) lastEl.classList.add('last-discard');
+    }
   }
   
   if (playerIndex === 1) {
@@ -7697,6 +8099,7 @@ function clearCaches() {
   huTypeCache.clear();
   tingCache.clear();
   invalidateRemainingCardsCache();
+  document.querySelectorAll('.last-discard').forEach(el => el.classList.remove('last-discard'));
 }
 
 function checkTing(player) {
@@ -8578,7 +8981,7 @@ function shouldAIPeng(player, card) {
   const afterPengMelds = [...melds, {
     type: 'triplet',
     cards: [card, card, card],
-    huValue: isJingKan ? 12 : 3
+    huValue: isJingKan ? 12 : 2
   }];
   
   const afterPengXiangTing = calculateXiangTingShu(afterPengHandCorrect, afterPengMelds);
@@ -8935,7 +9338,7 @@ function addHistory(playerName, cardChar) {
 }
 
 function showMessage(title, content, isLiuJu = false) {
-  // 隐藏听牌徽章和自摸徽章
+  logGame('LIUJU_SHOW', 'showMessage被调用, title=', title, 'isLiuJu=', isLiuJu, 'roundNumber=', gameState.roundNumber, 'isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage);
   const tingBadge = document.getElementById('tingBadge');
   const zimoBadge = document.getElementById('zimoBadge');
   if (tingBadge) tingBadge.classList.add('hidden');
@@ -8995,6 +9398,7 @@ function showMessage(title, content, isLiuJu = false) {
   const messageArea = document.getElementById('messageArea');
   messageArea.classList.add('show');
   messageArea.dataset.liuju = isLiuJu;
+  logGame('LIUJU_SHOW', 'messageArea已显示, isLiuJu=', isLiuJu, 'classList show=', messageArea.classList.contains('show'));
   
   // 移除之前的滑动事件监听器，防止重复添加
   if (messageArea._swipeHandler) {
@@ -9022,65 +9426,75 @@ function showMessage(title, content, isLiuJu = false) {
 
 function closeMessage() {
   if (gameState.isClosingMessage) {
-    console.log('closeMessage: 已经在关闭中，跳过');
+    logGame('LIUJU_CLOSE', 'closeMessage防重入拦截, isClosingMessage=true, roundNumber=', gameState.roundNumber);
     return;
   }
   gameState.isClosingMessage = true;
-  console.log('closeMessage: 开始关闭');
+  logGame('LIUJU_CLOSE', '>>> closeMessage开始执行 <<< isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
   
   const messageArea = document.getElementById('messageArea');
   const isLiuJu = messageArea.dataset.liuju === 'true';
   messageArea.classList.remove('show');
   messageArea.dataset.liuju = 'false';
+  document.getElementById('messageContent').innerHTML = '';
+  logGame('LIUJU_CLOSE', 'messageArea已隐藏并清空内容, isLiuJu=', isLiuJu);
+  
+  const overlay = document.getElementById('dealingOverlay');
+  const mask = document.getElementById('dealingMask');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.style.visibility = 'hidden';
+    overlay.style.opacity = '0';
+    overlay.classList.add('hidden');
+    overlay.innerHTML = '<div class="dealing-text"></div>';
+  }
+  if (mask) {
+    mask.style.display = 'none';
+    mask.classList.add('hidden');
+  }
+  
+  const playedCardsEl2 = document.getElementById('playedCards');
+  if (playedCardsEl2) playedCardsEl2.style.display = '';
   
   stopCountdown();
-  
   gameState.isMyTurn = false;
   gameState.waitingForResponse = false;
-  gameState.selectedCardIndex = -1;
-  gameState.canHu = false;
-  gameState.canZhao = false;
-  gameState.canPeng = false;
-  gameState.canChi = false;
+  gameState.isDrawing = false;
   
   const container = document.getElementById('actionButtons');
-  container.innerHTML = '';
-  
-  document.getElementById('myHand').innerHTML = '';
-  document.getElementById('player1Discard').innerHTML = '';
-  document.getElementById('myDiscard').innerHTML = '';
-  document.getElementById('player2Discard').innerHTML = '';
-  document.getElementById('player1Melds').innerHTML = '';
-  document.getElementById('myMelds').innerHTML = '';
-  document.getElementById('player2Melds').innerHTML = '';
-  document.getElementById('playedCards').innerHTML = '';
-  
-  updateHuBadgeDisplay();
-  
-  console.log('closeMessage: isLiuJu =', isLiuJu, 'roundNumber =', gameState.roundNumber);
+  if (container) container.innerHTML = '';
   
   if (isLiuJu) {
-    
     if (gameState.roundNumber >= 8) {
-      console.log('第8局流局结束，显示结算页面');
+      logGame('LIUJU_CLOSE', '第8局流局结束, 显示结算页面');
       showSettlementPage();
       setTimeout(() => {
         gameState.isClosingMessage = false;
+        logGame('LIUJU_CLOSE', 'isClosingMessage重置(settlement)');
       }, 500);
       return;
     }
     
-    console.log('流局，开始下一局');
-    startRound();
-    
-    setTimeout(() => {
-      gameState.isClosingMessage = false;
-      console.log('isClosingMessage 已重置');
-    }, 1000);
+    gameState.skipDealAnimation = true;
+    logGame('LIUJU_CLOSE', '流局关闭, 设置skipDealAnimation=true');
+    requestAnimationFrame(() => {
+      if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+        overlay.style.visibility = 'hidden';
+        overlay.style.opacity = '0';
+      }
+      requestAnimationFrame(() => {
+        gameState.isClosingMessage = false;
+        startRound();
+        logGame('LIUJU_CLOSE', '<<< closeMessage完成 >>> startRound已调用');
+      });
+    });
     return;
   }
   
   gameState.isClosingMessage = false;
+  logGame('LIUJU_CLOSE', '非流局关闭, isClosingMessage=false');
 }
 
 // 设置弹窗功能
@@ -9139,6 +9553,7 @@ function updateDifficulty(value) {
 }
 
 function showSettlementPage() {
+  logGame('SETTLE', 'showSettlementPage被调用, roundNumber=', gameState.roundNumber, 'isHandlingHu=', gameState.isHandlingHu, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
   console.log('====== showSettlementPage 被调用 ======');
   console.log('roundHistory 长度:', gameState.roundHistory.length);
   console.log('roundHistory 内容:', JSON.stringify(gameState.roundHistory));
@@ -9318,6 +9733,27 @@ document.addEventListener('DOMContentLoaded', () => {
   
   initSwipeToClose();
   
+  const overlayEl = document.getElementById('dealingOverlay');
+  if (overlayEl) {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target = mutation.target;
+        if (target.id === 'dealingOverlay' || target.id === 'dealingMask') {
+          if (mutation.type === 'attributes') {
+            const display = target.style.display;
+            const hasHidden = target.classList.contains('hidden');
+            const isVisible = display !== 'none' && !hasHidden;
+            if (isVisible) {
+              const stackLines = new Error().stack.split('\n').slice(2, 6).map(s => s.trim()).join(' <- ');
+              logGame('OVERLAY_MUTATION', target.id, mutation.attributeName, 'display=', display, 'hidden=', hasHidden, 'isVisible=', isVisible, 'CALLSTACK=', stackLines);
+            }
+          }
+        }
+      }
+    });
+    observer.observe(overlayEl, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+  
   const myAvatar = document.getElementById('myAvatar');
   if (myAvatar) {
     myAvatar.style.cursor = 'pointer';
@@ -9326,6 +9762,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   updateTime();
   setInterval(updateTime, 1000);
+  
+  initResourceMonitor();
 });
 
 function updateTime() {
@@ -9406,6 +9844,91 @@ document.addEventListener('dragstart', (e) => {
   e.preventDefault();
   return false;
 });
+
+let _resMonitorFpsFrames = 0;
+let _resMonitorFpsLast = performance.now();
+let _resMonitorFpsValue = 0;
+
+function _resMonitorCalcFps() {
+  _resMonitorFpsFrames++;
+  const now = performance.now();
+  const elapsed = now - _resMonitorFpsLast;
+  if (elapsed >= 1000) {
+    _resMonitorFpsValue = Math.round((_resMonitorFpsFrames * 1000) / elapsed);
+    _resMonitorFpsFrames = 0;
+    _resMonitorFpsLast = now;
+  }
+  requestAnimationFrame(_resMonitorCalcFps);
+}
+
+function _resMonitorGetJsMemory() {
+  if (performance.memory) {
+    return {
+      usedJSHeapSize: Math.round(performance.memory.usedJSHeapSize / 1048576),
+      totalJSHeapSize: Math.round(performance.memory.totalJSHeapSize / 1048576),
+      jsHeapSizeLimit: Math.round(performance.memory.jsHeapSizeLimit / 1048576)
+    };
+  }
+  return null;
+}
+
+function _resMonitorGetDomStats() {
+  const allElements = document.querySelectorAll('*');
+  let imgCount = 0;
+  let divCount = 0;
+  let listenerCount = 0;
+  allElements.forEach(el => {
+    if (el.tagName === 'IMG') imgCount++;
+    else if (el.tagName === 'DIV') divCount++;
+  });
+  return {
+    totalNodes: allElements.length,
+    divCount: divCount,
+    imgCount: imgCount
+  };
+}
+
+function _resMonitorGetTimers() {
+  return {
+    activeTimers: gameState._activeTimerCount || 0,
+    roundNumber: gameState.roundNumber || 0,
+    isMyTurn: gameState.isMyTurn || false,
+    isDealing: gameState.isDealing || false,
+    isHandlingHu: gameState.isHandlingHu || false
+  };
+}
+
+function logResourceSnapshot() {
+  const mem = _resMonitorGetJsMemory();
+  const dom = _resMonitorGetDomStats();
+  const timers = _resMonitorGetTimers();
+  
+  const parts = [];
+  parts.push('FPS=' + _resMonitorFpsValue);
+  
+  if (mem) {
+    parts.push('JSHeap=' + mem.usedJSHeapSize + 'MB/' + mem.totalJSHeapSize + 'MB');
+    parts.push('HeapLimit=' + mem.jsHeapSizeLimit + 'MB');
+  }
+  
+  parts.push('DOM=' + dom.totalNodes + '(div=' + dom.divCount + ',img=' + dom.imgCount + ')');
+  parts.push('Round=' + timers.roundNumber);
+  parts.push('myTurn=' + timers.isMyTurn);
+  parts.push('dealing=' + timers.isDealing);
+  parts.push('handlingHu=' + timers.isHandlingHu);
+  
+  logGame('RESOURCE', parts.join(', '));
+}
+
+function initResourceMonitor() {
+  requestAnimationFrame(_resMonitorCalcFps);
+  
+  logResourceSnapshot();
+  
+  setInterval(logResourceSnapshot, 30000);
+  
+  logGame('RESOURCE', '资源监控已启动, 采样间隔30秒');
+}
 
 document.addEventListener('touchstart', (e) => {
   if (e.touches.length > 1) {
@@ -9528,9 +10051,6 @@ function autoTestDoAction() {
   
   if (gameState.waitingForResponse) {
     if (autoTestStats.firstActionOfRound) {
-      if (gameState.countdown % 5 === 0 || gameState.countdown <= 3) {
-        autoTestLog('  (首局等待超时...countdown=' + gameState.countdown + ')');
-      }
       autoTestActionPending = false;
       setTimeout(autoTestDoAction, 1000);
       return;
@@ -9562,16 +10082,14 @@ function autoTestDoAction() {
     
     let delay;
     const delayRand = Math.random();
-    if (delayRand < 0.1) {
-      delay = Math.floor(Math.random() * 5000) + 30000;
-      autoTestLog('  (开小差模式，延迟' + Math.round(delay/1000) + '秒)');
-    } else if (delayRand < 0.3) {
-      delay = Math.floor(Math.random() * 10000) + 15000;
-      autoTestLog('  (思考中，延迟' + Math.round(delay/1000) + '秒)');
-    } else if (delayRand < 0.6) {
-      delay = Math.floor(Math.random() * 8000) + 5000;
+    if (delayRand < 0.05) {
+      delay = Math.floor(Math.random() * 5000) + 20000;
+    } else if (delayRand < 0.2) {
+      delay = Math.floor(Math.random() * 8000) + 10000;
+    } else if (delayRand < 0.5) {
+      delay = Math.floor(Math.random() * 5000) + 5000;
     } else {
-      delay = Math.floor(Math.random() * 3000) + 500;
+      delay = Math.floor(Math.random() * 3000) + 1000;
     }
     setTimeout(() => {
       if (!autoTestRunning) return;
@@ -9625,9 +10143,6 @@ function autoTestDoAction() {
     }
     
     if (autoTestStats.firstActionOfRound) {
-      if (gameState.countdown % 5 === 0 || gameState.countdown <= 3) {
-        autoTestLog('  (首局等待超时...countdown=' + gameState.countdown + ')');
-      }
       autoTestActionPending = false;
       setTimeout(autoTestDoAction, 1000);
       return;
@@ -9647,16 +10162,14 @@ function autoTestDoAction() {
     
     let delay;
     const r2 = Math.random();
-    if (r2 < 0.1) {
-      delay = Math.floor(Math.random() * 5000) + 30000;
-      autoTestLog('  (开小差模式，延迟' + Math.round(delay/1000) + '秒)');
-    } else if (r2 < 0.3) {
-      delay = Math.floor(Math.random() * 10000) + 15000;
-      autoTestLog('  (思考中，延迟' + Math.round(delay/1000) + '秒)');
-    } else if (r2 < 0.6) {
-      delay = Math.floor(Math.random() * 8000) + 5000;
+    if (r2 < 0.05) {
+      delay = Math.floor(Math.random() * 5000) + 20000;
+    } else if (r2 < 0.2) {
+      delay = Math.floor(Math.random() * 8000) + 10000;
+    } else if (r2 < 0.5) {
+      delay = Math.floor(Math.random() * 5000) + 5000;
     } else {
-      delay = Math.floor(Math.random() * 3000) + 500;
+      delay = Math.floor(Math.random() * 3000) + 1000;
     }
     setTimeout(() => {
       if (!autoTestRunning) return;
@@ -9701,10 +10214,6 @@ let autoTestCountdownChecker = null;
 let autoTestPageChecker = null;
 
 function runAutoTest(rounds = 3) {
-  return;
-  if (typeof FlutterBridge !== 'undefined') {
-    FlutterBridge.postMessage('AUTOTEST_LOG:runAutoTest called, rounds=' + rounds);
-  }
   autoTestLog('========== AUTOTEST START ==========');
   autoTestLog('Target rounds: ' + rounds);
   
@@ -9741,34 +10250,100 @@ function runAutoTest(rounds = 3) {
     
     const settlementPage = document.getElementById('settlementPage');
     if (settlementPage && settlementPage.classList.contains('show')) {
-      autoTestLog('Auto closing settlement page');
-      closeSettlement();
-      setTimeout(() => {
-        if (!autoTestRunning) return;
-        autoTestLog('Restarting game after settlement');
-        startGame();
-        autoTestWaitForPiao();
-      }, 3000);
+      if (!settlementPage.dataset.autoTestClosing) {
+        settlementPage.dataset.autoTestClosing = 'true';
+        autoTestLog('Settlement page detected, will click close in 5s');
+        setTimeout(() => {
+          if (!autoTestRunning) return;
+          autoTestLog('Clicking settlement close area');
+          closeSettlement();
+          autoTestStats.rounds++;
+          autoTestLog('Round done (settlement)! ' + autoTestStats.rounds + '/' + rounds);
+          
+          if (autoTestStats.rounds >= rounds) {
+            const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
+            autoTestLog('========== AUTOTEST END ==========');
+            autoTestLog('Time: ' + elapsed + 's | Rounds: ' + autoTestStats.rounds + ' | Actions: ' + autoTestStats.actions);
+            autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
+            autoTestCleanup();
+            return;
+          }
+          
+          setTimeout(() => {
+            if (!autoTestRunning) return;
+            autoTestLog('Restarting game after settlement');
+            startGame();
+            autoTestWaitForPiao();
+          }, 3000);
+        }, 5000);
+      }
       return;
     }
     
     const dealingOverlay = document.getElementById('dealingOverlay');
     if (dealingOverlay && dealingOverlay.style.display !== 'none' && !dealingOverlay.classList.contains('hidden') && gameState.isHandlingHu) {
-      autoTestLog('Auto closing hu result page');
-      closeHuMessage();
+      if (!dealingOverlay.dataset.autoTestClosing) {
+        dealingOverlay.dataset.autoTestClosing = 'true';
+        autoTestLog('Hu result page detected, will click confirm in 5s');
+        setTimeout(() => {
+          if (!autoTestRunning) return;
+          if (dealingOverlay) delete dealingOverlay.dataset.autoTestClosing;
+          const confirmBtn = document.getElementById('huConfirmBtn') || document.querySelector('#dealingOverlay .confirm-btn');
+          const closeBtn = document.getElementById('huCloseBtn');
+          if (confirmBtn) {
+            autoTestLog('Clicking hu confirm button');
+            confirmBtn.click();
+          } else if (closeBtn) {
+            autoTestLog('Clicking hu close button');
+            closeBtn.click();
+          } else {
+            autoTestLog('No hu close button found, calling closeHuMessage directly');
+            closeHuMessage();
+          }
+        }, 5000);
+      }
       return;
     }
     
     const messageArea = document.getElementById('messageArea');
     if (messageArea && messageArea.classList.contains('show')) {
-      autoTestLog('Auto closing message page (liuju/result)');
-      closeMessage();
+      if (!messageArea.dataset.autoTestClosing) {
+        messageArea.dataset.autoTestClosing = 'true';
+        autoTestLog('Message page detected, will click close in 5s');
+        setTimeout(() => {
+          if (!autoTestRunning) return;
+          if (messageArea) delete messageArea.dataset.autoTestClosing;
+          const msgCloseBtn = messageArea.querySelector('.close-btn') || messageArea.querySelector('button');
+          if (msgCloseBtn) {
+            autoTestLog('Clicking message close button');
+            msgCloseBtn.click();
+          } else {
+            autoTestLog('No message close button found, clicking message area');
+            messageArea.click();
+          }
+        }, 5000);
+      }
       return;
     }
   }, 3000);
   
   const origCloseHuMessage = closeHuMessage;
+  const origCloseMessage = closeMessage;
+  const origHandleTimeout = handleTimeout;
   let huMessageClosing = false;
+  let messageClosing = false;
+  
+  function autoTestCleanup() {
+    autoTestRunning = false;
+    if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
+    if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
+    if (autoTestPageChecker) clearInterval(autoTestPageChecker);
+    closeHuMessage = origCloseHuMessage;
+    closeMessage = origCloseMessage;
+    handleTimeout = origHandleTimeout;
+    autoTestLog('Cleanup done, all original functions restored');
+  }
+  
   closeHuMessage = function() {
     if (huMessageClosing) return;
     huMessageClosing = true;
@@ -9777,11 +10352,6 @@ function runAutoTest(rounds = 3) {
     autoTestLog('Round done! ' + autoTestStats.rounds + '/' + rounds);
     
     if (autoTestStats.rounds >= rounds) {
-      autoTestRunning = false;
-      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
-      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
-      if (autoTestPageChecker) clearInterval(autoTestPageChecker);
-      
       const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
       autoTestLog('========== AUTOTEST END ==========');
       autoTestLog('Time: ' + elapsed + 's');
@@ -9807,7 +10377,12 @@ function runAutoTest(rounds = 3) {
       }
       
       origCloseHuMessage.call(this);
+      autoTestRunning = false;
+      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
+      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
       closeHuMessage = origCloseHuMessage;
+      closeMessage = origCloseMessage;
+      handleTimeout = origHandleTimeout;
       return;
     }
     
@@ -9822,8 +10397,6 @@ function runAutoTest(rounds = 3) {
     }, 3000);
   };
   
-  const origCloseMessage = closeMessage;
-  let messageClosing = false;
   closeMessage = function() {
     if (messageClosing) return;
     messageClosing = true;
@@ -9841,18 +10414,18 @@ function runAutoTest(rounds = 3) {
     autoTestLog('Round done (liuju)! ' + autoTestStats.rounds + '/' + rounds);
     
     if (autoTestStats.rounds >= rounds) {
-      autoTestRunning = false;
-      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
-      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
-      if (autoTestPageChecker) clearInterval(autoTestPageChecker);
-      
       const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
       autoTestLog('========== AUTOTEST END ==========');
       autoTestLog('Time: ' + elapsed + 's | Rounds: ' + autoTestStats.rounds + ' | Actions: ' + autoTestStats.actions);
       autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
       
       origCloseMessage.call(this);
+      autoTestRunning = false;
+      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
+      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
+      closeHuMessage = origCloseHuMessage;
       closeMessage = origCloseMessage;
+      handleTimeout = origHandleTimeout;
       return;
     }
     
@@ -9867,7 +10440,6 @@ function runAutoTest(rounds = 3) {
     }, 3000);
   };
   
-  const origHandleTimeout = handleTimeout;
   handleTimeout = function() {
     autoTestStats.timeouts++;
     autoTestLog('Timeout! isMyTurn=' + gameState.isMyTurn + ' waiting=' + gameState.waitingForResponse);
@@ -9910,7 +10482,9 @@ function autoTestWaitForPiao() {
   }, 500);
 }
 
-function stopAutoTest() {
+function autoPlayAsHuman() {}
+
+function stopAutoPlay() {
   autoTestRunning = false;
   if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
   if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);

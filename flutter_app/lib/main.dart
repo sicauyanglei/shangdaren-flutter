@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:async';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,8 +44,12 @@ class _GamePageState extends State<GamePage> {
   late WebViewController _controller;
   bool _isLoading = true;
   bool _pageLoaded = false;
-  static const _testChannel = MethodChannel('com.shangdaren.game/test');
-  bool _testTriggered = false;
+  static const MethodChannel _testChannel = MethodChannel(
+    'com.shangdaren.game/test',
+  );
+  File? _logFile;
+  IOSink? _logSink;
+  Timer? _resourceMonitorTimer;
 
   @override
   void initState() {
@@ -57,9 +64,8 @@ class _GamePageState extends State<GamePage> {
               _isLoading = false;
             });
             _pageLoaded = true;
-            Future.delayed(const Duration(seconds: 3), () {
-              _checkPendingTest();
-            });
+            _initLogFile();
+            _checkPendingAutoTest();
           },
         ),
       )
@@ -69,29 +75,16 @@ class _GamePageState extends State<GamePage> {
           final msg = message.message;
           if (msg == 'exit') {
             exit(0);
-          } else if (msg == 'runAutoTest') {
-            _controller.runJavaScript('runAutoTest(3);');
-          } else if (msg.startsWith('runAutoTest:')) {
-            final rounds = int.tryParse(msg.split(':')[1]) ?? 3;
-            _controller.runJavaScript('runAutoTest($rounds);');
           } else if (msg.startsWith('SDR_LOG:')) {
-            debugPrint('SDR ${msg.substring(8)}');
-          } else if (msg.startsWith('TEST_DONE:')) {
-            if (false) {
-              const platform = MethodChannel('com.shangdaren.game/log');
-              platform.invokeMethod('log', {
-                'tag': 'AUTOTEST_RESULT',
-                'msg': msg.substring(10),
-              });
-            }
+            final logLine = msg.substring(8);
+            debugPrint('SDR $logLine');
+            _writeLog(logLine);
           } else if (msg.startsWith('AUTOTEST_LOG:')) {
-            if (false) {
-              const platform = MethodChannel('com.shangdaren.game/log');
-              platform.invokeMethod('log', {
-                'tag': 'AUTOTEST',
-                'msg': msg.substring(13),
-              });
-            }
+            final logLine = '[AUTOTEST] ${msg.substring(13)}';
+            debugPrint(logLine);
+            _writeLog(logLine);
+          } else if (msg.startsWith('TEST_DONE:')) {
+            debugPrint('TEST_DONE ${msg.substring(10)}');
           }
         },
       )
@@ -103,43 +96,107 @@ class _GamePageState extends State<GamePage> {
       androidController.setMediaPlaybackRequiresUserGesture(false);
       AndroidWebViewController.enableDebugging(true);
     }
-
-    _pollPendingTest();
   }
 
-  void _pollPendingTest() {
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!mounted || !_pageLoaded) return;
-      _checkPendingTest();
-      _pollPendingTest();
+  @override
+  void dispose() {
+    _resourceMonitorTimer?.cancel();
+    _logSink?.close();
+    super.dispose();
+  }
+
+  Future<void> _checkPendingAutoTest() async {
+    try {
+      final rounds = await _testChannel.invokeMethod<int>('getPendingRounds');
+      if (rounds != null && rounds > 0) {
+        debugPrint('AUTOTEST: Starting auto test with $rounds rounds');
+        await Future.delayed(const Duration(seconds: 2));
+        _controller.runJavaScript('runAutoTest($rounds)');
+      }
+    } catch (e) {
+      debugPrint('AUTOTEST: Error checking pending rounds: $e');
+    }
+  }
+
+  Future<void> _initLogFile() async {
+    try {
+      final now = DateTime.now();
+      final dateStr =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+
+      Directory? logDir;
+
+      var status = await Permission.manageExternalStorage.status;
+      if (!status.isGranted) {
+        status = await Permission.manageExternalStorage.request();
+      }
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+      }
+
+      if (status.isGranted) {
+        final sdrDir = Directory('/storage/emulated/0/DCIM/ShangDaRen');
+        if (!await sdrDir.exists()) {
+          await sdrDir.create(recursive: true);
+        }
+        logDir = sdrDir;
+      }
+
+      if (logDir == null) {
+        final extDir = await getExternalStorageDirectory();
+        if (extDir != null) {
+          final sdrDir = Directory('${extDir.path}/ShangDaRen');
+          if (!await sdrDir.exists()) {
+            await sdrDir.create(recursive: true);
+          }
+          logDir = sdrDir;
+        }
+      }
+
+      if (logDir == null) {
+        debugPrint('No available log directory');
+        return;
+      }
+
+      _logFile = File('${logDir.path}/game_log_$dateStr.txt');
+      _logSink = _logFile!.openWrite(mode: FileMode.append);
+      _logSink!.writeln('=== 上大人字牌日志 $dateStr ===');
+      _logSink!.flush();
+      debugPrint('Log file: ${_logFile!.path}');
+      _startResourceMonitor();
+    } catch (e) {
+      debugPrint('Init log file error: $e');
+    }
+  }
+
+  void _startResourceMonitor() {
+    _resourceMonitorTimer?.cancel();
+    _logNativeResource();
+    _resourceMonitorTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _logNativeResource();
     });
   }
 
-  void _checkPendingTest() {
-    return;
-    if (_testTriggered || !_pageLoaded) return;
-    _testChannel
-        .invokeMethod<int>('getPendingRounds')
-        .then((rounds) {
-          if (rounds != null && rounds > 0 && !_testTriggered) {
-            _testTriggered = true;
-            const logChannel = MethodChannel('com.shangdaren.game/log');
-            logChannel.invokeMethod('log', {
-              'tag': 'AUTOTEST',
-              'msg': 'Triggering runAutoTest($rounds)',
-            });
-            _controller.runJavaScript(
-              'try { runAutoTest($rounds); } catch(e) { FlutterBridge.postMessage("AUTOTEST_LOG:ERROR:" + e.message); }',
-            );
-          }
-        })
-        .catchError((e) {
-          const logChannel = MethodChannel('com.shangdaren.game/log');
-          logChannel.invokeMethod('log', {
-            'tag': 'AUTOTEST',
-            'msg': 'getPendingRounds error: $e',
-          });
-        });
+  void _logNativeResource() {
+    try {
+      final info = ProcessInfo.currentRss;
+      final maxRss = ProcessInfo.maxRss;
+      final usedMb = (info / 1048576).round();
+      final maxMb = (maxRss / 1048576).round();
+      final line = '[NATIVE_RESOURCE] RSS=${usedMb}MB, MaxRSS=${maxMb}MB';
+      debugPrint('SDR $line');
+      _writeLog(line);
+    } catch (e) {
+      debugPrint('Resource monitor error: $e');
+    }
+  }
+
+  void _writeLog(String line) {
+    if (_logSink != null) {
+      final timestamp = DateTime.now().toString().substring(11, 23);
+      _logSink!.writeln('[$timestamp] $line');
+      _logSink!.flush();
+    }
   }
 
   @override
