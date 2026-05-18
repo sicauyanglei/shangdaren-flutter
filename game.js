@@ -220,10 +220,9 @@ function addLog(level, ...args) {
 
 function logGame(tag, ...args) {
   addLog('INFO', '[' + tag + ']', ...args);
-  if (tag === 'HU_CLOSE' || tag === 'HU_SHOW' || tag === 'RESUME' || tag === 'RESP' ||
-      tag === 'ROUND' || tag === 'DEAL_ANIM' || tag === 'PIAO' || tag === 'UI' ||
-      tag === 'AI' || tag === 'AI_DRAW' || tag === 'LIUJU_CLOSE' || tag === 'LIUJU_SHOW' ||
-      tag === 'ZHAO' || tag === 'HU' || tag === 'SETTLE' || tag === 'OVERLAY_MUTATION' ||
+  if (tag === 'HU' || tag === 'RESP' || tag === 'ROUND' || tag === 'DEAL_ANIM' ||
+      tag === 'PIAO' || tag === 'UI' || tag === 'AI' || tag === 'AI_DRAW' ||
+      tag === 'LIUJU_SHOW' || tag === 'ZHAO' || tag === 'SETTLE' || tag === 'OVERLAY' ||
       tag === 'RESOURCE') {
     try {
       if (typeof FlutterBridge !== 'undefined') {
@@ -392,7 +391,6 @@ function setupSwipeToClose(element, onCloseCallback) {
     
     const overlayEl = document.getElementById('dealingOverlay');
     if (overlayEl && overlayEl.classList.contains('hidden')) {
-      logGame('HU_CLOSE', 'swipe touchend: overlay已hidden, 忽略swipe操作');
       return;
     }
     
@@ -405,7 +403,6 @@ function setupSwipeToClose(element, onCloseCallback) {
       setTimeout(() => {
         const overlayCheck = document.getElementById('dealingOverlay');
         if (overlayCheck && overlayCheck.classList.contains('hidden')) {
-          logGame('HU_CLOSE', 'swipe setTimeout: overlay已hidden, 跳过样式重置和回调');
           return;
         }
         element.style.transform = '';
@@ -443,7 +440,6 @@ function setupSwipeToClose(element, onCloseCallback) {
     
     const overlayEl = document.getElementById('dealingOverlay');
     if (overlayEl && overlayEl.classList.contains('hidden')) {
-      logGame('HU_CLOSE', 'swipe mouseup: overlay已hidden, 忽略swipe操作');
       return;
     }
     
@@ -456,7 +452,6 @@ function setupSwipeToClose(element, onCloseCallback) {
       setTimeout(() => {
         const overlayCheck = document.getElementById('dealingOverlay');
         if (overlayCheck && overlayCheck.classList.contains('hidden')) {
-          logGame('HU_CLOSE', 'swipe mouseup setTimeout: overlay已hidden, 跳过样式重置和回调');
           return;
         }
         element.style.transform = '';
@@ -2028,6 +2023,13 @@ function startRound() {
     el.classList.add('hidden');
   });
   
+  const playedCardsEl = document.getElementById('playedCards');
+  if (playedCardsEl) playedCardsEl.innerHTML = '';
+  
+  document.querySelectorAll('.player-discard, .my-discard-side').forEach(el => {
+    el.innerHTML = '';
+  });
+  
   updateAvatars();
   document.getElementById('roundNum').textContent = `${gameState.roundNumber}/8`;
   updateUI();
@@ -2337,9 +2339,6 @@ function renderMyHand() {
           return;
         }
         if (gameState.isDrawing) {
-          return;
-        }
-        if (gameState.isDiscarding) {
           return;
         }
         
@@ -4885,7 +4884,13 @@ function discardCard(playerIndex, cardIndex) {
   }
   
   if (cardIndex < 0 || cardIndex >= player.hand.length) {
-    logError('DISCARD', '无效的牌索引:', cardIndex, '手牌数:', player.hand.length);
+    logError('DISCARD', '无效的牌索引:', cardIndex, '手牌数:', player.hand.length, '调用栈:', new Error().stack);
+    if (playerIndex === 1) {
+      logError('DISCARD', '人类玩家索引无效，不执行回退出牌，重置状态');
+      gameState.isDiscarding = false;
+      gameState.selectedCardIndex = -1;
+      return;
+    }
     if (player.hand.length > 0) {
       cardIndex = player.hand.length - 1;
     } else {
@@ -6612,6 +6617,9 @@ function performChi(playerIndex) {
   if (gameState.isDealing) return;
   clearCaches();
   
+  gameState.selectedCardIndex = -1;
+  gameState.isDiscarding = true;
+  
   const player = gameState.players[playerIndex];
   const card = gameState.lastDiscardedCard;
   
@@ -6716,6 +6724,8 @@ function performChi(playerIndex) {
     updateCurrentPlayerUI();
     
     if (player.type === 'human') {
+      gameState.isDiscarding = false;
+      gameState.selectedCardIndex = -1;
       startCountdown();
       updateActionButtons();
     } else {
@@ -6736,6 +6746,9 @@ function performChi(playerIndex) {
 function performPeng(playerIndex) {
   if (gameState.isDealing) return;
   clearCaches();
+  
+  gameState.selectedCardIndex = -1;
+  gameState.isDiscarding = true;
   
   const player = gameState.players[playerIndex];
   const card = gameState.lastDiscardedCard;
@@ -6799,6 +6812,8 @@ function performPeng(playerIndex) {
     updateCurrentPlayerUI();
     
     if (player.type === 'human') {
+      gameState.isDiscarding = false;
+      gameState.selectedCardIndex = -1;
       startCountdown();
       updateActionButtons();
     } else {
@@ -6819,6 +6834,9 @@ function performPeng(playerIndex) {
 function performZhao(playerIndex, char = null) {
   if (gameState.isDealing) return;
   clearCaches();
+  
+  gameState.selectedCardIndex = -1;
+  gameState.isDiscarding = true;
   
   const player = gameState.players[playerIndex];
   
@@ -6981,6 +6999,8 @@ function finishZhao(playerIndex, player) {
   if (playerIndex === 1) {
     gameState.isMyTurn = true;
     gameState.isDrawing = false;
+    gameState.isDiscarding = false;
+    gameState.selectedCardIndex = -1;
     
     const tingResult = checkTing(player);
     player.isTing = tingResult.isTing;
@@ -7225,8 +7245,6 @@ function _handleHu(playerIndex, method) {
 }
 
 function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoPlayer, method, huCard, multiplier, loserScores, scoresBefore) {
-  logGame('HU_SHOW', 'showHuMessage被调用, player=', player.name, 'isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
-  
   const tingBadge = document.getElementById('tingBadge');
   const zimoBadge = document.getElementById('zimoBadge');
   if (tingBadge) tingBadge.classList.add('hidden');
@@ -7411,7 +7429,6 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   
   huOverlay.classList.remove('hidden');
   huMask.classList.remove('hidden');
-  logGame('HU_SHOW', 'huOverlay已显示, hidden=', huOverlay.classList.contains('hidden'), 'computedDisplay=', getComputedStyle(huOverlay).display);
   
   const confirmBtn = document.getElementById('huConfirmBtn');
   if (confirmBtn) {
@@ -7448,13 +7465,8 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
 }
 
 function closeHuMessage() {
-  if (gameState.isClosingHuMessage) {
-    logGame('HU_CLOSE', 'closeHuMessage防重入拦截');
-    return;
-  }
+  if (gameState.isClosingHuMessage) return;
   gameState.isClosingHuMessage = true;
-  
-  logGame('HU_CLOSE', '>>> closeHuMessage开始 <<< isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
   
   const huOverlay = document.getElementById('huOverlay');
   const huMask = document.getElementById('huMask');
@@ -7478,7 +7490,6 @@ function closeHuMessage() {
   if (huMask) {
     huMask.classList.add('hidden');
   }
-  logGame('HU_CLOSE', 'huOverlay已隐藏, hidden=', huOverlay?.classList.contains('hidden'));
   
   const playedCardsEl = document.getElementById('playedCards');
   if (playedCardsEl) playedCardsEl.style.display = '';
@@ -7492,17 +7503,14 @@ function closeHuMessage() {
   if (container) container.innerHTML = '';
   
   if (gameState.roundNumber >= 8) {
-    logGame('HU_CLOSE', '第8局结束, 显示结算页面');
     gameState.isClosingHuMessage = false;
     showSettlementPage();
     return;
   }
   
   gameState.skipDealAnimation = true;
-  logGame('HU_CLOSE', '设置skipDealAnimation=true, 直接调用startRound');
   gameState.isClosingHuMessage = false;
   startRound();
-  logGame('HU_CLOSE', '<<< closeHuMessage完成 >>>');
 }
 
 function removeLastDiscard() {
@@ -7719,10 +7727,6 @@ function discardAction() {
   if (gameState.isDrawing) {
     return;
   }
-  if (gameState.isDiscarding) {
-    logGame('DISCARD', 'discardAction防重入: isDiscarding=true');
-    return;
-  }
   gameState.isDiscarding = true;
   
   const me = gameState.players[1];
@@ -7749,9 +7753,6 @@ function selectCard(index) {
     return;
   }
   if (gameState.isDrawing) {
-    return;
-  }
-  if (gameState.isDiscarding) {
     return;
   }
   
@@ -9425,19 +9426,14 @@ function showMessage(title, content, isLiuJu = false) {
 }
 
 function closeMessage() {
-  if (gameState.isClosingMessage) {
-    logGame('LIUJU_CLOSE', 'closeMessage防重入拦截, isClosingMessage=true, roundNumber=', gameState.roundNumber);
-    return;
-  }
+  if (gameState.isClosingMessage) return;
   gameState.isClosingMessage = true;
-  logGame('LIUJU_CLOSE', '>>> closeMessage开始执行 <<< isHandlingHu=', gameState.isHandlingHu, 'roundNumber=', gameState.roundNumber);
   
   const messageArea = document.getElementById('messageArea');
   const isLiuJu = messageArea.dataset.liuju === 'true';
   messageArea.classList.remove('show');
   messageArea.dataset.liuju = 'false';
   document.getElementById('messageContent').innerHTML = '';
-  logGame('LIUJU_CLOSE', 'messageArea已隐藏并清空内容, isLiuJu=', isLiuJu);
   
   const overlay = document.getElementById('dealingOverlay');
   const mask = document.getElementById('dealingMask');
@@ -9466,17 +9462,14 @@ function closeMessage() {
   
   if (isLiuJu) {
     if (gameState.roundNumber >= 8) {
-      logGame('LIUJU_CLOSE', '第8局流局结束, 显示结算页面');
       showSettlementPage();
       setTimeout(() => {
         gameState.isClosingMessage = false;
-        logGame('LIUJU_CLOSE', 'isClosingMessage重置(settlement)');
       }, 500);
       return;
     }
     
     gameState.skipDealAnimation = true;
-    logGame('LIUJU_CLOSE', '流局关闭, 设置skipDealAnimation=true');
     requestAnimationFrame(() => {
       if (overlay) {
         overlay.classList.add('hidden');
@@ -9487,14 +9480,12 @@ function closeMessage() {
       requestAnimationFrame(() => {
         gameState.isClosingMessage = false;
         startRound();
-        logGame('LIUJU_CLOSE', '<<< closeMessage完成 >>> startRound已调用');
       });
     });
     return;
   }
   
   gameState.isClosingMessage = false;
-  logGame('LIUJU_CLOSE', '非流局关闭, isClosingMessage=false');
 }
 
 // 设置弹窗功能
@@ -9744,8 +9735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasHidden = target.classList.contains('hidden');
             const isVisible = display !== 'none' && !hasHidden;
             if (isVisible) {
-              const stackLines = new Error().stack.split('\n').slice(2, 6).map(s => s.trim()).join(' <- ');
-              logGame('OVERLAY_MUTATION', target.id, mutation.attributeName, 'display=', display, 'hidden=', hasHidden, 'isVisible=', isVisible, 'CALLSTACK=', stackLines);
+              logGame('OVERLAY', target.id, mutation.attributeName, '异常可见');
             }
           }
         }
