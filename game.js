@@ -391,6 +391,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
   const touchstartHandler = (e) => {
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
+    currentX = startX;
     isDragging = true;
     element.style.transition = 'none';
   };
@@ -415,12 +416,16 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
     if (Math.abs(deltaX) > threshold) {
+      logGame('SWIPE', '滑动关闭触发, deltaX=', deltaX, 'threshold=', threshold);
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
         element.style.transform = '';
         element.style.opacity = '';
-        if (onCloseCallback) onCloseCallback();
+        const overlay = document.getElementById(overlayId);
+        if (overlay && !overlay.classList.contains('hidden')) {
+          if (onCloseCallback) onCloseCallback();
+        }
       }, 300);
     } else {
       element.style.transform = '';
@@ -431,6 +436,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
   const mousedownHandler = (e) => {
     startX = e.clientX;
     startY = e.clientY;
+    currentX = startX;
     isDragging = true;
     element.style.transition = 'none';
   };
@@ -455,12 +461,16 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
     if (Math.abs(deltaX) > threshold) {
+      logGame('SWIPE', '鼠标滑动关闭触发, deltaX=', deltaX, 'threshold=', threshold);
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
         element.style.transform = '';
         element.style.opacity = '';
-        if (onCloseCallback) onCloseCallback();
+        const overlay = document.getElementById(overlayId);
+        if (overlay && !overlay.classList.contains('hidden')) {
+          if (onCloseCallback) onCloseCallback();
+        }
       }, 300);
     } else {
       element.style.transform = '';
@@ -7168,9 +7178,16 @@ function _handleHu(playerIndex, method) {
   gameState.isHandlingHu = true;
   
   _huSafetyTimer = setTimeout(() => {
-    if (gameState.isHandlingHu) {
-      logGame('HU', '超时保护: isHandlingHu仍为true, 自动关闭胡牌页面');
-      closeHuMessage();
+    try {
+      if (gameState.isHandlingHu) {
+        logGame('HU', '超时保护: isHandlingHu仍为true, 自动关闭胡牌页面');
+        closeHuMessage();
+      } else {
+        logGame('HU', '超时保护: isHandlingHu已重置, 无需关闭');
+      }
+    } catch(e) {
+      logGame('HU', '超时保护异常:', e.message);
+      try { closeHuMessage(); } catch(e2) {}
     }
   }, 15000);
   
@@ -7544,18 +7561,32 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   huOverlay.classList.remove('hidden');
   huMask.classList.remove('hidden');
   
+  logGame('HU_SHOW', '胡牌页面已显示, huOverlay hidden=', huOverlay.classList.contains('hidden'));
+  
   const confirmBtn = document.getElementById('huConfirmBtn');
   if (confirmBtn) {
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.addEventListener('click', closeHuMessage);
+    newConfirmBtn.addEventListener('click', function(e) {
+      logGame('HU_BTN', '确定按钮点击');
+      e.stopPropagation();
+      closeHuMessage();
+    });
+  } else {
+    logGame('HU_SHOW', '警告: 找不到确定按钮huConfirmBtn');
   }
   
   const closeBtn = document.getElementById('huCloseBtn');
   if (closeBtn) {
     const newCloseBtn = closeBtn.cloneNode(true);
     closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-    newCloseBtn.addEventListener('click', closeHuMessage);
+    newCloseBtn.addEventListener('click', function(e) {
+      logGame('HU_BTN', '关闭按钮点击');
+      e.stopPropagation();
+      closeHuMessage();
+    });
+  } else {
+    logGame('HU_SHOW', '警告: 找不到关闭按钮huCloseBtn');
   }
   
   if (huContent._swipeHandler) {
