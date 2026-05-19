@@ -7010,8 +7010,8 @@ function finishZhao(playerIndex, player) {
     
     const tingBadge = document.getElementById('tingBadge');
     const zimoBadge = document.getElementById('zimoBadge');
-    tingBadge.classList.add('hidden');
-    zimoBadge.classList.add('hidden');
+    if (tingBadge) tingBadge.classList.add('hidden');
+    if (zimoBadge) zimoBadge.classList.add('hidden');
     
     updateHuBadgeDisplay();
     
@@ -7117,16 +7117,17 @@ function _handleHu(playerIndex, method) {
   let score = 0;
   
   if (method === 'zimo') {
+    const winnerPiaoValue = winner.piao || 0;
     const otherPiaoSum = gameState.players.reduce((sum, p, i) => {
-      return i !== playerIndex ? sum + p.piao : sum;
+      return i !== playerIndex ? sum + (p.piao || 0) : sum;
     }, 0);
     
-    const winnerScore = 2 * (gameState.baseScore + baseMultiplier * gameState.multiplierBase) + winnerPiao * 2 + otherPiaoSum;
+    const winnerScore = 2 * (gameState.baseScore + baseMultiplier * gameState.multiplierBase) + winnerPiaoValue * 2 + otherPiaoSum;
     
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + (loser.piao || 0) + winnerPiaoValue;
         loser.score -= loserScore;
       }
     }
@@ -7138,6 +7139,7 @@ function _handleHu(playerIndex, method) {
     // 输牌人分数 = 底分 + 倍数 × 倍数基数分 + 飘分(点炮人飘分 + 赢家飘分)
     // 赢牌人分数 = 底分 + 倍数 × 倍数基数分 + 飘分(赢家飘分 + 点炮人飘分)
     // 两者相等
+    const winnerPiaoValue = winner.piao || 0;
     
     if (gameState.lastDiscardPlayerIndex < 0 || gameState.lastDiscardPlayerIndex >= gameState.players.length) {
       console.error('handleHu: 无效的点炮玩家索引', gameState.lastDiscardPlayerIndex);
@@ -7150,7 +7152,7 @@ function _handleHu(playerIndex, method) {
         method: '点炮',
         multiplier: displayMultiplier,
         score: 0,
-        piaoScores: gameState.players.map(p => p.piao),
+        piaoScores: gameState.players.map(p => p.piao || 0),
         isLiuJu: false,
         scoreChanges: [0, 0, 0],
         error: '无效的点炮玩家索引'
@@ -7170,7 +7172,7 @@ function _handleHu(playerIndex, method) {
         method: '点炮',
         multiplier: displayMultiplier,
         score: 0,
-        piaoScores: gameState.players.map(p => p.piao),
+        piaoScores: gameState.players.map(p => p.piao || 0),
         isLiuJu: false,
         scoreChanges: [0, 0, 0],
         error: '找不到点炮玩家'
@@ -7178,9 +7180,9 @@ function _handleHu(playerIndex, method) {
       gameState.roundHistory.push(roundInfo);
       return;
     }
-    const dianPaoPiao = dianPaoPlayer.piao;
+    const dianPaoPiaoValue = dianPaoPlayer.piao || 0;
     
-    const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + dianPaoPiao + winnerPiao;
+    const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + dianPaoPiaoValue + winnerPiaoValue;
     dianPaoPlayer.score -= loserScore;
     
     winner.score += loserScore;
@@ -7193,17 +7195,18 @@ function _handleHu(playerIndex, method) {
   
   // 计算输家的分数
   const loserScores = [];
+  const winnerPiaoValue = winner.piao || 0;
   if (method === 'zimo') {
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + (loser.piao || 0) + winnerPiaoValue;
         loserScores.push({ name: loser.name, score: loserScore });
       }
     }
   } else {
     if (dianPaoPlayer) {
-      const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + dianPaoPlayer.piao + winnerPiao;
+      const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + (dianPaoPlayer.piao || 0) + winnerPiaoValue;
       loserScores.push({ name: dianPaoPlayer.name, score: loserScore });
     }
   }
@@ -7218,7 +7221,7 @@ function _handleHu(playerIndex, method) {
     method: methodName,
     multiplier: displayMultiplier,
     score: score,
-    piaoScores: gameState.players.map(p => p.piao),
+    piaoScores: gameState.players.map(p => p.piao || 0),
     isLiuJu: false,
     scoreChanges: gameState.players.map((p, i) => p.score - scoresBefore[i])
   };
