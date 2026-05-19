@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +65,7 @@ class _GamePageState extends State<GamePage> {
               _isLoading = false;
             });
             _pageLoaded = true;
+            _controller.runJavaScript('try{localStorage.clear();}catch(e){}');
             _initLogFile();
             _checkPendingAutoTest();
           },
@@ -74,7 +76,9 @@ class _GamePageState extends State<GamePage> {
         onMessageReceived: (message) {
           final msg = message.message;
           if (msg == 'exit') {
-            exit(0);
+            SystemNavigator.pop();
+          } else if (msg == 'ROUND_END') {
+            _handleRoundEnd();
           } else if (msg.startsWith('SDR_LOG:')) {
             final logLine = msg.substring(8);
             debugPrint('SDR $logLine');
@@ -94,7 +98,7 @@ class _GamePageState extends State<GamePage> {
       final androidController =
           _controller.platform as AndroidWebViewController;
       androidController.setMediaPlaybackRequiresUserGesture(false);
-      AndroidWebViewController.enableDebugging(true);
+      AndroidWebViewController.enableDebugging(kDebugMode);
     }
   }
 
@@ -106,6 +110,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _checkPendingAutoTest() async {
+    if (kReleaseMode) return;
     try {
       final rounds = await _testChannel.invokeMethod<int>('getPendingRounds');
       if (rounds != null && rounds > 0) {
@@ -172,8 +177,9 @@ class _GamePageState extends State<GamePage> {
   void _startResourceMonitor() {
     _resourceMonitorTimer?.cancel();
     _logNativeResource();
-    _resourceMonitorTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _resourceMonitorTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _logNativeResource();
+      _checkMemoryWarning();
     });
   }
 
@@ -188,6 +194,71 @@ class _GamePageState extends State<GamePage> {
       _writeLog(line);
     } catch (e) {
       debugPrint('Resource monitor error: $e');
+    }
+  }
+
+  void _checkMemoryWarning() {
+    try {
+      final rss = ProcessInfo.currentRss;
+      final rssMb = (rss / 1048576).round();
+      _writeLog('[MEMORY_CHECK] RSS=${rssMb}MB');
+
+      if (rssMb >= 350) {
+        _writeLog(
+          '[MEMORY_WARNING] RSS=${rssMb}MB >= 350MB, clearCache + forceJsGc',
+        );
+        _clearWebViewCache();
+        _forceJsGc();
+      } else if (rssMb >= 280) {
+        _writeLog('[MEMORY_WARNING] RSS=${rssMb}MB >= 280MB, forceJsGc');
+        _forceJsGc();
+      }
+    } catch (e) {
+      debugPrint('Memory check error: $e');
+    }
+  }
+
+  void _handleRoundEnd() {
+    try {
+      final rss = ProcessInfo.currentRss;
+      final rssMb = (rss / 1048576).round();
+      _writeLog('[ROUND_END] RSS=${rssMb}MB');
+
+      if (rssMb >= 280) {
+        _writeLog(
+          '[ROUND_END] RSS=${rssMb}MB >= 280MB, clearCache + forceJsGc',
+        );
+        _clearWebViewCache();
+        _forceJsGc();
+      } else {
+        _forceJsGc();
+      }
+    } catch (e) {
+      debugPrint('Round end handler error: $e');
+    }
+  }
+
+  void _clearWebViewCache() {
+    try {
+      if (_controller.platform is AndroidWebViewController) {
+        final androidController =
+            _controller.platform as AndroidWebViewController;
+        androidController.clearCache();
+        _writeLog('[CACHE] WebView cache cleared');
+      }
+    } catch (e) {
+      debugPrint('Clear cache error: $e');
+    }
+  }
+
+  void _forceJsGc() {
+    try {
+      _controller.runJavaScript(
+        'if(typeof cleanupOrphanDom==="function"){cleanupOrphanDom();}'
+        'if(typeof gc==="function"){gc();}',
+      );
+    } catch (e) {
+      debugPrint('Force JS GC error: $e');
     }
   }
 
@@ -223,7 +294,7 @@ class _GamePageState extends State<GamePage> {
           ),
         );
         if (shouldExit == true) {
-          exit(0);
+          SystemNavigator.pop();
         }
       },
       child: Scaffold(
