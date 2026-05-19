@@ -385,6 +385,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
   let startY = 0;
   let currentX = 0;
   let isDragging = false;
+  let hasMoved = false;
   
   const threshold = window.innerWidth * 0.15;
   
@@ -393,6 +394,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     startY = e.touches[0].clientY;
     currentX = startX;
     isDragging = true;
+    hasMoved = false;
     element.style.transition = 'none';
   };
   
@@ -403,6 +405,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     const deltaY = Math.abs(e.touches[0].clientY - startY);
     
     if (deltaY < Math.abs(deltaX) && Math.abs(deltaX) > 10) {
+      hasMoved = true;
       element.style.transform = `translateX(${deltaX}px)`;
       element.style.opacity = 1 - Math.abs(deltaX) / (window.innerWidth * 0.5);
     }
@@ -411,6 +414,12 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
   const touchendHandler = (e) => {
     if (!isDragging) return;
     isDragging = false;
+    
+    if (!hasMoved) {
+      element.style.transform = '';
+      element.style.opacity = '';
+      return;
+    }
     
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
@@ -438,6 +447,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     startY = e.clientY;
     currentX = startX;
     isDragging = true;
+    hasMoved = false;
     element.style.transition = 'none';
   };
   
@@ -448,6 +458,7 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     const deltaY = Math.abs(e.clientY - startY);
     
     if (deltaY < Math.abs(deltaX) && Math.abs(deltaX) > 10) {
+      hasMoved = true;
       element.style.transform = `translateX(${deltaX}px)`;
       element.style.opacity = 1 - Math.abs(deltaX) / (window.innerWidth * 0.5);
     }
@@ -456,6 +467,12 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
   const mouseupHandler = (e) => {
     if (!isDragging) return;
     isDragging = false;
+    
+    if (!hasMoved) {
+      element.style.transform = '';
+      element.style.opacity = '';
+      return;
+    }
     
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
@@ -487,7 +504,6 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     }
   };
   
-  // 保存事件处理函数的引用
   element._swipeHandler = {
     touchstart: touchstartHandler,
     touchmove: touchmoveHandler,
@@ -498,7 +514,6 @@ function setupSwipeToClose(element, onCloseCallback, overlayId) {
     mouseleave: mouseleaveHandler
   };
   
-  // 添加事件监听器
   element.addEventListener('touchstart', touchstartHandler, { passive: true });
   element.addEventListener('touchmove', touchmoveHandler, { passive: true });
   element.addEventListener('touchend', touchendHandler, { passive: true });
@@ -7567,11 +7582,14 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   if (confirmBtn) {
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.addEventListener('click', function(e) {
-      logGame('HU_BTN', '确定按钮点击');
+    const handler = function(e) {
+      e.preventDefault();
       e.stopPropagation();
+      logGame('HU_BTN', '确定按钮触发, event=', e.type);
       closeHuMessage();
-    });
+    };
+    newConfirmBtn.addEventListener('touchend', handler);
+    newConfirmBtn.addEventListener('click', handler);
   } else {
     logGame('HU_SHOW', '警告: 找不到确定按钮huConfirmBtn');
   }
@@ -7580,11 +7598,14 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   if (closeBtn) {
     const newCloseBtn = closeBtn.cloneNode(true);
     closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-    newCloseBtn.addEventListener('click', function(e) {
-      logGame('HU_BTN', '关闭按钮点击');
+    const handler = function(e) {
+      e.preventDefault();
       e.stopPropagation();
+      logGame('HU_BTN', '关闭按钮触发, event=', e.type);
       closeHuMessage();
-    });
+    };
+    newCloseBtn.addEventListener('touchend', handler);
+    newCloseBtn.addEventListener('click', handler);
   } else {
     logGame('HU_SHOW', '警告: 找不到关闭按钮huCloseBtn');
   }
