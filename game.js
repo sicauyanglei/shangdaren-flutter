@@ -7384,13 +7384,17 @@ function _handleHu(playerIndex, method) {
   }
   
   // 先更新UI（但不更新分数显示），然后显示胡牌弹窗
+  logGame('HU', 'handleHu: 即将调用updateUI');
   updateUI();
   
+  logGame('HU', 'handleHu: 即将调用showHuMessage, player=', player.name, 'huType=', huTypeName, 'score=', score);
   // 显示胡牌弹窗，传入旧分数用于动画
   showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoPlayer, method, huCard, displayMultiplier, loserScores, scoresBefore);
+  logGame('HU', 'handleHu: showHuMessage调用完成');
 }
 
 function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoPlayer, method, huCard, multiplier, loserScores, scoresBefore) {
+  logGame('HU_SHOW', 'showHuMessage入口, player=', player.name, 'method=', method);
   const tingBadge = document.getElementById('tingBadge');
   const zimoBadge = document.getElementById('zimoBadge');
   if (tingBadge) tingBadge.classList.add('hidden');
