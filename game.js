@@ -136,6 +136,29 @@ document.addEventListener('DOMContentLoaded', function() {
 let audioContext = null;
 let audioInitialized = false;
 let voicesLoaded = false;
+let _pendingTimeouts = [];
+let _huSafetyTimer = null;
+
+function _trackedTimeout(fn, delay) {
+  const id = setTimeout(() => {
+    _removeTrackedTimeout(id);
+    fn();
+  }, delay);
+  _pendingTimeouts.push(id);
+  return id;
+}
+
+function _removeTrackedTimeout(id) {
+  const idx = _pendingTimeouts.indexOf(id);
+  if (idx >= 0) _pendingTimeouts.splice(idx, 1);
+}
+
+function _clearAllPendingTimeouts() {
+  for (const id of _pendingTimeouts) {
+    clearTimeout(id);
+  }
+  _pendingTimeouts = [];
+}
 
 // 日志系统 - 支持结构化标签、日志级别控制、全局错误捕获
 const gameLogs = [];
@@ -355,7 +378,7 @@ function testAudio(text) {
 }
 
 // 通用滑动关闭功能
-function setupSwipeToClose(element, onCloseCallback) {
+function setupSwipeToClose(element, onCloseCallback, overlayId) {
   if (!element) return;
   
   let startX = 0;
@@ -363,9 +386,8 @@ function setupSwipeToClose(element, onCloseCallback) {
   let currentX = 0;
   let isDragging = false;
   
-  const threshold = window.innerWidth * 0.3;
+  const threshold = window.innerWidth * 0.15;
   
-  // 定义事件处理函数
   const touchstartHandler = (e) => {
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
@@ -389,11 +411,6 @@ function setupSwipeToClose(element, onCloseCallback) {
     if (!isDragging) return;
     isDragging = false;
     
-    const overlayEl = document.getElementById('dealingOverlay');
-    if (overlayEl && overlayEl.classList.contains('hidden')) {
-      return;
-    }
-    
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
@@ -401,10 +418,6 @@ function setupSwipeToClose(element, onCloseCallback) {
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
-        const overlayCheck = document.getElementById('dealingOverlay');
-        if (overlayCheck && overlayCheck.classList.contains('hidden')) {
-          return;
-        }
         element.style.transform = '';
         element.style.opacity = '';
         if (onCloseCallback) onCloseCallback();
@@ -438,11 +451,6 @@ function setupSwipeToClose(element, onCloseCallback) {
     if (!isDragging) return;
     isDragging = false;
     
-    const overlayEl = document.getElementById('dealingOverlay');
-    if (overlayEl && overlayEl.classList.contains('hidden')) {
-      return;
-    }
-    
     const deltaX = currentX - startX;
     element.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     
@@ -450,10 +458,6 @@ function setupSwipeToClose(element, onCloseCallback) {
       element.style.transform = `translateX(${deltaX > 0 ? window.innerWidth : -window.innerWidth}px)`;
       element.style.opacity = '0';
       setTimeout(() => {
-        const overlayCheck = document.getElementById('dealingOverlay');
-        if (overlayCheck && overlayCheck.classList.contains('hidden')) {
-          return;
-        }
         element.style.transform = '';
         element.style.opacity = '';
         if (onCloseCallback) onCloseCallback();
@@ -601,9 +605,7 @@ const audioPreloaded = new Map();
 function preloadAudioFiles() {
   const voiceTypes = ['male', 'female'];
   const commonSounds = ['吃', '碰', '招', '胡', '自摸', '流局', '快点吧'];
-  const allChars = Object.keys(audioFileMap).filter(k => !commonSounds.includes(k));
-  const preloadList = [...commonSounds, ...allChars];
-  for (const text of preloadList) {
+  for (const text of commonSounds) {
     const fileName = audioFileMap[text];
     if (!fileName) continue;
     for (const voiceType of voiceTypes) {
@@ -615,6 +617,78 @@ function preloadAudioFiles() {
       audioPreloaded.set(audioKey, audio);
     }
   }
+}
+
+function _getOrCreateAudio(audioKey, audioPath) {
+  let audio = audioPreloaded.get(audioKey);
+  if (audio) return audio;
+  audio = new Audio(audioPath);
+  audioPreloaded.set(audioKey, audio);
+  return audio;
+}
+
+function cleanupAudioCache() {
+  const commonKeys = [];
+  const voiceTypes = ['male', 'female'];
+  const commonSounds = ['吃', '碰', '招', '胡', '自摸', '流局', '快点吧'];
+  for (const text of commonSounds) {
+    const fileName = audioFileMap[text];
+    if (!fileName) continue;
+    for (const vt of voiceTypes) {
+      commonKeys.push(`${vt}/${fileName}`);
+    }
+  }
+  
+  const exhaustedChars = getExhaustedCardChars();
+  if (exhaustedChars.length === 0) return;
+  
+  let cleaned = 0;
+  for (const [key, audio] of audioPreloaded) {
+    if (commonKeys.includes(key)) continue;
+    
+    let isExhausted = false;
+    for (const char of exhaustedChars) {
+      const fn = audioFileMap[char];
+      if (fn && key.includes('/' + fn)) {
+        isExhausted = true;
+        break;
+      }
+    }
+    
+    if (isExhausted) {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      audioPreloaded.delete(key);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    logGame('AUDIO', '清理出满4张牌的音频缓存: ' + cleaned + '个, 牌字: ' + exhaustedChars.join(','));
+  }
+}
+
+function getExhaustedCardChars() {
+  const charCounts = {};
+  for (const player of gameState.players) {
+    for (const card of player.playedCards) {
+      charCounts[card.character] = (charCounts[card.character] || 0) + 1;
+    }
+    for (const meld of player.melds) {
+      for (const card of meld.cards) {
+        charCounts[card.character] = (charCounts[card.character] || 0) + 1;
+      }
+    }
+  }
+  
+  const exhausted = [];
+  for (const [char, count] of Object.entries(charCounts)) {
+    if (count >= 4) {
+      exhausted.push(char);
+    }
+  }
+  return exhausted;
 }
 
 async function playLocalAudio(text, playerIndex = -1, volumeMultiplier = 1.0) {
@@ -644,29 +718,16 @@ async function playLocalAudio(text, playerIndex = -1, volumeMultiplier = 1.0) {
       safeResolve();
     }, 3000);
     
-    const preloaded = audioPreloaded.get(audioKey);
-    if (preloaded) {
-      try {
-        preloaded.currentTime = 0;
-        preloaded.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
-        preloaded.onended = () => { clearTimeout(timeout); safeResolve(); };
-        preloaded.onerror = () => { clearTimeout(timeout); safeResolve(); };
-        preloaded.play().then(() => {}).catch(() => { clearTimeout(timeout); safeResolve(); });
-      } catch(e) {
-        clearTimeout(timeout);
-        safeResolve();
-      }
-    } else {
-      try {
-        const audio = new Audio(audioPath);
-        audio.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
-        audio.onended = () => { clearTimeout(timeout); safeResolve(); };
-        audio.onerror = () => { clearTimeout(timeout); safeResolve(); };
-        audio.play().then(() => {}).catch(() => { clearTimeout(timeout); safeResolve(); });
-      } catch(e) {
-        clearTimeout(timeout);
-        safeResolve();
-      }
+    try {
+      const audio = _getOrCreateAudio(audioKey, audioPath);
+      audio.currentTime = 0;
+      audio.volume = Math.min(gameSettings.volume * volumeMultiplier, 1.0);
+      audio.onended = () => { clearTimeout(timeout); audio.onended = null; audio.onerror = null; safeResolve(); };
+      audio.onerror = () => { clearTimeout(timeout); audio.onended = null; audio.onerror = null; safeResolve(); };
+      audio.play().then(() => {}).catch(() => { clearTimeout(timeout); audio.onended = null; audio.onerror = null; safeResolve(); });
+    } catch(e) {
+      clearTimeout(timeout);
+      safeResolve();
     }
   });
 }
@@ -984,8 +1045,13 @@ document.addEventListener('visibilitychange', async () => {
     if (isGameActive && !gameState.isPaused) {
       pauseGame();
     }
+    _resMonitorFpsRunning = false;
   } else if (document.visibilityState === 'visible') {
-    // 应用切回，恢复游戏
+    _resMonitorFpsRunning = true;
+    _resMonitorFpsFrames = 0;
+    _resMonitorFpsLast = performance.now();
+    requestAnimationFrame(_resMonitorCalcFps);
+    
     await requestWakeLock();
     
     if (isGameActive && gameState.isPaused) {
@@ -1397,6 +1463,13 @@ let pauseStartTime = 0;
 
 function recordActivity() {
   lastActivityTime = Date.now();
+}
+
+function _pushRoundHistory(info) {
+  gameState.roundHistory.push(info);
+  if (gameState.roundHistory.length > 20) {
+    gameState.roundHistory.splice(0, gameState.roundHistory.length - 20);
+  }
 }
 
 setInterval(() => {
@@ -1950,16 +2023,29 @@ function startRound() {
   gameState.isLiuJuHandled = false;
   gameState.isClosingMessage = false;
   
+  _clearAllPendingTimeouts();
+  
   if (piaoCountdownTimer) {
     clearInterval(piaoCountdownTimer);
     piaoCountdownTimer = null;
   }
   
   document.querySelectorAll('[style*="z-index: 9999"], [style*="z-index: 10000"], [style*="z-index:10000"], [style*="z-index:9999"]').forEach(el => {
+    if (el.id === 'huOverlay' || el.id === 'huMask' || el.id === 'huContent') return;
+    if (el.parentNode) el.remove();
+  });
+  
+  document.querySelectorAll('[style*="position:fixed"]').forEach(el => {
+    if (el.id === 'huOverlay' || el.id === 'huMask' || el.id === 'huContent') return;
+    if (el.id === 'dealingOverlay' || el.id === 'dealingMask') return;
+    if (el.closest('#gameContainer')) return;
     if (el.parentNode) el.remove();
   });
   
   clearCaches();
+  
+  const historyList = document.getElementById('historyList');
+  if (historyList) historyList.innerHTML = '';
   
   gameState.roundNumber++;
   
@@ -2292,6 +2378,12 @@ function renderMyHand() {
     logGame('UI', 'renderMyHand跳过: isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
     return;
   }
+  
+  if (window._activeDragCleanup) {
+    window._activeDragCleanup();
+    window._activeDragCleanup = null;
+  }
+  
   const me = gameState.players[1];
   const handEl = document.getElementById('myHand');
   handEl.innerHTML = '';
@@ -2427,12 +2519,20 @@ function renderMyHand() {
         function onMouseUp(ev) {
           document.removeEventListener('mousemove', onMouseMove);
           document.removeEventListener('mouseup', onMouseUp);
+          window._activeDragCleanup = null;
           endDrag(ds.dragCard, ev.clientX, ev.clientY, ds.cardIndex);
           dragState = null;
         }
         
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+        window._activeDragCleanup = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          if (ds.dragCard && ds.dragCard.parentNode) ds.dragCard.remove();
+          try { cardEl.style.opacity = ''; } catch(e) {}
+          dragState = null;
+        };
       };
       
       cardEl.ontouchstart = function(e) {
@@ -2458,6 +2558,7 @@ function renderMyHand() {
           document.removeEventListener('touchmove', onTouchMove, { passive: false });
           document.removeEventListener('touchend', onTouchEnd);
           document.removeEventListener('touchcancel', onTouchCancel);
+          window._activeDragCleanup = null;
           const t = ev.changedTouches[0];
           if (t) {
             endDrag(ds.dragCard, t.clientX, t.clientY, ds.cardIndex);
@@ -2473,6 +2574,7 @@ function renderMyHand() {
           document.removeEventListener('touchmove', onTouchMove, { passive: false });
           document.removeEventListener('touchend', onTouchEnd);
           document.removeEventListener('touchcancel', onTouchCancel);
+          window._activeDragCleanup = null;
           if (ds.dragCard && ds.dragCard.parentNode) ds.dragCard.remove();
           try { cardEl.style.opacity = ''; } catch(e) {}
           dragState = null;
@@ -2481,6 +2583,14 @@ function renderMyHand() {
         document.addEventListener('touchmove', onTouchMove, { passive: false });
         document.addEventListener('touchend', onTouchEnd);
         document.addEventListener('touchcancel', onTouchCancel);
+        window._activeDragCleanup = () => {
+          document.removeEventListener('touchmove', onTouchMove, { passive: false });
+          document.removeEventListener('touchend', onTouchEnd);
+          document.removeEventListener('touchcancel', onTouchCancel);
+          if (ds.dragCard && ds.dragCard.parentNode) ds.dragCard.remove();
+          try { cardEl.style.opacity = ''; } catch(e) {}
+          dragState = null;
+        };
       };
       
       stackEl.appendChild(cardEl);
@@ -7057,6 +7167,13 @@ function _handleHu(playerIndex, method) {
   }
   gameState.isHandlingHu = true;
   
+  _huSafetyTimer = setTimeout(() => {
+    if (gameState.isHandlingHu) {
+      logGame('HU', '超时保护: isHandlingHu仍为true, 自动关闭胡牌页面');
+      closeHuMessage();
+    }
+  }, 15000);
+  
   clearCaches();
   
   logGame('HU', '=== handleHu被调用 === playerIndex=', playerIndex, 'method=', method, 'roundNumber=', gameState.roundNumber, 'isClosingHuMessage=', gameState.isClosingHuMessage, 'isClosingMessage=', gameState.isClosingMessage);
@@ -7086,28 +7203,25 @@ function _handleHu(playerIndex, method) {
   // 人类玩家: 只播放胡牌类型（点击按钮时已经播放了"胡"/"自摸"）
   
   if (player.type === 'ai') {
-    // AI玩家：播放"胡"/"自摸" + 间隔一秒 + 胡牌类型
     if (method === 'zimo') {
       playButtonSound('自摸', playerIndex);
-      setTimeout(() => {
+      _trackedTimeout(() => {
         speakText(huResult.huType.name, playerIndex);
       }, 1000);
     } else {
       playButtonSound('胡', playerIndex);
-      setTimeout(() => {
+      _trackedTimeout(() => {
         speakText(huResult.huType.name, playerIndex);
       }, 1000);
     }
   } else {
-    // 人类玩家：延迟播放胡牌类型（因为点击按钮时刚播放了"胡"/"自摸"）
-    setTimeout(() => {
+    _trackedTimeout(() => {
       speakText(huResult.huType.name, playerIndex);
     }, 800);
   }
   
   // 获取对应胡牌方式的倍数
   const baseMultiplier = method === 'zimo' ? huResult.huType.multiplier.zimo : huResult.huType.multiplier.dianpao;
-  const dianpaoMultiplier = huResult.huType.multiplier.dianpao;
   const displayMultiplier = baseMultiplier;
   
   const winner = player;
@@ -7126,7 +7240,7 @@ function _handleHu(playerIndex, method) {
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
         loser.score -= loserScore;
       }
     }
@@ -7155,7 +7269,7 @@ function _handleHu(playerIndex, method) {
         scoreChanges: [0, 0, 0],
         error: '无效的点炮玩家索引'
       };
-      gameState.roundHistory.push(roundInfo);
+      _pushRoundHistory(roundInfo);
       return;
     }
     const dianPaoPlayer = gameState.players[gameState.lastDiscardPlayerIndex];
@@ -7175,7 +7289,7 @@ function _handleHu(playerIndex, method) {
         scoreChanges: [0, 0, 0],
         error: '找不到点炮玩家'
       };
-      gameState.roundHistory.push(roundInfo);
+      _pushRoundHistory(roundInfo);
       return;
     }
     const dianPaoPiao = dianPaoPlayer.piao;
@@ -7197,7 +7311,7 @@ function _handleHu(playerIndex, method) {
     for (let i = 0; i < gameState.players.length; i++) {
       if (i !== playerIndex) {
         const loser = gameState.players[i];
-        const loserScore = gameState.baseScore + dianpaoMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
+        const loserScore = gameState.baseScore + baseMultiplier * gameState.multiplierBase + loser.piao + winnerPiao;
         loserScores.push({ name: loser.name, score: loserScore });
       }
     }
@@ -7226,7 +7340,7 @@ function _handleHu(playerIndex, method) {
   console.log('记录本局结果: 第', roundInfo.roundNumber, '局, 赢家:', roundInfo.winner, '胡牌类型:', roundInfo.huType);
   console.log('roundHistory 当前长度:', gameState.roundHistory.length);
   
-  gameState.roundHistory.push(roundInfo);
+  _pushRoundHistory(roundInfo);
   
   console.log('roundHistory 新长度:', gameState.roundHistory.length);
   
@@ -7263,7 +7377,7 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
   if (playedCardsEl) playedCardsEl.style.display = 'none';
   
   if (scoresBefore) {
-    setTimeout(() => {
+    _trackedTimeout(() => {
       for (let i = 0; i < gameState.players.length; i++) {
         const scoreDiff = gameState.players[i].score - scoresBefore[i];
         if (scoreDiff !== 0) {
@@ -7453,7 +7567,7 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
     huContent.removeEventListener('mouseup', huContent._swipeHandler.mouseup);
     huContent.removeEventListener('mouseleave', huContent._swipeHandler.mouseleave);
   }
-  setupSwipeToClose(huContent, closeHuMessage);
+  setupSwipeToClose(huContent, closeHuMessage, 'huOverlay');
   
   if (gameState.testMode) {
     setTimeout(() => {
@@ -7465,6 +7579,7 @@ function showHuMessage(player, huResult, methodName, huTypeName, score, dianPaoP
 }
 
 function closeHuMessage() {
+  logGame('HU_CLOSE', 'closeHuMessage被调用, isClosingHuMessage=', gameState.isClosingHuMessage, 'roundNumber=', gameState.roundNumber);
   if (gameState.isClosingHuMessage) return;
   gameState.isClosingHuMessage = true;
   
@@ -7491,6 +7606,13 @@ function closeHuMessage() {
     huMask.classList.add('hidden');
   }
   
+  _clearAllPendingTimeouts();
+  
+  if (_huSafetyTimer) {
+    clearTimeout(_huSafetyTimer);
+    _huSafetyTimer = null;
+  }
+  
   const playedCardsEl = document.getElementById('playedCards');
   if (playedCardsEl) playedCardsEl.style.display = '';
   
@@ -7510,6 +7632,7 @@ function closeHuMessage() {
   
   gameState.skipDealAnimation = true;
   gameState.isClosingHuMessage = false;
+  notifyRoundEnd();
   startRound();
 }
 
@@ -7557,7 +7680,7 @@ function moveToNextPlayer() {
       isLiuJu: true,
       scoreChanges: [0, 0, 0]
     };
-    gameState.roundHistory.push(roundInfo);
+    _pushRoundHistory(roundInfo);
     
     // 播放"流局"音效，然后弹出流局页面
     playButtonSound('流局', gameState.currentPlayerIndex);
@@ -7926,19 +8049,19 @@ function animateScoreChange(playerIndex, newScore, oldScore) {
     scoreEl.classList.add('score-up');
     if (avatarEl) {
       avatarEl.classList.add('winner');
-      setTimeout(() => avatarEl.classList.remove('winner'), 3000);
+      _trackedTimeout(() => avatarEl.classList.remove('winner'), 3000);
     }
   } else {
     scoreEl.classList.add('score-down');
     if (avatarEl) {
       avatarEl.classList.add('loser');
-      setTimeout(() => avatarEl.classList.remove('loser'), 500);
+      _trackedTimeout(() => avatarEl.classList.remove('loser'), 500);
     }
   }
   
   if (avatarEl) {
     avatarEl.classList.add('score-change');
-    setTimeout(() => avatarEl.classList.remove('score-change'), 600);
+    _trackedTimeout(() => avatarEl.classList.remove('score-change'), 600);
   }
   
   const diffEl = document.createElement('span');
@@ -7952,13 +8075,13 @@ function animateScoreChange(playerIndex, newScore, oldScore) {
     avatarEl.style.position = 'relative';
     avatarEl.appendChild(diffEl);
     
-    setTimeout(() => {
+    _trackedTimeout(() => {
       diffEl.classList.add('fade-out');
-      setTimeout(() => diffEl.remove(), 500);
+      _trackedTimeout(() => diffEl.remove(), 500);
     }, 1500);
   }
   
-  setTimeout(() => {
+  _trackedTimeout(() => {
     scoreEl.classList.remove('score-changing', 'score-up', 'score-down');
   }, 1000);
 }
@@ -9332,6 +9455,9 @@ function calculateExpectedHu(hand, melds) {
 function addHistory(playerName, cardChar) {
   const historyList = document.getElementById('historyList');
   if (!historyList) return;
+  while (historyList.children.length > 50) {
+    historyList.removeChild(historyList.lastChild);
+  }
   const item = document.createElement('div');
   item.className = 'history-item';
   item.innerHTML = `<span class="player-name">${playerName}</span>: <span class="card-char">${cardChar}</span>`;
@@ -9435,6 +9561,19 @@ function closeMessage() {
   messageArea.dataset.liuju = 'false';
   document.getElementById('messageContent').innerHTML = '';
   
+  if (messageArea._swipeHandler) {
+    messageArea.removeEventListener('touchstart', messageArea._swipeHandler.touchstart);
+    messageArea.removeEventListener('touchmove', messageArea._swipeHandler.touchmove);
+    messageArea.removeEventListener('touchend', messageArea._swipeHandler.touchend);
+    messageArea.removeEventListener('mousedown', messageArea._swipeHandler.mousedown);
+    messageArea.removeEventListener('mousemove', messageArea._swipeHandler.mousemove);
+    messageArea.removeEventListener('mouseup', messageArea._swipeHandler.mouseup);
+    messageArea.removeEventListener('mouseleave', messageArea._swipeHandler.mouseleave);
+    messageArea._swipeHandler = null;
+  }
+  
+  _clearAllPendingTimeouts();
+  
   const overlay = document.getElementById('dealingOverlay');
   const mask = document.getElementById('dealingMask');
   if (overlay) {
@@ -9479,6 +9618,7 @@ function closeMessage() {
       }
       requestAnimationFrame(() => {
         gameState.isClosingMessage = false;
+        notifyRoundEnd();
         startRound();
       });
     });
@@ -9838,8 +9978,10 @@ document.addEventListener('dragstart', (e) => {
 let _resMonitorFpsFrames = 0;
 let _resMonitorFpsLast = performance.now();
 let _resMonitorFpsValue = 0;
+let _resMonitorFpsRunning = true;
 
 function _resMonitorCalcFps() {
+  if (!_resMonitorFpsRunning) return;
   _resMonitorFpsFrames++;
   const now = performance.now();
   const elapsed = now - _resMonitorFpsLast;
@@ -9910,6 +10052,42 @@ function logResourceSnapshot() {
   logGame('RESOURCE', parts.join(', '));
 }
 
+function cleanupOrphanDom() {
+  const before = document.querySelectorAll('*').length;
+  
+  document.querySelectorAll('[style*="z-index: 9999"], [style*="z-index: 10000"], [style*="z-index:10000"], [style*="z-index:9999"]').forEach(el => {
+    if (el.id === 'huOverlay' || el.id === 'huMask' || el.id === 'huContent') return;
+    if (el.parentNode) el.remove();
+  });
+  
+  document.querySelectorAll('.popup-overlay.hidden').forEach(el => {
+    if (el.parentNode) el.remove();
+  });
+  
+  document.querySelectorAll('[style*="position:fixed"]').forEach(el => {
+    if (el.id === 'huOverlay' || el.id === 'huMask' || el.id === 'huContent') return;
+    if (el.id === 'dealingOverlay' || el.id === 'dealingMask') return;
+    if (el.closest('#gameContainer')) return;
+    if (el.parentNode) el.remove();
+  });
+  
+  const after = document.querySelectorAll('*').length;
+  const removed = before - after;
+  if (removed > 0) {
+    logGame('DOM_CLEANUP', '清理孤儿DOM: before=', before, 'after=', after, 'removed=', removed);
+  }
+}
+
+function notifyRoundEnd() {
+  cleanupOrphanDom();
+  cleanupAudioCache();
+  try {
+    if (typeof FlutterBridge !== 'undefined') {
+      FlutterBridge.postMessage('ROUND_END');
+    }
+  } catch(e) {}
+}
+
 function initResourceMonitor() {
   requestAnimationFrame(_resMonitorCalcFps);
   
@@ -9956,7 +10134,8 @@ let autoTestStats = {
   lastActionTime: 0,
   countdownChecks: [],
   stateHistory: [],
-  firstActionOfRound: true
+  firstActionOfRound: true,
+  memorySnapshots: []
 };
 
 function autoTestLog(msg) {
@@ -9991,6 +10170,24 @@ function autoTestRecordState(label) {
     autoTestStats.stateHistory.shift();
   }
   return state;
+}
+
+function autoTestSnapshotMemory() {
+  const snap = {
+    round: autoTestStats.rounds,
+    time: Date.now(),
+    jsHeap: 0,
+    domNodes: 0,
+    divCount: 0
+  };
+  if (performance.memory) {
+    snap.jsHeap = Math.round(performance.memory.usedJSHeapSize / 1048576);
+  }
+  snap.domNodes = document.querySelectorAll('*').length;
+  snap.divCount = document.querySelectorAll('div').length;
+  autoTestStats.memorySnapshots.push(snap);
+  autoTestLog('[MEM] R' + snap.round + ' JSHeap=' + snap.jsHeap + 'MB DOM=' + snap.domNodes + '(div=' + snap.divCount + ')');
+  return snap;
 }
 
 function autoTestCheckFreeze() {
@@ -10033,7 +10230,7 @@ function autoTestDoAction() {
   
   if (gameState.isHandlingHu || gameState.isDealing || gameState.isPaused) {
     autoTestActionPending = false;
-    setTimeout(autoTestDoAction, 1000);
+    setTimeout(autoTestDoAction, 500);
     return;
   }
   
@@ -10042,7 +10239,7 @@ function autoTestDoAction() {
   if (gameState.waitingForResponse) {
     if (autoTestStats.firstActionOfRound) {
       autoTestActionPending = false;
-      setTimeout(autoTestDoAction, 1000);
+      setTimeout(autoTestDoAction, 500);
       return;
     }
     
@@ -10070,17 +10267,7 @@ function autoTestDoAction() {
     
     autoTestLog('响应: ' + action + ' (可选: ' + actions.join(',') + ')');
     
-    let delay;
-    const delayRand = Math.random();
-    if (delayRand < 0.05) {
-      delay = Math.floor(Math.random() * 5000) + 20000;
-    } else if (delayRand < 0.2) {
-      delay = Math.floor(Math.random() * 8000) + 10000;
-    } else if (delayRand < 0.5) {
-      delay = Math.floor(Math.random() * 5000) + 5000;
-    } else {
-      delay = Math.floor(Math.random() * 3000) + 1000;
-    }
+    const delay = 800 + Math.random() * 1500;
     setTimeout(() => {
       if (!autoTestRunning) return;
       if (!gameState.waitingForResponse) {
@@ -10118,7 +10305,7 @@ function autoTestDoAction() {
       }
       
       autoTestActionPending = false;
-      setTimeout(autoTestDoAction, 1500 + Math.random() * 2000);
+      setTimeout(autoTestDoAction, 800 + Math.random() * 1200);
     }, delay);
     return;
   }
@@ -10128,13 +10315,13 @@ function autoTestDoAction() {
     if (me.hand.length === 0) {
       autoTestLog('手牌为空，等待...');
       autoTestActionPending = false;
-      setTimeout(autoTestDoAction, 1000);
+      setTimeout(autoTestDoAction, 500);
       return;
     }
     
     if (autoTestStats.firstActionOfRound) {
       autoTestActionPending = false;
-      setTimeout(autoTestDoAction, 1000);
+      setTimeout(autoTestDoAction, 500);
       return;
     }
     
@@ -10150,17 +10337,7 @@ function autoTestDoAction() {
       }
     }
     
-    let delay;
-    const r2 = Math.random();
-    if (r2 < 0.05) {
-      delay = Math.floor(Math.random() * 5000) + 20000;
-    } else if (r2 < 0.2) {
-      delay = Math.floor(Math.random() * 8000) + 10000;
-    } else if (r2 < 0.5) {
-      delay = Math.floor(Math.random() * 5000) + 5000;
-    } else {
-      delay = Math.floor(Math.random() * 3000) + 1000;
-    }
+    const delay = 800 + Math.random() * 1500;
     setTimeout(() => {
       if (!autoTestRunning) return;
       if (!gameState.isMyTurn || gameState.isDrawing) {
@@ -10190,13 +10367,13 @@ function autoTestDoAction() {
       }
       
       autoTestActionPending = false;
-      setTimeout(autoTestDoAction, 1500 + Math.random() * 2000);
+      setTimeout(autoTestDoAction, 800 + Math.random() * 1200);
     }, delay);
     return;
   }
   
   autoTestActionPending = false;
-  setTimeout(autoTestDoAction, 1000);
+  setTimeout(autoTestDoAction, 500);
 }
 
 let autoTestFreezeChecker = null;
@@ -10204,6 +10381,10 @@ let autoTestCountdownChecker = null;
 let autoTestPageChecker = null;
 
 function runAutoTest(rounds = 3) {
+  if (typeof FlutterBridge === 'undefined') {
+    console.warn('runAutoTest only available in app mode');
+    return;
+  }
   autoTestLog('========== AUTOTEST START ==========');
   autoTestLog('Target rounds: ' + rounds);
   
@@ -10224,8 +10405,11 @@ function runAutoTest(rounds = 3) {
     lastActionTime: Date.now(),
     countdownChecks: [],
     stateHistory: [],
-    firstActionOfRound: true
+    firstActionOfRound: true,
+    memorySnapshots: []
   };
+  
+  autoTestSnapshotMemory();
   
   autoTestFreezeChecker = setInterval(() => {
     autoTestCheckFreeze();
@@ -10238,24 +10422,37 @@ function runAutoTest(rounds = 3) {
   autoTestPageChecker = setInterval(() => {
     if (!autoTestRunning) return;
     
+    const huOverlay = document.getElementById('huOverlay');
+    if (huOverlay && !huOverlay.classList.contains('hidden')) {
+      if (!huOverlay.dataset.autoTestClosing) {
+        huOverlay.dataset.autoTestClosing = 'true';
+        autoTestLog('Hu overlay detected, closing in 2s');
+        setTimeout(() => {
+          if (!autoTestRunning) return;
+          delete huOverlay.dataset.autoTestClosing;
+          autoTestLog('Closing hu overlay');
+          closeHuMessage();
+        }, 2000);
+      }
+      return;
+    }
+    
     const settlementPage = document.getElementById('settlementPage');
     if (settlementPage && settlementPage.classList.contains('show')) {
       if (!settlementPage.dataset.autoTestClosing) {
         settlementPage.dataset.autoTestClosing = 'true';
-        autoTestLog('Settlement page detected, will click close in 5s');
+        autoTestLog('Settlement page detected, closing in 2s');
         setTimeout(() => {
           if (!autoTestRunning) return;
-          autoTestLog('Clicking settlement close area');
+          delete settlementPage.dataset.autoTestClosing;
+          autoTestLog('Closing settlement');
           closeSettlement();
           autoTestStats.rounds++;
+          autoTestSnapshotMemory();
           autoTestLog('Round done (settlement)! ' + autoTestStats.rounds + '/' + rounds);
           
           if (autoTestStats.rounds >= rounds) {
-            const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
-            autoTestLog('========== AUTOTEST END ==========');
-            autoTestLog('Time: ' + elapsed + 's | Rounds: ' + autoTestStats.rounds + ' | Actions: ' + autoTestStats.actions);
-            autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
-            autoTestCleanup();
+            autoTestFinish(rounds);
             return;
           }
           
@@ -10264,58 +10461,41 @@ function runAutoTest(rounds = 3) {
             autoTestLog('Restarting game after settlement');
             startGame();
             autoTestWaitForPiao();
-          }, 3000);
-        }, 5000);
-      }
-      return;
-    }
-    
-    const dealingOverlay = document.getElementById('dealingOverlay');
-    if (dealingOverlay && dealingOverlay.style.display !== 'none' && !dealingOverlay.classList.contains('hidden') && gameState.isHandlingHu) {
-      if (!dealingOverlay.dataset.autoTestClosing) {
-        dealingOverlay.dataset.autoTestClosing = 'true';
-        autoTestLog('Hu result page detected, will click confirm in 5s');
-        setTimeout(() => {
-          if (!autoTestRunning) return;
-          if (dealingOverlay) delete dealingOverlay.dataset.autoTestClosing;
-          const confirmBtn = document.getElementById('huConfirmBtn') || document.querySelector('#dealingOverlay .confirm-btn');
-          const closeBtn = document.getElementById('huCloseBtn');
-          if (confirmBtn) {
-            autoTestLog('Clicking hu confirm button');
-            confirmBtn.click();
-          } else if (closeBtn) {
-            autoTestLog('Clicking hu close button');
-            closeBtn.click();
-          } else {
-            autoTestLog('No hu close button found, calling closeHuMessage directly');
-            closeHuMessage();
-          }
-        }, 5000);
+          }, 2000);
+        }, 2000);
       }
       return;
     }
     
     const messageArea = document.getElementById('messageArea');
-    if (messageArea && messageArea.classList.contains('show')) {
+    if (messageArea && messageArea.classList.contains('show') && messageArea.dataset.liuju === 'true') {
       if (!messageArea.dataset.autoTestClosing) {
         messageArea.dataset.autoTestClosing = 'true';
-        autoTestLog('Message page detected, will click close in 5s');
+        autoTestLog('Liuju page detected, closing in 2s');
         setTimeout(() => {
           if (!autoTestRunning) return;
-          if (messageArea) delete messageArea.dataset.autoTestClosing;
-          const msgCloseBtn = messageArea.querySelector('.close-btn') || messageArea.querySelector('button');
-          if (msgCloseBtn) {
-            autoTestLog('Clicking message close button');
-            msgCloseBtn.click();
-          } else {
-            autoTestLog('No message close button found, clicking message area');
-            messageArea.click();
+          delete messageArea.dataset.autoTestClosing;
+          autoTestLog('Closing liuju page');
+          closeMessage();
+          autoTestStats.rounds++;
+          autoTestSnapshotMemory();
+          autoTestLog('Round done (liuju)! ' + autoTestStats.rounds + '/' + rounds);
+          
+          if (autoTestStats.rounds >= rounds) {
+            autoTestFinish(rounds);
+            return;
           }
-        }, 5000);
+          
+          setTimeout(() => {
+            if (!autoTestRunning) return;
+            autoTestLog('Starting auto actions for next round (liuju)...');
+            autoTestWaitForPiao();
+          }, 2000);
+        }, 2000);
       }
       return;
     }
-  }, 3000);
+  }, 1500);
   
   const origCloseHuMessage = closeHuMessage;
   const origCloseMessage = closeMessage;
@@ -10325,13 +10505,51 @@ function runAutoTest(rounds = 3) {
   
   function autoTestCleanup() {
     autoTestRunning = false;
+    autoTestActionPending = false;
     if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
     if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
     if (autoTestPageChecker) clearInterval(autoTestPageChecker);
+    autoTestFreezeChecker = null;
+    autoTestCountdownChecker = null;
+    autoTestPageChecker = null;
     closeHuMessage = origCloseHuMessage;
     closeMessage = origCloseMessage;
     handleTimeout = origHandleTimeout;
     autoTestLog('Cleanup done, all original functions restored');
+  }
+  
+  function autoTestFinish(targetRounds) {
+    const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
+    autoTestLog('========== AUTOTEST END ==========');
+    autoTestLog('Time: ' + elapsed + 's | Rounds: ' + autoTestStats.rounds + '/' + targetRounds + ' | Actions: ' + autoTestStats.actions);
+    autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
+    autoTestLog('Freezes: ' + autoTestStats.freezes + ' Timeouts: ' + autoTestStats.timeouts);
+    
+    if (autoTestStats.memorySnapshots.length > 0) {
+      const first = autoTestStats.memorySnapshots[0];
+      const last = autoTestStats.memorySnapshots[autoTestStats.memorySnapshots.length - 1];
+      autoTestLog('[MEM_SUMMARY] First: JSHeap=' + first.jsHeap + 'MB DOM=' + first.domNodes + ' | Last: JSHeap=' + last.jsHeap + 'MB DOM=' + last.domNodes);
+      const maxHeap = Math.max(...autoTestStats.memorySnapshots.map(s => s.jsHeap));
+      const maxDom = Math.max(...autoTestStats.memorySnapshots.map(s => s.domNodes));
+      autoTestLog('[MEM_SUMMARY] Peak: JSHeap=' + maxHeap + 'MB DOM=' + maxDom);
+    }
+    
+    if (typeof FlutterBridge !== 'undefined') {
+      FlutterBridge.postMessage('TEST_DONE:' + JSON.stringify({
+        rounds: autoTestStats.rounds,
+        actions: autoTestStats.actions,
+        freezes: autoTestStats.freezes,
+        timeouts: autoTestStats.timeouts,
+        zhao: autoTestStats.zhaoCount,
+        peng: autoTestStats.pengCount,
+        chi: autoTestStats.chiCount,
+        hu: autoTestStats.huCount,
+        errors: autoTestStats.errors,
+        memorySnapshots: autoTestStats.memorySnapshots
+      }));
+    }
+    
+    autoTestCleanup();
   }
   
   closeHuMessage = function() {
@@ -10339,40 +10557,12 @@ function runAutoTest(rounds = 3) {
     huMessageClosing = true;
     
     autoTestStats.rounds++;
-    autoTestLog('Round done! ' + autoTestStats.rounds + '/' + rounds);
+    autoTestSnapshotMemory();
+    autoTestLog('Round done (hu)! ' + autoTestStats.rounds + '/' + rounds);
     
     if (autoTestStats.rounds >= rounds) {
-      const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
-      autoTestLog('========== AUTOTEST END ==========');
-      autoTestLog('Time: ' + elapsed + 's');
-      autoTestLog('Rounds: ' + autoTestStats.rounds);
-      autoTestLog('Actions: ' + autoTestStats.actions);
-      autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
-      autoTestLog('Freezes: ' + autoTestStats.freezes);
-      autoTestLog('Timeouts: ' + autoTestStats.timeouts);
-      autoTestLog('Errors: ' + (autoTestStats.errors.length > 0 ? autoTestStats.errors.join('; ') : 'none'));
-      
-      if (typeof FlutterBridge !== 'undefined') {
-        FlutterBridge.postMessage('TEST_DONE:' + JSON.stringify({
-          rounds: autoTestStats.rounds,
-          actions: autoTestStats.actions,
-          freezes: autoTestStats.freezes,
-          timeouts: autoTestStats.timeouts,
-          zhao: autoTestStats.zhaoCount,
-          peng: autoTestStats.pengCount,
-          chi: autoTestStats.chiCount,
-          hu: autoTestStats.huCount,
-          errors: autoTestStats.errors
-        }));
-      }
-      
       origCloseHuMessage.call(this);
-      autoTestRunning = false;
-      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
-      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
-      closeHuMessage = origCloseHuMessage;
-      closeMessage = origCloseMessage;
-      handleTimeout = origHandleTimeout;
+      autoTestFinish(rounds);
       return;
     }
     
@@ -10384,7 +10574,7 @@ function runAutoTest(rounds = 3) {
       messageClosing = false;
       autoTestLog('Starting auto actions for next round...');
       autoTestWaitForPiao();
-    }, 3000);
+    }, 2000);
   };
   
   closeMessage = function() {
@@ -10401,21 +10591,12 @@ function runAutoTest(rounds = 3) {
     }
     
     autoTestStats.rounds++;
+    autoTestSnapshotMemory();
     autoTestLog('Round done (liuju)! ' + autoTestStats.rounds + '/' + rounds);
     
     if (autoTestStats.rounds >= rounds) {
-      const elapsed = Math.round((Date.now() - autoTestStats.startTime) / 1000);
-      autoTestLog('========== AUTOTEST END ==========');
-      autoTestLog('Time: ' + elapsed + 's | Rounds: ' + autoTestStats.rounds + ' | Actions: ' + autoTestStats.actions);
-      autoTestLog('Zhao:' + autoTestStats.zhaoCount + ' Peng:' + autoTestStats.pengCount + ' Chi:' + autoTestStats.chiCount + ' Hu:' + autoTestStats.huCount + ' Discard:' + autoTestStats.discardCount + ' Pass:' + autoTestStats.passCount);
-      
       origCloseMessage.call(this);
-      autoTestRunning = false;
-      if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
-      if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
-      closeHuMessage = origCloseHuMessage;
-      closeMessage = origCloseMessage;
-      handleTimeout = origHandleTimeout;
+      autoTestFinish(rounds);
       return;
     }
     
@@ -10427,7 +10608,7 @@ function runAutoTest(rounds = 3) {
       huMessageClosing = false;
       autoTestLog('Starting auto actions for next round (liuju)...');
       autoTestWaitForPiao();
-    }, 3000);
+    }, 2000);
   };
   
   handleTimeout = function() {
@@ -10459,7 +10640,8 @@ function autoTestWaitForPiao() {
         if (!gameState.isDealing && !document.getElementById('piaoOverlay')) {
           clearInterval(waitPiaoDone);
           autoTestLog('Piao phase done, starting auto actions');
-          setTimeout(autoTestDoAction, 2000);
+          autoTestStats.firstActionOfRound = false;
+          setTimeout(autoTestDoAction, 1500);
         }
       }, 500);
     }
@@ -10467,6 +10649,7 @@ function autoTestWaitForPiao() {
     if (!gameState.isDealing && !document.getElementById('piaoOverlay') && gameState.gameStarted) {
       clearInterval(checkPiao);
       autoTestLog('Game already started, starting auto actions');
+      autoTestStats.firstActionOfRound = false;
       setTimeout(autoTestDoAction, 1000);
     }
   }, 500);
@@ -10476,8 +10659,12 @@ function autoPlayAsHuman() {}
 
 function stopAutoPlay() {
   autoTestRunning = false;
+  autoTestActionPending = false;
   if (autoTestFreezeChecker) clearInterval(autoTestFreezeChecker);
   if (autoTestCountdownChecker) clearInterval(autoTestCountdownChecker);
   if (autoTestPageChecker) clearInterval(autoTestPageChecker);
+  autoTestFreezeChecker = null;
+  autoTestCountdownChecker = null;
+  autoTestPageChecker = null;
   autoTestLog('AUTOTEST STOPPED');
 }
