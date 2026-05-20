@@ -1529,6 +1529,21 @@ setInterval(() => {
   
   if (gameState.countdown > 0) return;
   
+  if (gameState.isHandlingHu && elapsed > 15000) {
+    logError('WATCHDOG', '胡牌页面卡死超过15s，强制关闭 isHandlingHu=' + gameState.isHandlingHu + ' elapsed=' + elapsed);
+    try { closeHuMessage(); } catch(e) { logError('WATCHDOG', 'closeHuMessage异常:', e.message); }
+    recordActivity();
+    return;
+  }
+  
+  const messageArea = document.getElementById('messageArea');
+  if (messageArea && messageArea.classList.contains('show') && elapsed > 15000) {
+    logError('WATCHDOG', '流局/消息页面卡死超过15s，强制关闭 elapsed=' + elapsed);
+    try { closeMessage(); } catch(e) { logError('WATCHDOG', 'closeMessage异常:', e.message); }
+    recordActivity();
+    return;
+  }
+  
   if (elapsed > 10000) {
     logError('WATCHDOG', '检测到卡死，强制恢复 isDrawing=' + gameState.isDrawing + ' isMyTurn=' + gameState.isMyTurn + ' waiting=' + gameState.waitingForResponse + ' elapsed=' + elapsed);
     
@@ -6015,55 +6030,13 @@ function checkRemainingCards(cards, neededGroups) {
   
   const usedIds = new Set();
   
-  // 如果牌数比期望多1张，说明可能有招
-  if (cards.length === neededCards + 1) {
-    // 尝试找招（同字4张）
-    for (const [char, count] of Object.entries(counts)) {
-      if (count >= 4) {
-        // 找到一个招
-        const zhaoCards = cards.filter(c => c.character === char).slice(0, 4);
-        zhaoCards.forEach(c => usedIds.add(c.id));
-        const remaining = cards.filter(c => !usedIds.has(c.id));
-        
-        // 招用4张牌算1个组合，剩余牌数应该是 (neededGroups - 1) * 3 + 2
-        if (checkRemainingCards(remaining, neededGroups - 1)) {
-          return true;
-        }
-        
-        // 回溯
-        zhaoCards.forEach(c => usedIds.delete(c.id));
-      }
-    }
-  }
-  
-  // 尝试找坎（同字3张）
-  for (const [char, count] of Object.entries(counts)) {
-    if (count >= 3) {
-      // 找到一个坎
-      const kanCards = cards.filter(c => c.character === char).slice(0, 3);
-      kanCards.forEach(c => usedIds.add(c.id));
-      const remaining = cards.filter(c => !usedIds.has(c.id));
-      
-      if (checkRemainingCards(remaining, neededGroups - 1)) {
-        return true;
-      }
-      
-      // 回溯
-      kanCards.forEach(c => usedIds.delete(c.id));
-    }
-  }
-  
-  // 尝试找句（同组不同位置3张）
   for (let sentence = 1; sentence <= 8; sentence++) {
     const sentenceCards = cards.filter(c => c.sentence === sentence && !usedIds.has(c.id));
-    
-    // 需要有位置0、1、2各至少一张
     const pos0Cards = sentenceCards.filter(c => c.position === 0);
     const pos1Cards = sentenceCards.filter(c => c.position === 1);
     const pos2Cards = sentenceCards.filter(c => c.position === 2);
     
     if (pos0Cards.length > 0 && pos1Cards.length > 0 && pos2Cards.length > 0) {
-      // 找到一个句
       usedIds.add(pos0Cards[0].id);
       usedIds.add(pos1Cards[0].id);
       usedIds.add(pos2Cards[0].id);
@@ -6073,10 +6046,39 @@ function checkRemainingCards(cards, neededGroups) {
         return true;
       }
       
-      // 回溯
       usedIds.delete(pos0Cards[0].id);
       usedIds.delete(pos1Cards[0].id);
       usedIds.delete(pos2Cards[0].id);
+    }
+  }
+  
+  if (cards.length === neededCards + 1) {
+    for (const [char, count] of Object.entries(counts)) {
+      if (count >= 4) {
+        const zhaoCards = cards.filter(c => c.character === char).slice(0, 4);
+        zhaoCards.forEach(c => usedIds.add(c.id));
+        const remaining = cards.filter(c => !usedIds.has(c.id));
+        
+        if (checkRemainingCards(remaining, neededGroups - 1)) {
+          return true;
+        }
+        
+        zhaoCards.forEach(c => usedIds.delete(c.id));
+      }
+    }
+  }
+  
+  for (const [char, count] of Object.entries(counts)) {
+    if (count >= 3) {
+      const kanCards = cards.filter(c => c.character === char).slice(0, 3);
+      kanCards.forEach(c => usedIds.add(c.id));
+      const remaining = cards.filter(c => !usedIds.has(c.id));
+      
+      if (checkRemainingCards(remaining, neededGroups - 1)) {
+        return true;
+      }
+      
+      kanCards.forEach(c => usedIds.delete(c.id));
     }
   }
   
@@ -7688,8 +7690,8 @@ function closeHuMessage() {
   
   gameState.skipDealAnimation = true;
   gameState.isClosingHuMessage = false;
-  notifyRoundEnd();
   startRound();
+  notifyRoundEnd();
 }
 
 function removeLastDiscard() {
@@ -8303,6 +8305,8 @@ function checkTingInternal(hand, melds) {
     return { isTing: false, tingCards: [] };
   }
   
+  logGame('TING', '基本听牌条件满足, type:', basicTing.type);
+  
   let tingCards = [];
   
   if (basicTing.type === 'ninePairs') {
@@ -8331,75 +8335,93 @@ function checkTingInternal(hand, melds) {
     return { isTing: true, tingCards: [...new Set(tingCards)] };
   }
   
-  if (basicTing.type === 'sixGroupsOneSingle') {
+  if (basicTing.type === 'b1') {
     const singleCard = basicTing.singleCard;
+    logGame('TING', 'b.1: 单张:', singleCard?.character, '组:', singleCard?.sentence);
     if (singleCard) {
-      const sentence = singleCard.sentence;
-      const sentenceChars = getSentenceCharacters(sentence);
+      const candidateChars = new Set();
       
+      candidateChars.add(singleCard.character);
+      
+      const sentenceChars = getSentenceCharacters(singleCard.sentence);
       for (const char of sentenceChars) {
         const testCard = createCardByCharacter(char);
-        if (!testCard) continue;
-        
-        if (testCard.position !== singleCard.position) {
-          const testHandWithDraw = [...hand, testCard];
-          const testHuCount = calculateHuCountCached(testHandWithDraw, melds);
-          const huType = detectHuTypeCached(testHandWithDraw, melds, testHuCount);
-          
-          if (huType.type !== 'none') {
-            const isSpecialHu = ['kuHu', 'qingKuHu', 'kuTaiHu', 'kuChongTaiHu', 'kuChongTaiKa', 'qingKuTaiKa', 'qingKuTaiHu', 'qingKuChongTaiHu', 'qingKuChongTaiKa', 'hongYuan3Jing', 'hongYuan4Jing', 'hongYuan5Jing', 'hongYuan6Jing', 'heiYuan', 'shiDui'].includes(huType.type);
-            if (isSpecialHu || testHuCount >= 11) {
-              tingCards.push(char);
-            }
-          }
+        if (testCard && testCard.position !== singleCard.position) {
+          candidateChars.add(char);
         }
       }
       
-      const testCard = createCardByCharacter(singleCard.character);
-      if (testCard) {
-        const testHandWithDraw = [...hand, testCard];
-        const testHuCount = calculateHuCountCached(testHandWithDraw, melds);
-        const huType = detectHuTypeCached(testHandWithDraw, melds, testHuCount);
-        
-        if (huType.type !== 'none' && (huType.type === 'shiDui' || testHuCount >= 11)) {
-          tingCards.push(singleCard.character);
-        }
-      }
-    }
-    return { isTing: tingCards.length > 0, tingCards: [...new Set(tingCards)] };
-  }
-  
-  if (basicTing.type === 'fiveGroupsTwoPairs') {
-    const pairs = basicTing.pairs || [];
-    const halfKaos = basicTing.halfKaos || [];
-    
-    const groupSet = new Set();
-    for (const pair of pairs) {
-      groupSet.add(pair.sentence);
-    }
-    for (let i = 0; i < halfKaos.length; i++) {
-      if (halfKaos[i]) groupSet.add(halfKaos[i].sentence);
-    }
-    
-    for (const sentence of groupSet) {
-      const sentenceChars = getSentenceCharacters(sentence);
+      logGame('TING', 'b.1候选听牌字:', [...candidateChars].join(','));
       
-      for (const char of sentenceChars) {
+      for (const char of candidateChars) {
         const testCard = createCardByCharacter(char);
         if (!testCard) continue;
         
         const testHandWithDraw = [...hand, testCard];
         const testHuCount = calculateHuCountCached(testHandWithDraw, melds);
         const huType = detectHuTypeCached(testHandWithDraw, melds, testHuCount);
+        
+        logGame('TING', '测试听牌字:', char, '胡数:', testHuCount, '胡型:', huType.type);
         
         if (huType.type !== 'none') {
           const isSpecialHu = ['kuHu', 'qingKuHu', 'kuTaiHu', 'kuChongTaiHu', 'kuChongTaiKa', 'qingKuTaiKa', 'qingKuTaiHu', 'qingKuChongTaiHu', 'qingKuChongTaiKa', 'hongYuan3Jing', 'hongYuan4Jing', 'hongYuan5Jing', 'hongYuan6Jing', 'heiYuan', 'shiDui'].includes(huType.type);
           if (isSpecialHu || testHuCount >= 11) {
             tingCards.push(char);
+            logGame('TING', '找到听牌字:', char);
           }
         }
       }
     }
+    logGame('TING', 'b.1结果: isTing:', tingCards.length > 0, '听牌字:', [...new Set(tingCards)].join(','));
+    return { isTing: tingCards.length > 0, tingCards: [...new Set(tingCards)] };
+  }
+  
+  if (basicTing.type === 'b2') {
+    const pairs = basicTing.pairs || [];
+    const halfKaos = basicTing.halfKaos || [];
+    
+    const candidateChars = new Set();
+    
+    for (const pair of pairs) {
+      candidateChars.add(pair.character);
+    }
+    
+    for (let i = 0; i < halfKaos.length; i += 2) {
+      if (i + 1 < halfKaos.length) {
+        const card1 = halfKaos[i];
+        const card2 = halfKaos[i + 1];
+        const sentenceChars = getSentenceCharacters(card1.sentence);
+        const existingPositions = new Set([card1.position, card2.position]);
+        for (const char of sentenceChars) {
+          const testCard = createCardByCharacter(char);
+          if (testCard && !existingPositions.has(testCard.position)) {
+            candidateChars.add(char);
+          }
+        }
+      }
+    }
+    
+    logGame('TING', 'b.2: 候选听牌字:', [...candidateChars].join(','));
+    
+    for (const char of candidateChars) {
+      const testCard = createCardByCharacter(char);
+      if (!testCard) continue;
+      
+      const testHandWithDraw = [...hand, testCard];
+      const testHuCount = calculateHuCountCached(testHandWithDraw, melds);
+      const huType = detectHuTypeCached(testHandWithDraw, melds, testHuCount);
+      
+      logGame('TING', 'b.2测试听牌字:', char, '胡数:', testHuCount, '胡型:', huType.type);
+      
+      if (huType.type !== 'none') {
+        const isSpecialHu = ['kuHu', 'qingKuHu', 'kuTaiHu', 'kuChongTaiHu', 'kuChongTaiKa', 'qingKuTaiKa', 'qingKuTaiHu', 'qingKuChongTaiHu', 'qingKuChongTaiKa', 'hongYuan3Jing', 'hongYuan4Jing', 'hongYuan5Jing', 'hongYuan6Jing', 'heiYuan', 'shiDui'].includes(huType.type);
+        if (isSpecialHu || testHuCount >= 11) {
+          tingCards.push(char);
+          logGame('TING', 'b.2找到听牌字:', char);
+        }
+      }
+    }
+    logGame('TING', 'b.2结果: isTing:', tingCards.length > 0, '听牌字:', [...new Set(tingCards)].join(','));
     return { isTing: tingCards.length > 0, tingCards: [...new Set(tingCards)] };
   }
   
@@ -8442,9 +8464,7 @@ function detectHuTypeCached(hand, melds, huCount) {
 
 // 检查基本听牌条件
 function checkBasicTingCondition(hand, melds) {
-  console.log('=== checkBasicTingCondition ===');
-  console.log('手牌:', hand.map(c => c.character).join(''));
-  console.log('melds数量:', melds.length);
+  logGame('TING', '=== checkBasicTingCondition === 手牌:', hand.map(c => c.character).join(''), 'melds数量:', melds.length);
   
   let meldGroups = 0;
   for (const meld of melds) {
@@ -8473,7 +8493,7 @@ function checkBasicTingCondition(hand, melds) {
     if (meld.type === 'quartet') { quartetCount++; pairCount += 2; }
   }
   
-  console.log('条件a检查: 对数:', pairCount, '单张数:', singleCount, '坎数:', tripletCount, '招数:', quartetCount);
+  logGame('TING', '条件a检查: 对数:', pairCount, '单张数:', singleCount, '坎数:', tripletCount, '招数:', quartetCount);
   
   if (pairCount >= 9 && singleCount <= 2) {
     let singleCard = null;
@@ -8488,26 +8508,22 @@ function checkBasicTingCondition(hand, melds) {
   }
   
   const handAnalysis = analyzeHandForTing(hand, melds);
+  const D = handAnalysis.pairs.length + Math.floor(handAnalysis.halfKaos.length / 2);
+  const E = handAnalysis.singles.length;
   
-  console.log('条件b检查: 总组合数:', handAnalysis.totalGroups, '单张数:', handAnalysis.singles.length);
-  console.log('条件c检查: 对子数:', handAnalysis.pairs.length, '半靠数:', handAnalysis.halfKaos.length);
+  logGame('TING', '条件b检查: D(对/半靠数):', D, 'E(单张数):', E, 'singles:', handAnalysis.singles.map(c => c.character).join(','), 'pairs:', handAnalysis.pairs.map(c => c.character).join(','), 'halfKaos:', handAnalysis.halfKaos.map(c => c.character).join(','));
   
-  if (handAnalysis.totalGroups === 6 && handAnalysis.singles.length === 1) {
-    console.log('满足条件b: 6组合+1单, 单张:', handAnalysis.singles[0]?.character);
-    return { meets: true, type: 'sixGroupsOneSingle', singleCard: handAnalysis.singles[0] };
+  if (D === 0 && E === 1) {
+    logGame('TING', '满足条件b.1: D=0,E=1, 单张:', handAnalysis.singles[0]?.character);
+    return { meets: true, type: 'b1', singleCard: handAnalysis.singles[0] };
   }
   
-  if (handAnalysis.totalGroups === 5 && handAnalysis.pairs.length + Math.floor(handAnalysis.halfKaos.length / 2) >= 2) {
-    console.log('满足条件c: 5组合+2对/半靠');
-    return { meets: true, type: 'fiveGroupsTwoPairs', pairs: [...handAnalysis.pairs, ...handAnalysis.halfKaos], halfKaos: handAnalysis.halfKaos };
+  if (D === 2 && E === 0) {
+    logGame('TING', '满足条件b.2: D=2,E=0');
+    return { meets: true, type: 'b2', pairs: [...handAnalysis.pairs, ...handAnalysis.halfKaos], halfKaos: handAnalysis.halfKaos };
   }
   
-  if (handAnalysis.totalGroups >= 6 && handAnalysis.pairs.length + Math.floor(handAnalysis.halfKaos.length / 2) >= 1) {
-    console.log('满足条件c变体: 6组合+1对/半靠');
-    return { meets: true, type: 'fiveGroupsTwoPairs', pairs: [...handAnalysis.pairs, ...handAnalysis.halfKaos], halfKaos: handAnalysis.halfKaos };
-  }
-  
-  console.log('不满足任何基本听牌条件');
+  logGame('TING', '不满足任何基本听牌条件');
   return { meets: false };
 }
 
@@ -8556,12 +8572,12 @@ function analyzeHandForTing(hand, melds) {
     }
     
     for (const [char, count] of Object.entries(counts)) {
-      if (count >= 4) {
-        zhaoCount++;
+      if (count === 3) {
+        kanCount++;
         const cards = remainingCards.filter(c => c.character === char);
         cards.forEach(c => usedCardIds.add(c.id));
-      } else if (count === 3) {
-        kanCount++;
+      } else if (count >= 4) {
+        zhaoCount++;
         const cards = remainingCards.filter(c => c.character === char);
         cards.forEach(c => usedCardIds.add(c.id));
       }
@@ -8626,19 +8642,22 @@ function analyzeHandForTing(hand, melds) {
   }
   
   let bestResult = null;
+  let bestPriority = -1;
   
   for (const result of allResults) {
-    if (result.totalGroups === 6 && result.singles.length === 1) {
-      if (!bestResult || result.pairs.length + Math.floor(result.halfKaos.length / 2) > 
-          bestResult.pairs.length + Math.floor(bestResult.halfKaos.length / 2)) {
-        bestResult = result;
-      }
+    const D = result.pairs.length + Math.floor(result.halfKaos.length / 2);
+    const E = result.singles.length;
+    let priority = -1;
+    
+    if (D === 0 && E === 1) {
+      priority = 2;
+    } else if (D === 2 && E === 0) {
+      priority = 1;
     }
-    if (result.totalGroups === 5 && result.pairs.length + result.halfKaos.length >= 2) {
-      if (!bestResult || result.pairs.length + Math.floor(result.halfKaos.length / 2) > 
-          bestResult.pairs.length + Math.floor(bestResult.halfKaos.length / 2)) {
-        bestResult = result;
-      }
+    
+    if (priority > bestPriority) {
+      bestResult = result;
+      bestPriority = priority;
     }
   }
   
@@ -9583,7 +9602,6 @@ function showMessage(title, content, isLiuJu = false) {
   messageArea.dataset.liuju = isLiuJu;
   logGame('LIUJU_SHOW', 'messageArea已显示, isLiuJu=', isLiuJu, 'classList show=', messageArea.classList.contains('show'));
   
-  // 移除之前的滑动事件监听器，防止重复添加
   if (messageArea._swipeHandler) {
     messageArea.removeEventListener('touchstart', messageArea._swipeHandler.touchstart);
     messageArea.removeEventListener('touchmove', messageArea._swipeHandler.touchmove);
@@ -9594,8 +9612,41 @@ function showMessage(title, content, isLiuJu = false) {
     messageArea.removeEventListener('mouseleave', messageArea._swipeHandler.mouseleave);
   }
   
-  // 添加滑动关闭功能
-  setupSwipeToClose(messageArea, closeMessage);
+  setupSwipeToClose(messageArea, closeMessage, 'messageArea');
+  
+  const msgCloseBtn = document.getElementById('msgCloseBtn');
+  if (msgCloseBtn) {
+    const newCloseBtn = msgCloseBtn.cloneNode(true);
+    msgCloseBtn.parentNode.replaceChild(newCloseBtn, msgCloseBtn);
+    const handler = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      logGame('LIUJU_BTN', '关闭按钮触发, event=', e.type);
+      try { closeMessage(); } catch(err) { logGame('LIUJU_BTN', 'closeMessage异常:', err.message); }
+    };
+    newCloseBtn.addEventListener('touchend', handler);
+    newCloseBtn.addEventListener('click', handler);
+    logGame('LIUJU_BTN', '关闭按钮事件已绑定');
+  } else {
+    logGame('LIUJU_BTN', '警告: msgCloseBtn不存在!');
+  }
+  
+  const msgConfirmBtn = document.getElementById('msgConfirmBtn');
+  if (msgConfirmBtn) {
+    const newConfirmBtn = msgConfirmBtn.cloneNode(true);
+    msgConfirmBtn.parentNode.replaceChild(newConfirmBtn, msgConfirmBtn);
+    const handler = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      logGame('LIUJU_BTN', '确定按钮触发, event=', e.type);
+      try { closeMessage(); } catch(err) { logGame('LIUJU_BTN', 'closeMessage异常:', err.message); }
+    };
+    newConfirmBtn.addEventListener('touchend', handler);
+    newConfirmBtn.addEventListener('click', handler);
+    logGame('LIUJU_BTN', '确定按钮事件已绑定');
+  } else {
+    logGame('LIUJU_BTN', '警告: msgConfirmBtn不存在!');
+  }
   
   // 测试模式下自动2秒后关闭
   if (gameState.testMode) {
@@ -9608,6 +9659,7 @@ function showMessage(title, content, isLiuJu = false) {
 }
 
 function closeMessage() {
+  logGame('LIUJU_CLOSE', 'closeMessage被调用, isClosingMessage=', gameState.isClosingMessage, 'roundNumber=', gameState.roundNumber);
   if (gameState.isClosingMessage) return;
   gameState.isClosingMessage = true;
   
@@ -9674,8 +9726,8 @@ function closeMessage() {
       }
       requestAnimationFrame(() => {
         gameState.isClosingMessage = false;
-        notifyRoundEnd();
         startRound();
+        notifyRoundEnd();
       });
     });
     return;
@@ -10135,7 +10187,6 @@ function cleanupOrphanDom() {
 }
 
 function notifyRoundEnd() {
-  cleanupOrphanDom();
   cleanupAudioCache();
   try {
     if (typeof FlutterBridge !== 'undefined') {

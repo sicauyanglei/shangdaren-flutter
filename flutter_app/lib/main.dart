@@ -204,13 +204,7 @@ class _GamePageState extends State<GamePage> {
       _writeLog('[MEMORY_CHECK] RSS=${rssMb}MB');
 
       if (rssMb >= 350) {
-        _writeLog(
-          '[MEMORY_WARNING] RSS=${rssMb}MB >= 350MB, clearCache + forceJsGc',
-        );
-        _clearWebViewCache();
-        _forceJsGc();
-      } else if (rssMb >= 280) {
-        _writeLog('[MEMORY_WARNING] RSS=${rssMb}MB >= 280MB, forceJsGc');
+        _writeLog('[MEMORY_WARNING] RSS=${rssMb}MB >= 350MB, forceJsGc');
         _forceJsGc();
       }
     } catch (e) {
@@ -224,15 +218,7 @@ class _GamePageState extends State<GamePage> {
       final rssMb = (rss / 1048576).round();
       _writeLog('[ROUND_END] RSS=${rssMb}MB');
 
-      if (rssMb >= 280) {
-        _writeLog(
-          '[ROUND_END] RSS=${rssMb}MB >= 280MB, clearCache + forceJsGc',
-        );
-        _clearWebViewCache();
-        _forceJsGc();
-      } else {
-        _forceJsGc();
-      }
+      _forceJsGc();
     } catch (e) {
       debugPrint('Round end handler error: $e');
     }
