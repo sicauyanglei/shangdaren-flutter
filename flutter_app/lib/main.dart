@@ -41,7 +41,7 @@ class GamePage extends StatefulWidget {
   State<GamePage> createState() => _GamePageState();
 }
 
-class _GamePageState extends State<GamePage> {
+class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   late WebViewController _controller;
   bool _isLoading = true;
   bool _pageLoaded = false;
@@ -51,10 +51,15 @@ class _GamePageState extends State<GamePage> {
   File? _logFile;
   IOSink? _logSink;
   Timer? _resourceMonitorTimer;
+  Timer? _logFlushTimer;
+  int _pendingLogCount = 0;
+  int _lastRssMb = 0;
+  int _consecutiveHighMemory = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
@@ -80,9 +85,13 @@ class _GamePageState extends State<GamePage> {
           } else if (msg == 'ROUND_END') {
             _handleRoundEnd();
           } else if (msg.startsWith('SDR_LOG:')) {
-            final logLine = msg.substring(8);
-            debugPrint('SDR $logLine');
-            _writeLog(logLine);
+            final logContent = msg.substring(8);
+            final lines = logContent.split('\n');
+            for (final line in lines) {
+              if (line.isEmpty) continue;
+              debugPrint('SDR $line');
+              _writeLog(line);
+            }
           } else if (msg.startsWith('AUTOTEST_LOG:')) {
             final logLine = '[AUTOTEST] ${msg.substring(13)}';
             debugPrint(logLine);
@@ -103,8 +112,24 @@ class _GamePageState extends State<GamePage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _controller.runJavaScript(
+        'if(typeof onAppBackground==="function"){onAppBackground();}',
+      );
+    } else if (state == AppLifecycleState.resumed) {
+      _controller.runJavaScript(
+        'if(typeof onAppForeground==="function"){onAppForeground();}',
+      );
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _resourceMonitorTimer?.cancel();
+    _logFlushTimer?.cancel();
+    _flushLog();
     _logSink?.close();
     super.dispose();
   }
@@ -166,7 +191,8 @@ class _GamePageState extends State<GamePage> {
       _logFile = File('${logDir.path}/game_log_$dateStr.txt');
       _logSink = _logFile!.openWrite(mode: FileMode.append);
       _logSink!.writeln('=== 上大人字牌日志 $dateStr ===');
-      _logSink!.flush();
+      _pendingLogCount = 1;
+      _startLogFlushTimer();
       debugPrint('Log file: ${_logFile!.path}');
       _startResourceMonitor();
     } catch (e) {
@@ -201,11 +227,31 @@ class _GamePageState extends State<GamePage> {
     try {
       final rss = ProcessInfo.currentRss;
       final rssMb = (rss / 1048576).round();
-      _writeLog('[MEMORY_CHECK] RSS=${rssMb}MB');
+      _lastRssMb = rssMb;
 
-      if (rssMb >= 350) {
-        _writeLog('[MEMORY_WARNING] RSS=${rssMb}MB >= 350MB, forceJsGc');
+      if (rssMb >= 300 && rssMb < 400) {
+        _consecutiveHighMemory++;
+        _writeLog('[MEMORY_L1] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
         _forceJsGc();
+      } else if (rssMb >= 400 && rssMb < 500) {
+        _consecutiveHighMemory++;
+        _writeLog('[MEMORY_L2] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
+        _forceJsGc();
+        _trimJsMemory();
+      } else if (rssMb >= 500) {
+        _consecutiveHighMemory++;
+        _writeLog('[MEMORY_L3] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
+        _forceJsGc();
+        _trimJsMemory();
+        _trimWebViewCache();
+      } else {
+        _consecutiveHighMemory = 0;
+      }
+
+      if (_consecutiveHighMemory >= 4 && rssMb >= 400) {
+        _writeLog('[MEMORY_CRITICAL] RSS=${rssMb}MB, aggressive cleanup');
+        _aggressiveCleanup();
+        _consecutiveHighMemory = 0;
       }
     } catch (e) {
       debugPrint('Memory check error: $e');
@@ -219,21 +265,9 @@ class _GamePageState extends State<GamePage> {
       _writeLog('[ROUND_END] RSS=${rssMb}MB');
 
       _forceJsGc();
+      _trimJsMemory();
     } catch (e) {
       debugPrint('Round end handler error: $e');
-    }
-  }
-
-  void _clearWebViewCache() {
-    try {
-      if (_controller.platform is AndroidWebViewController) {
-        final androidController =
-            _controller.platform as AndroidWebViewController;
-        androidController.clearCache();
-        _writeLog('[CACHE] WebView cache cleared');
-      }
-    } catch (e) {
-      debugPrint('Clear cache error: $e');
     }
   }
 
@@ -248,12 +282,65 @@ class _GamePageState extends State<GamePage> {
     }
   }
 
+  void _trimJsMemory() {
+    try {
+      _controller.runJavaScript(
+        'if(typeof trimMemory==="function"){trimMemory();}',
+      );
+    } catch (e) {
+      debugPrint('Trim JS memory error: $e');
+    }
+  }
+
+  void _trimWebViewCache() {
+    try {
+      if (_controller.platform is AndroidWebViewController) {
+        final androidController =
+            _controller.platform as AndroidWebViewController;
+        androidController.clearCache();
+        _writeLog('[CACHE] WebView cache trimmed');
+      }
+    } catch (e) {
+      debugPrint('Trim WebView cache error: $e');
+    }
+  }
+
+  void _aggressiveCleanup() {
+    try {
+      _controller.runJavaScript(
+        'if(typeof aggressiveCleanup==="function"){aggressiveCleanup();}',
+      );
+      if (_controller.platform is AndroidWebViewController) {
+        final androidController =
+            _controller.platform as AndroidWebViewController;
+        androidController.clearCache();
+      }
+      _writeLog('[MEMORY] Aggressive cleanup completed');
+    } catch (e) {
+      debugPrint('Aggressive cleanup error: $e');
+    }
+  }
+
   void _writeLog(String line) {
     if (_logSink != null) {
       final timestamp = DateTime.now().toString().substring(11, 23);
       _logSink!.writeln('[$timestamp] $line');
-      _logSink!.flush();
+      _pendingLogCount++;
     }
+  }
+
+  void _flushLog() {
+    if (_logSink != null && _pendingLogCount > 0) {
+      _logSink!.flush();
+      _pendingLogCount = 0;
+    }
+  }
+
+  void _startLogFlushTimer() {
+    _logFlushTimer?.cancel();
+    _logFlushTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _flushLog();
+    });
   }
 
   @override
