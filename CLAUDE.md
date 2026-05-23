@@ -15,13 +15,14 @@ flutter build apk --release               # Release APK
 flutter build appbundle --release         # Android App Bundle
 flutter run                               # Run on connected device
 flutter analyze                          # Dart linting
+flutter test                             # Run tests
 ```
 
 ## Architecture
 
 ### Hybrid Structure
 - **Flutter Layer** (`lib/main.dart`): WebView container, native permissions, file logging, memory monitoring
-- **Web Layer** (`assets/html/`): Complete game UI and logic in HTML/CSS/JavaScript
+- **Web Layer** (`assets/html/`): Complete game UI and logic in HTML/CSS/JavaScript (game.js is ~11K lines)
 
 ### Key Files
 | File | Purpose |
@@ -30,7 +31,7 @@ flutter analyze                          # Dart linting
 | `flutter_app/assets/html/index.html` | Game HTML/CSS UI (landscape, responsive) |
 | `flutter_app/assets/html/game.js` | All game logic - card operations, AI, scoring, tilings |
 | `flutter_app/assets/html/sw.js` | Service worker for offline caching |
-| `flutter_app/assets/html/audio/` | Sound effects and voice prompts |
+| `flutter_app/assets/html/audio/` | Sound effects and voice prompts (male/female subdirs) |
 
 ### Game Data Structures
 - **Characters**: 24 unique characters (上大人丘乙己化三千七十土尔小生八九子佳作亡福禄寿)
@@ -47,5 +48,13 @@ Flutter communicates with the WebView via `JavaScriptChannel` named `'FlutterBri
 
 ### Native Integration
 - **Logging**: Writes to `/storage/emulated/0/DCIM/ShangDaRen/game_log_*.txt`
-- **Memory**: Monitors RSS, forces JS GC when >350MB
+- **Memory**: Monitors RSS, tiered cleanup at 250MB/400MB/500MB thresholds
+- **Auto-test**: MethodChannel `com.shangdaren.game/test` with `getPendingRounds` for automated testing
 - **Audio**: Initialized on first user interaction
+
+### Image Assets
+Card images use size/color variants:
+- `images/s/` - small variant
+- `images/v/` - vertical variant
+- `images/s/*C.png` - cardback variant
+- `images/s/*F.png` - face variant

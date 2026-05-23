@@ -124,13 +124,17 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     }
   }
 
+  bool _isDisposed = false;
+
   @override
   void dispose() {
+    _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _resourceMonitorTimer?.cancel();
     _logFlushTimer?.cancel();
     _flushLog();
     _logSink?.close();
+    _controller.removeJavaScriptChannel('FlutterBridge');
     super.dispose();
   }
 
@@ -224,35 +228,88 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   void _checkMemoryWarning() {
+    if (_isDisposed) return;
     try {
       final rss = ProcessInfo.currentRss;
       final rssMb = (rss / 1048576).round();
       _lastRssMb = rssMb;
 
-      if (rssMb >= 300 && rssMb < 400) {
-        _consecutiveHighMemory++;
-        _writeLog('[MEMORY_L1] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
-        _forceJsGc();
-      } else if (rssMb >= 400 && rssMb < 500) {
-        _consecutiveHighMemory++;
-        _writeLog('[MEMORY_L2] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
-        _forceJsGc();
-        _trimJsMemory();
-      } else if (rssMb >= 500) {
-        _consecutiveHighMemory++;
-        _writeLog('[MEMORY_L3] RSS=${rssMb}MB, consecutive=$_consecutiveHighMemory');
-        _forceJsGc();
-        _trimJsMemory();
-        _trimWebViewCache();
-      } else {
-        _consecutiveHighMemory = 0;
-      }
+      _controller
+          .runJavaScriptReturningResult(
+            '(function(){try{var gs=window.gameState;if(!gs)return"idle";if(gs.isHandlingHu)return"hu";if(gs.isDealing)return"dealing";if(gs.isDrawing)return"drawing";if(gs.waitingForResponse)return"waiting";if(gs.isMyTurn||gs.isStartingRound)return"active";return"idle";}catch(e){return"unknown";}})()',
+          )
+          .then((stateResult) {
+            if (_isDisposed) return;
+            final gameState =
+                stateResult?.toString().replaceAll('"', '') ?? 'unknown';
 
-      if (_consecutiveHighMemory >= 4 && rssMb >= 400) {
-        _writeLog('[MEMORY_CRITICAL] RSS=${rssMb}MB, aggressive cleanup');
-        _aggressiveCleanup();
-        _consecutiveHighMemory = 0;
-      }
+            _controller
+                .runJavaScriptReturningResult(
+                  'document.querySelectorAll("*").length',
+                )
+                .then((domResult) {
+                  if (_isDisposed) return;
+                  final domStr = domResult?.toString() ?? '?';
+
+                  if (rssMb >= 250 && rssMb < 400) {
+                    _consecutiveHighMemory++;
+                    _writeLog(
+                      '[MEMORY_L1] RSS=${rssMb}MB, DOM=$domStr, state=$gameState, consecutive=$_consecutiveHighMemory',
+                    );
+                    _controller.runJavaScript(
+                      'if(typeof cleanupOrphanDom==="function"){cleanupOrphanDom();}',
+                    );
+                  } else if (rssMb >= 400 && rssMb < 500) {
+                    _consecutiveHighMemory++;
+                    _writeLog(
+                      '[MEMORY_L2] RSS=${rssMb}MB, DOM=$domStr, state=$gameState, consecutive=$_consecutiveHighMemory',
+                    );
+                    _controller.runJavaScript(
+                      'if(typeof cleanupOrphanDom==="function"){cleanupOrphanDom();}',
+                    );
+                    _forceJsGc();
+                    _trimJsMemory();
+                  } else if (rssMb >= 500) {
+                    _consecutiveHighMemory++;
+                    _writeLog(
+                      '[MEMORY_L3] RSS=${rssMb}MB, DOM=$domStr, state=$gameState, consecutive=$_consecutiveHighMemory',
+                    );
+                    _forceJsGc();
+                    _trimJsMemory();
+                  } else {
+                    _consecutiveHighMemory = 0;
+                  }
+
+                  if (_consecutiveHighMemory >= 8 && rssMb >= 400) {
+                    final isSafeState =
+                        gameState == 'hu' || gameState == 'unknown';
+                    if (isSafeState) {
+                      _writeLog(
+                        '[MEMORY_CRITICAL] RSS=${rssMb}MB, DOM=$domStr, state=$gameState, JS aggressive cleanup',
+                      );
+                      _controller.runJavaScript(
+                        'if(typeof aggressiveCleanup==="function"){aggressiveCleanup();}',
+                      );
+                    } else {
+                      _writeLog(
+                        '[MEMORY_CRITICAL_SAFE] RSS=${rssMb}MB, DOM=$domStr, state=$gameState, 游戏进行中安全清理',
+                      );
+                      _controller.runJavaScript(
+                        'if(typeof cleanupOrphanDom==="function"){cleanupOrphanDom();}',
+                      );
+                      _forceJsGc();
+                      _trimJsMemory();
+                    }
+                    _consecutiveHighMemory = 0;
+                  }
+                })
+                .catchError((e) {
+                  debugPrint('Memory check DOM error: $e');
+                });
+          })
+          .catchError((e) {
+            debugPrint('Memory check state error: $e');
+          });
     } catch (e) {
       debugPrint('Memory check error: $e');
     }
@@ -264,8 +321,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       final rssMb = (rss / 1048576).round();
       _writeLog('[ROUND_END] RSS=${rssMb}MB');
 
-      _forceJsGc();
+      _controller.runJavaScript(
+        'if(typeof onRoundEndCleanup==="function"){onRoundEndCleanup();}',
+      );
       _trimJsMemory();
+      _trimWebViewCache();
     } catch (e) {
       debugPrint('Round end handler error: $e');
     }
@@ -273,10 +333,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _forceJsGc() {
     try {
-      _controller.runJavaScript(
-        'if(typeof cleanupOrphanDom==="function"){cleanupOrphanDom();}'
-        'if(typeof gc==="function"){gc();}',
-      );
+      _controller.runJavaScript('if(typeof gc==="function"){gc();}');
     } catch (e) {
       debugPrint('Force JS GC error: $e');
     }
@@ -310,11 +367,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _controller.runJavaScript(
         'if(typeof aggressiveCleanup==="function"){aggressiveCleanup();}',
       );
-      if (_controller.platform is AndroidWebViewController) {
-        final androidController =
-            _controller.platform as AndroidWebViewController;
-        androidController.clearCache();
-      }
       _writeLog('[MEMORY] Aggressive cleanup completed');
     } catch (e) {
       debugPrint('Aggressive cleanup error: $e');
