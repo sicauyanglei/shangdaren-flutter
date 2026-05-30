@@ -149,14 +149,12 @@ class ShangdarenGame extends FlameGame {
     final dy = (gamePos.y - _dragStartY).abs();
 
     if (dx < _dragThreshold && dy < _dragThreshold) {
+      final previousSelected = _selectedCard;
+      _selectedCard = null;
+      _selectedCardIndex = null;
       if (_dragCard != null && _dragCardIndex != null) {
-        if (_selectedCard == _dragCard) {
+        if (previousSelected == _dragCard) {
           _gameController!.discardCard(_dragCardIndex!);
-          _selectedCard = null;
-          _selectedCardIndex = null;
-        } else {
-          _selectedCard = _dragCard;
-          _selectedCardIndex = _dragCardIndex;
         }
       }
       _isDragging = false;
@@ -164,6 +162,9 @@ class ShangdarenGame extends FlameGame {
       _dragCardIndex = null;
       _dragX = 0;
       _dragY = 0;
+      _gameBoard!.setDragState(false, null, null, 0, 0);
+      _gameBoard!.setSelected(1, null);
+      _syncBoard();
       return;
     }
 
@@ -177,15 +178,17 @@ class ShangdarenGame extends FlameGame {
 
     if (isOutside && _dragCardIndex != null) {
       _gameController!.discardCard(_dragCardIndex!);
-      _selectedCard = null;
-      _selectedCardIndex = null;
     }
 
+    _selectedCard = null;
+    _selectedCardIndex = null;
     _isDragging = false;
     _dragCard = null;
     _dragCardIndex = null;
     _dragX = 0;
     _dragY = 0;
+    _gameBoard!.setDragState(false, null, null, 0, 0);
+    _gameBoard!.setSelected(1, null);
     _syncBoard();
   }
 
@@ -197,6 +200,15 @@ class ShangdarenGame extends FlameGame {
     _dragCardIndex = null;
     _dragX = 0;
     _dragY = 0;
+    _dragOffsetX = 0;
+    _dragOffsetY = 0;
+    _dragStartX = 0;
+    _dragStartY = 0;
+    _dragOriginalX = 0;
+    _dragOriginalY = 0;
+    _gameBoard!.setDragState(false, null, null, 0, 0);
+    _gameBoard!.setSelected(1, null);
+    _syncBoard();
   }
 
   void handleTapAt(Offset globalPosition) {
