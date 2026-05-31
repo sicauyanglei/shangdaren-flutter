@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出牌醒目标识效果对比（完整版）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', sans-serif;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 30px;
+}
+
+.section-title {
+  text-align: center;
+  font-size: 18px;
+  color: #e94560;
+  margin: 30px 0 16px;
+  border-bottom: 1px solid #2a2a4a;
+  padding-bottom: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.card-effect {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+
+.card-effect h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-effect .tag {
+  font-size: 11px;
+  background: #e94560;
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.card-effect .tag.new {
+  background: #00bcd4;
+}
+
+.card-effect .desc {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.discard-row {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+  background: #0f3460;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.discard-row.overflow-visible {
+  overflow: visible;
+}
+
+.mini-card {
+  width: 28px;
+  height: 48px;
+  background: #f5f0e1;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mini-card.red { color: #d32f2f; }
+.mini-card.green { color: #2e7d32; }
+.mini-card.black { color: #333; }
+
+/* ===== 当前效果(对比) ===== */
+.effect-current .highlight {
+  animation: current-gold-pulse 1.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes current-gold-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px 2px rgba(255, 215, 0, 0.3), 0 0 10px 4px rgba(255, 215, 0, 0.15);
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    transform: scale(1.0);
+  }
+  50% {
+    box-shadow: 0 0 6px 3px rgba(255, 215, 0, 0.5), 0 0 14px 6px rgba(255, 215, 0, 0.25);
+    border: 2px solid rgba(255, 215, 0, 0.9);
+    transform: scale(1.05);
+  }
+}
+
+/* ===== 方案A: 红色脉冲边框 ===== */
+.effect-a .highlight {
+  animation: pulse-red-border 1.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes pulse-red-border {
+  0%, 100% {
+    box-shadow: 0 0 4px 1px rgba(255, 50, 50, 0.6), 0 0 10px 3px rgba(255, 50, 50, 0.3);
+    border: 2px solid rgba(255, 50, 50, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 8px 3px rgba(255, 50, 50, 0.9), 0 0 20px 8px rgba(255, 50, 50, 0.5);
+    border: 2px solid rgba(255, 100, 100, 1);
+  }
+}
+
+/* ===== 方案B: 橙色呼吸光晕 ===== */
+.effect-b .highlight {
+  animation: breathe-orange-glow 2s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes breathe-orange-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 6px 2px rgba(255, 152, 0, 0.5),
+      0 0 14px 6px rgba(255, 152, 0, 0.25),
+      0 0 24px 10px rgba(255, 152, 0, 0.1);
+    border: 2px solid rgba(255, 152, 0, 0.8);
+  }
+  50% {
+    box-shadow:
+      0 0 10px 4px rgba(255, 152, 0, 0.8),
+      0 0 22px 10px rgba(255, 152, 0, 0.4),
+      0 0 36px 16px rgba(255, 152, 0, 0.2);
+    border: 2px solid rgba(255, 200, 50, 1);
+  }
+}
+
+/* ===== 方案C: 闪烁白框 ===== */
+.effect-c .highlight {
+  animation: blink-white 0.6s step-end infinite;
+  z-index: 2;
+}
+
+@keyframes blink-white {
+  0%, 49% {
+    box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.8), 0 0 12px 4px rgba(255, 255, 255, 0.4);
+    border: 2px solid #fff;
+  }
+  50%, 100% {
+    box-shadow: 0 0 2px 1px rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* ===== 方案D: 背景高亮色块 ===== */
+.effect-d .highlight {
+  z-index: 2;
+  position: relative;
+}
+
+.effect-d .highlight::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: rgba(255, 50, 50, 0.35);
+  border-radius: 5px;
+  animation: pulse-bg 1.5s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes pulse-bg {
+  0%, 100% { background: rgba(255, 50, 50, 0.25); }
+  50% { background: rgba(255, 50, 50, 0.5); }
+}
+
+/* ===== 方案E: 放大+阴影 ===== */
+.effect-e .highlight {
+  animation: scale-shadow 1.5s ease-in-out infinite;
+  z-index: 2;
+  transform-origin: center center;
+}
+
+@keyframes scale-shadow {
+  0%, 100% {
+    transform: scale(1.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 8px rgba(255, 215, 0, 0.4);
+    border: 2px solid rgba(255, 215, 0, 0.8);
+  }
+  50% {
+    transform: scale(1.18);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8), 0 0 14px rgba(255, 215, 0, 0.7);
+    border: 2px solid rgba(255, 215, 0, 1);
+  }
+}
+
+/* ===== 方案F: 箭头指示器 ===== */
+.effect-f .highlight {
+  z-index: 2;
+  border: 2px solid rgba(255, 82, 82, 0.9);
+  box-shadow: 0 0 6px rgba(255, 82, 82, 0.5);
+}
+
+.effect-f .arrow-indicator {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: arrow-bounce 0.8s ease-in-out infinite;
+}
+
+.effect-f .arrow-indicator::after {
+  content: '\25BC';
+  color: #ff5252;
+  font-size: 14px;
+  filter: drop-shadow(0 0 4px rgba(255, 82, 82, 0.8));
+}
+
+@keyframes arrow-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(4px); }
+}
+
+/* ===== 方案G: 周围暗化聚焦 ===== */
+.effect-g .mini-card.dimmed {
+  opacity: 0.35;
+  filter: brightness(0.4);
+  transition: all 0.3s;
+}
+
+.effect-g .highlight {
+  z-index: 2;
+  border: 2px solid rgba(255, 215, 0, 0.9);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+  animation: subtle-pulse-gold 1.5s ease-in-out infinite;
+}
+
+@keyframes subtle-pulse-gold {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 0 12px rgba(255, 215, 0, 0.7); }
+}
+
+/* ===== 方案H: 彩虹渐变边框 ===== */
+.effect-h .highlight {
+  z-index: 2;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+  animation: rainbow-rotate 3s linear infinite;
+}
+
+.effect-h .highlight::before {
+  content: '';
+  position: absolute;
+  top: -3px; left: -3px; right: -3px; bottom: -3px;
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000);
+  background-size: 300% 100%;
+  border-radius: 5px;
+  z-index: -1;
+  animation: rainbow-flow 2s linear infinite;
+}
+
+@keyframes rainbow-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+@keyframes rainbow-rotate {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 100, 100, 0.5); }
+  33% { box-shadow: 0 0 6px rgba(100, 255, 100, 0.5); }
+  66% { box-shadow: 0 0 6px rgba(100, 100, 255, 0.5); }
+}
+
+/* ===== 方案I: 浮动悬浮 ===== */
+.effect-i .highlight {
+  z-index: 2;
+  animation: float-hover 1.8s ease-in-out infinite;
+  border: 2px solid rgba(100, 200, 255, 0.8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 8px rgba(100, 200, 255, 0.3);
+}
+
+@keyframes float-hover {
+  0%, 100% { transform: translateY(0); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 8px rgba(100, 200, 255, 0.3); }
+  50% { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 14px rgba(100, 200, 255, 0.5); }
+}
+
+/* ===== 方案J: 旋转光弧边框 ===== */
+.effect-j .highlight {
+  z-index: 2;
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.effect-j .highlight::before {
+  content: '';
+  position: absolute;
+  top: -3px; left: -3px; right: -3px; bottom: -3px;
+  border-radius: 5px;
+  background: conic-gradient(from var(--angle, 0deg), transparent 60%, #00e5ff 80%, transparent 100%);
+  z-index: -1;
+  animation: rotate-conic 1.5s linear infinite;
+}
+
+@keyframes rotate-conic {
+  0% { --angle: 0deg; }
+  100% { --angle: 360deg; }
+}
+
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ===== 方案K: 波纹扩散 ===== */
+.effect-k .highlight {
+  z-index: 2;
+  position: relative;
+  border: 2px solid rgba(255, 82, 82, 0.8);
+}
+
+.effect-k .ripple-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 48px;
+  border: 2px solid rgba(255, 82, 82, 0.6);
+  border-radius: 3px;
+  transform: translate(-50%, -50%);
+  animation: ripple-expand 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+.effect-k .ripple-ring:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+.effect-k .ripple-ring:nth-child(3) {
+  animation-delay: 1.0s;
+}
+
+@keyframes ripple-expand {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+
+/* ===== 方案L: 霓虹灯管 ===== */
+.effect-l .highlight {
+  z-index: 2;
+  border: 2px solid #ff4081;
+  animation: neon-flicker 2s ease-in-out infinite;
+}
+
+@keyframes neon-flicker {
+  0%, 100% {
+    box-shadow:
+      0 0 4px 1px #ff4081,
+      0 0 10px 3px rgba(255, 64, 129, 0.6),
+      0 0 20px 6px rgba(255, 64, 129, 0.3),
+      inset 0 0 4px rgba(255, 64, 129, 0.2);
+    border-color: #ff4081;
+  }
+  8% {
+    box-shadow: 0 0 2px 1px #ff4081;
+    border-color: rgba(255, 64, 129, 0.5);
+  }
+  10% {
+    box-shadow:
+      0 0 4px 1px #ff4081,
+      0 0 10px 3px rgba(255, 64, 129, 0.6),
+      0 0 20px 6px rgba(255, 64, 129, 0.3),
+      inset 0 0 4px rgba(255, 64, 129, 0.2);
+    border-color: #ff4081;
+  }
+  50% {
+    box-shadow:
+      0 0 6px 2px #ff4081,
+      0 0 14px 5px rgba(255, 64, 129, 0.7),
+      0 0 28px 10px rgba(255, 64, 129, 0.4),
+      inset 0 0 6px rgba(255, 64, 129, 0.3);
+    border-color: #ff80ab;
+  }
+}
+
+/* ===== 方案M: 抖动提醒 ===== */
+.effect-m .highlight {
+  z-index: 2;
+  border: 2px solid rgba(255, 152, 0, 0.9);
+  box-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
+  animation: shake-remind 0.5s ease-in-out infinite;
+}
+
+@keyframes shake-remind {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-2px); }
+  30% { transform: translateX(2px); }
+  45% { transform: translateX(-1px); }
+  60% { transform: translateX(1px); }
+  75% { transform: translateX(0); }
+}
+
+/* ===== 方案N: 底部光柱 ===== */
+.effect-n .highlight {
+  z-index: 2;
+  position: relative;
+  border: 2px solid rgba(255, 215, 0, 0.7);
+}
+
+.effect-n .light-beam {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 18px;
+  background: linear-gradient(to top, transparent, rgba(255, 215, 0, 0.6), rgba(255, 215, 0, 0.2));
+  clip-path: polygon(30% 100%, 70% 100%, 100% 0%, 0% 0%);
+  animation: beam-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes beam-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ===== 方案O: 描边流动(蚂蚁线) ===== */
+.effect-o .highlight {
+  z-index: 2;
+  border: 2px dashed rgba(255, 82, 82, 0.9);
+  animation: marching-ants 0.6s linear infinite;
+  box-shadow: 0 0 4px rgba(255, 82, 82, 0.3);
+}
+
+@keyframes marching-ants {
+  0% { border-dash-offset: 0; }
+  100% { border-dash-offset: 12; }
+}
+
+/* CSS trick for marching ants using background */
+.effect-o .highlight {
+  position: relative;
+  border: none;
+  background-clip: padding-box;
+}
+
+.effect-o .highlight::before {
+  content: '';
+  position: absolute;
+  top: -3px; left: -3px; right: -3px; bottom: -3px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    #ff5252 0px, #ff5252 4px,
+    transparent 4px, transparent 8px
+  );
+  background-size: 8px 100%;
+  animation: march-h 0.4s linear infinite;
+  z-index: -1;
+  padding: 2px;
+}
+
+.effect-o .highlight::after {
+  content: '';
+  position: absolute;
+  top: -3px; left: -3px; right: -3px; bottom: -3px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(
+    0deg,
+    #ff5252 0px, #ff5252 4px,
+    transparent 4px, transparent 8px
+  );
+  background-size: 100% 8px;
+  animation: march-v 0.4s linear infinite;
+  z-index: -1;
+}
+
+@keyframes march-h {
+  0% { background-position: 0 0; }
+  100% { background-position: 8px 0; }
+}
+
+@keyframes march-v {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 8px; }
+}
+
+/* ===== 方案P: 脉冲圆点标记 ===== */
+.effect-p .highlight {
+  z-index: 2;
+  border: 2px solid rgba(255, 82, 82, 0.7);
+  box-shadow: 0 0 4px rgba(255, 82, 82, 0.3);
+}
+
+.effect-p .dot-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  background: #ff1744;
+  border-radius: 50%;
+  animation: dot-pulse 1s ease-in-out infinite;
+  z-index: 3;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 4px rgba(255, 23, 68, 0.6); }
+  50% { transform: scale(1.4); box-shadow: 0 0 8px rgba(255, 23, 68, 0.9); }
+}
+
+/* ===== 大卡牌预览区 ===== */
+.big-preview {
+  margin-top: 30px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+
+.big-preview h2 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.big-cards-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.big-card-group {
+  text-align: center;
+}
+
+.big-card-group .label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 8px;
+}
+
+.big-card {
+  width: 60px;
+  height: 100px;
+  background: #f5f0e1;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+  position: relative;
+}
+
+.big-card.red { color: #d32f2f; }
+.big-card.green { color: #2e7d32; }
+
+.big-card.effect-a-big {
+  animation: pulse-red-border-big 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red-border-big {
+  0%, 100% {
+    box-shadow: 0 0 6px 2px rgba(255, 50, 50, 0.6), 0 0 16px 6px rgba(255, 50, 50, 0.3);
+    border: 2px solid rgba(255, 50, 50, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px rgba(255, 50, 50, 0.9), 0 0 28px 12px rgba(255, 50, 50, 0.5);
+    border: 2px solid rgba(255, 100, 100, 1);
+  }
+}
+
+.big-card.effect-b-big {
+  animation: breathe-orange-glow-big 2s ease-in-out infinite;
+}
+
+@keyframes breathe-orange-glow-big {
+  0%, 100% {
+    box-shadow:
+      0 0 8px 3px rgba(255, 152, 0, 0.5),
+      0 0 20px 8px rgba(255, 152, 0, 0.25),
+      0 0 36px 14px rgba(255, 152, 0, 0.1);
+    border: 2px solid rgba(255, 152, 0, 0.8);
+  }
+  50% {
+    box-shadow:
+      0 0 14px 6px rgba(255, 152, 0, 0.8),
+      0 0 30px 14px rgba(255, 152, 0, 0.4),
+      0 0 50px 22px rgba(255, 152, 0, 0.2);
+    border: 2px solid rgba(255, 200, 50, 1);
+  }
+}
+
+.big-card.effect-c-big {
+  animation: blink-white-big 0.6s step-end infinite;
+}
+
+@keyframes blink-white-big {
+  0%, 49% {
+    box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.8), 0 0 18px 6px rgba(255, 255, 255, 0.4);
+    border: 2px solid #fff;
+  }
+  50%, 100% {
+    box-shadow: 0 0 3px 1px rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+  }
+}
+
+.big-card.effect-d-big {
+  position: relative;
+}
+
+.big-card.effect-d-big::before {
+  content: '';
+  position: absolute;
+  top: -6px; left: -6px; right: -6px; bottom: -6px;
+  background: rgba(255, 50, 50, 0.35);
+  border-radius: 8px;
+  animation: pulse-bg-big 1.5s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes pulse-bg-big {
+  0%, 100% { background: rgba(255, 50, 50, 0.25); }
+  50% { background: rgba(255, 50, 50, 0.5); }
+}
+
+.big-card.effect-e-big {
+  animation: scale-shadow-big 1.5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@keyframes scale-shadow-big {
+  0%, 100% {
+    transform: scale(1.08);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 10px rgba(255, 215, 0, 0.4);
+    border: 2px solid rgba(255, 215, 0, 0.8);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 18px rgba(255, 215, 0, 0.7);
+    border: 2px solid rgba(255, 215, 0, 1);
+  }
+}
+
+.big-card.effect-g-big {
+  border: 2px solid rgba(255, 215, 0, 0.9);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  animation: subtle-pulse-gold-big 1.5s ease-in-out infinite;
+}
+
+@keyframes subtle-pulse-gold-big {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(255, 215, 0, 0.7); }
+}
+
+.big-card.effect-h-big {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.big-card.effect-h-big::before {
+  content: '';
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000);
+  background-size: 300% 100%;
+  border-radius: 7px;
+  z-index: -1;
+  animation: rainbow-flow 2s linear infinite;
+}
+
+.big-card.effect-i-big {
+  animation: float-hover-big 1.8s ease-in-out infinite;
+  border: 2px solid rgba(100, 200, 255, 0.8);
+}
+
+@keyframes float-hover-big {
+  0%, 100% { transform: translateY(0); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 10px rgba(100, 200, 255, 0.3); }
+  50% { transform: translateY(-8px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(100, 200, 255, 0.5); }
+}
+
+.big-card.effect-j-big {
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.big-card.effect-j-big::before {
+  content: '';
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  border-radius: 7px;
+  background: conic-gradient(from var(--angle, 0deg), transparent 50%, #00e5ff 75%, #7c4dff 90%, transparent 100%);
+  z-index: -1;
+  animation: rotate-conic 1.5s linear infinite;
+}
+
+.big-card.effect-k-big {
+  position: relative;
+  border: 2px solid rgba(255, 82, 82, 0.8);
+}
+
+.big-card.effect-l-big {
+  border: 2px solid #ff4081;
+  animation: neon-flicker 2s ease-in-out infinite;
+}
+
+.big-card.effect-m-big {
+  border: 2px solid rgba(255, 152, 0, 0.9);
+  box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);
+  animation: shake-remind 0.5s ease-in-out infinite;
+}
+
+.big-card.effect-n-big {
+  position: relative;
+  border: 2px solid rgba(255, 215, 0, 0.7);
+}
+
+.big-card.effect-n-big::after {
+  content: '';
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 24px;
+  background: linear-gradient(to top, transparent, rgba(255, 215, 0, 0.5));
+  clip-path: polygon(25% 100%, 75% 100%, 100% 0%, 0% 0%);
+  animation: beam-pulse 1.5s ease-in-out infinite;
+}
+
+.big-card.effect-o-big {
+  position: relative;
+  border: none;
+  background-clip: padding-box;
+}
+
+.big-card.effect-o-big::before {
+  content: '';
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  border-radius: 7px;
+  background: repeating-linear-gradient(90deg, #ff5252 0px, #ff5252 5px, transparent 5px, transparent 10px);
+  background-size: 10px 100%;
+  animation: march-h 0.4s linear infinite;
+  z-index: -1;
+}
+
+.big-card.effect-o-big::after {
+  content: '';
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  border-radius: 7px;
+  background: repeating-linear-gradient(0deg, #ff5252 0px, #ff5252 5px, transparent 5px, transparent 10px);
+  background-size: 100% 10px;
+  animation: march-v 0.4s linear infinite;
+  z-index: -1;
+}
+
+.big-card.effect-p-big {
+  border: 2px solid rgba(255, 82, 82, 0.7);
+  box-shadow: 0 0 6px rgba(255, 82, 82, 0.3);
+}
+
+.big-card.effect-p-big::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  background: #ff1744;
+  border-radius: 50%;
+  animation: dot-pulse-big 1s ease-in-out infinite;
+  z-index: 3;
+}
+
+@keyframes dot-pulse-big {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 4px rgba(255, 23, 68, 0.6); }
+  50% { transform: scale(1.3); box-shadow: 0 0 10px rgba(255, 23, 68, 0.9); }
+}
+
+.note {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #666;
+}
+</style>
+</head>
+<body>
+
+<h1>出牌醒目标识效果对比</h1>
+<p class="subtitle">弃牌区最后一张牌的视觉标识方案 — 请选择最醒目的效果</p>
+
+<div class="section-title">第一批方案（A-H）</div>
+
+<div class="grid">
+
+  <div class="card-effect effect-current">
+    <h2>当前效果 <span class="tag">现有</span></h2>
+    <p class="desc">金色边框脉冲 + 缩放1.0~1.05 + 双层金色发光</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-a">
+    <h2>A. 红色脉冲边框</h2>
+    <p class="desc">红色边框 + 红色外发光脉冲，红色在深色背景上最醒目</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-b">
+    <h2>B. 橙色呼吸光晕</h2>
+    <p class="desc">橙色宽边框 + 三层扩散光晕，呼吸式节奏，温暖醒目</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-c">
+    <h2>C. 闪烁白框</h2>
+    <p class="desc">白色边框快速闪烁（0.6s周期），类似警告提示效果</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-d">
+    <h2>D. 背景高亮色块</h2>
+    <p class="desc">卡牌底部红色半透明色块 + 微弱脉冲，不改变卡牌本身</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-e">
+    <h2>E. 放大+阴影</h2>
+    <p class="desc">卡牌放大1.12~1.18倍 + 强投影 + 金色边框，突出立体感</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-f">
+    <h2>F. 箭头指示器</h2>
+    <p class="desc">卡牌上方红色向下箭头弹跳动画 + 红色边框，直接指向目标</p>
+    <div class="discard-row overflow-visible">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight" style="position:relative">
+        <div class="arrow-indicator"></div>
+        己
+      </div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-g">
+    <h2>G. 周围暗化聚焦</h2>
+    <p class="desc">周围卡牌变暗，出牌保持原色+金色边框，聚焦效果</p>
+    <div class="discard-row">
+      <div class="mini-card black dimmed">七</div>
+      <div class="mini-card green dimmed">乙</div>
+      <div class="mini-card red dimmed">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-h">
+    <h2>H. 彩虹渐变边框</h2>
+    <p class="desc">边框颜色随时间渐变流动，视觉吸引力最强</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">第二批方案（I-P）— 新增创意</div>
+
+<div class="grid">
+
+  <div class="card-effect effect-i">
+    <h2>I. 浮动悬浮 <span class="tag new">新</span></h2>
+    <p class="desc">卡牌上下浮动3-5px + 冰蓝边框 + 阴影变化，像悬浮在桌面上</p>
+    <div class="discard-row overflow-visible">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-j">
+    <h2>J. 旋转光弧边框 <span class="tag new">新</span></h2>
+    <p class="desc">conic-gradient光弧沿边框旋转流动，科技感十足</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-k">
+    <h2>K. 波纹扩散 <span class="tag new">新</span></h2>
+    <p class="desc">从卡牌中心向外扩散的红色圆环波纹，类似水波纹效果</p>
+    <div class="discard-row overflow-visible">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight" style="position:relative">
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+        己
+      </div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-l">
+    <h2>L. 霓虹灯管 <span class="tag new">新</span></h2>
+    <p class="desc">霓虹灯管风格，粉色多层发光+微弱闪烁，灯管质感</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-m">
+    <h2>M. 抖动提醒 <span class="tag new">新</span></h2>
+    <p class="desc">卡牌水平微幅抖动 + 橙色边框，类似手机震动提醒</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-n">
+    <h2>N. 底部光柱 <span class="tag new">新</span></h2>
+    <p class="desc">卡牌下方金色光柱向上照射 + 金色边框，舞台聚光灯效果</p>
+    <div class="discard-row overflow-visible">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight" style="position:relative">
+        己
+        <div class="light-beam"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-o">
+    <h2>O. 描边流动(蚂蚁线) <span class="tag new">新</span></h2>
+    <p class="desc">红色虚线边框沿轮廓方向流动，类似PS选区蚂蚁线效果</p>
+    <div class="discard-row">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight">己</div>
+    </div>
+  </div>
+
+  <div class="card-effect effect-p">
+    <h2>P. 脉冲圆点标记 <span class="tag new">新</span></h2>
+    <p class="desc">卡牌右上角脉冲闪烁红色圆点 + 红色边框，类似通知标记</p>
+    <div class="discard-row overflow-visible">
+      <div class="mini-card black">七</div>
+      <div class="mini-card green">乙</div>
+      <div class="mini-card red">大</div>
+      <div class="mini-card black highlight" style="position:relative">
+        己
+        <div class="dot-badge"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 大卡牌预览 -->
+<div class="big-preview">
+  <h2>大卡牌尺寸效果预览（模拟中央出牌区域 60x100）</h2>
+  <div class="big-cards-row">
+    <div class="big-card-group">
+      <div class="big-card red effect-a-big">人</div>
+      <div class="label">A. 红色脉冲</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-b-big">人</div>
+      <div class="label">B. 橙色光晕</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-c-big">人</div>
+      <div class="label">C. 闪烁白框</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-d-big">人</div>
+      <div class="label">D. 背景高亮</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-e-big">人</div>
+      <div class="label">E. 放大阴影</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-g-big">人</div>
+      <div class="label">G. 暗化聚焦</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-h-big">人</div>
+      <div class="label">H. 彩虹渐变</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-i-big">人</div>
+      <div class="label">I. 浮动悬浮</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-j-big">人</div>
+      <div class="label">J. 旋转光弧</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-l-big">人</div>
+      <div class="label">L. 霓虹灯管</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-m-big">人</div>
+      <div class="label">M. 抖动提醒</div>
+    </div>
+    <div class="big-card-group" style="padding-bottom:28px">
+      <div class="big-card red effect-n-big">人</div>
+      <div class="label">N. 底部光柱</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-o-big">人</div>
+      <div class="label">O. 蚂蚁线</div>
+    </div>
+    <div class="big-card-group">
+      <div class="big-card red effect-p-big">人</div>
+      <div class="label">P. 圆点标记</div>
+    </div>
+  </div>
+</div>
+
+<p class="note">以上效果均为 CSS 动画模拟，实际 Flutter 实现可能略有差异。方案J旋转光弧需要浏览器支持 @property。</p>
+
+</body>
+</html>

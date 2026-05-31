@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>摸牌+1动画效果对比（含数字变化）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', sans-serif;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 30px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card-effect {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+
+.card-effect h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-effect .tag {
+  font-size: 11px;
+  background: #00bcd4;
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.card-effect .desc {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.hand-area {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 20px 10px;
+  background: #0f3460;
+  border-radius: 8px;
+  min-height: 320px;
+  position: relative;
+}
+
+.sentence-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.hand-card {
+  width: 60px;
+  height: 224px;
+  background: #f5f0e1;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+  position: relative;
+  box-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+
+.hand-card.red { color: #d32f2f; }
+.hand-card.green { color: #2e7d32; }
+.hand-card.black { color: #333; }
+
+.hand-card.stacked {
+  margin-top: -160px;
+}
+
+.hand-card.stacked:first-child {
+  margin-top: 0;
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  width: 36px;
+  height: 36px;
+  background: #FF4444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.badge.small-text {
+  font-size: 20px;
+}
+
+/* ===== 方案A: 数字翻转 + +1上浮 ===== */
+.effect-a .badge {
+  animation: badge-flip 0.6s ease-in-out;
+}
+
+@keyframes badge-flip {
+  0% { transform: scaleX(1); }
+  40% { transform: scaleX(0); }
+  60% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+.effect-a .badge .old-num {
+  position: absolute;
+  animation: num-out 0.6s ease-in-out forwards;
+}
+
+@keyframes num-out {
+  0% { opacity: 1; transform: translateX(0); }
+  40% { opacity: 0; transform: translateX(-8px); }
+  100% { opacity: 0; transform: translateX(-8px); }
+}
+
+.effect-a .badge .new-num {
+  position: absolute;
+  animation: num-in 0.6s ease-in-out forwards;
+}
+
+@keyframes num-in {
+  0% { opacity: 0; transform: translateX(8px); }
+  60% { opacity: 0; transform: translateX(8px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+.effect-a .plus-one {
+  position: absolute;
+  top: 0px;
+  right: 2px;
+  color: #FFD700;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 10;
+  animation: float-up-fade 1.5s ease-out forwards;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+  pointer-events: none;
+}
+
+@keyframes float-up-fade {
+  0% { opacity: 0; transform: translateY(0) scale(0.8); }
+  15% { opacity: 1; transform: translateY(-5px) scale(1.1); }
+  30% { transform: translateY(-10px) scale(1.0); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.7); }
+}
+
+/* ===== 方案B: 数字弹跳放大 + +1弹出 ===== */
+.effect-b .badge {
+  animation: badge-bounce-scale 0.8s ease-out;
+}
+
+@keyframes badge-bounce-scale {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.6); }
+  50% { transform: scale(0.9); }
+  70% { transform: scale(1.15); }
+  85% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.effect-b .badge .old-num {
+  position: absolute;
+  animation: num-shrink-out 0.4s ease-in forwards;
+}
+
+@keyframes num-shrink-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+.effect-b .badge .new-num {
+  position: absolute;
+  animation: num-grow-in 0.4s ease-out 0.2s forwards;
+  opacity: 0;
+}
+
+@keyframes num-grow-in {
+  0% { opacity: 0; transform: scale(0.5); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.effect-b .plus-one {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  color: #4CAF50;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 10;
+  animation: pop-up-fade 1.2s ease-out forwards;
+  text-shadow: 0 0 6px rgba(76, 175, 80, 0.6);
+  pointer-events: none;
+}
+
+@keyframes pop-up-fade {
+  0% { opacity: 0; transform: scale(0.3); }
+  20% { opacity: 1; transform: scale(1.3); }
+  40% { transform: scale(0.95); }
+  55% { transform: scale(1.05); }
+  70% { opacity: 1; transform: scale(1.0); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.6); }
+}
+
+/* ===== 方案C: 数字上滑替换 + +1上浮 ===== */
+.effect-c .badge {
+  overflow: hidden;
+}
+
+.effect-c .badge .old-num {
+  position: absolute;
+  animation: num-slide-up-out 0.5s ease-in forwards;
+}
+
+@keyframes num-slide-up-out {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-36px); opacity: 0; }
+}
+
+.effect-c .badge .new-num {
+  position: absolute;
+  animation: num-slide-up-in 0.5s ease-out 0.15s forwards;
+  transform: translateY(36px);
+  opacity: 0;
+}
+
+@keyframes num-slide-up-in {
+  0% { transform: translateY(36px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.effect-c .plus-one {
+  position: absolute;
+  top: 0px;
+  right: 2px;
+  color: #FF9800;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 10;
+  animation: float-up-fade 1.5s ease-out 0.3s forwards;
+  text-shadow: 0 0 6px rgba(255, 152, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* ===== 方案D: 闪光+数字渐变 + +1飞入 ===== */
+.effect-d .badge-flash {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 6;
+  animation: flash-expand 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes flash-expand {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+
+.effect-d .badge .old-num {
+  position: absolute;
+  animation: num-fade-out 0.3s ease-in forwards;
+}
+
+@keyframes num-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.effect-d .badge .new-num {
+  position: absolute;
+  animation: num-fade-in 0.3s ease-out 0.3s forwards;
+  opacity: 0;
+}
+
+@keyframes num-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.effect-d .plus-one {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  color: #FFD700;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 10;
+  animation: fly-in-badge 1.2s ease-out forwards;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+  pointer-events: none;
+}
+
+@keyframes fly-in-badge {
+  0% { opacity: 0; transform: translate(30px, -20px) scale(0.5); }
+  30% { opacity: 1; transform: translate(0, 0) scale(1.3); }
+  50% { transform: translate(0, 0) scale(1.0); }
+  80% { opacity: 1; transform: translate(0, 0) scale(1.0); }
+  100% { opacity: 0; transform: translate(0, -10px) scale(0.8); }
+}
+
+/* ===== 方案E: 徽章脉冲光圈 + 数字弹入 ===== */
+.effect-e .badge {
+  animation: badge-glow-pulse 1.0s ease-out;
+}
+
+@keyframes badge-glow-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7); transform: scale(1); }
+  30% { box-shadow: 0 0 16px 6px rgba(255, 68, 68, 0.5); transform: scale(1.4); }
+  60% { box-shadow: 0 0 6px 2px rgba(255, 68, 68, 0.2); transform: scale(0.95); }
+  80% { box-shadow: none; transform: scale(1.05); }
+  100% { box-shadow: none; transform: scale(1); }
+}
+
+.effect-e .badge .old-num {
+  position: absolute;
+  animation: num-drop-out 0.4s ease-in forwards;
+}
+
+@keyframes num-drop-out {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(10px); }
+}
+
+.effect-e .badge .new-num {
+  position: absolute;
+  animation: num-drop-in 0.4s ease-out 0.25s forwards;
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+@keyframes num-drop-in {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 方案F: 数字滚动计数 + +1弹出 ===== */
+.effect-f .badge .num-display {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+}
+
+.effect-f .badge .num-strip {
+  position: absolute;
+  left: 50%;
+  animation: num-roll 0.6s ease-out forwards;
+}
+
+@keyframes num-roll {
+  0% { transform: translate(-50%, 0); }
+  100% { transform: translate(-50%, -36px); }
+}
+
+.effect-f .badge .num-strip span {
+  display: block;
+  height: 36px;
+  line-height: 36px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.effect-f .plus-one {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  color: #FF4444;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 10;
+  animation: pop-up-fade 1.2s ease-out forwards;
+  text-shadow: 0 0 6px rgba(255, 68, 68, 0.6);
+  pointer-events: none;
+}
+
+.note {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #666;
+}
+
+.replay-btn {
+  display: block;
+  margin: 16px auto 0;
+  padding: 6px 16px;
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.replay-btn:hover {
+  background: #1a4a7a;
+}
+</style>
+</head>
+<body>
+
+<h1>摸牌+1动画效果对比（含数字变化）</h1>
+<p class="subtitle">人类玩家摸到已有卡牌时，右上角数字从旧值变新值 + "+1"动画效果 — 请选择最合适的效果</p>
+
+<div class="grid">
+
+  <!-- 方案A: 数字翻转 + +1上浮 -->
+  <div class="card-effect effect-a" id="effect-a">
+    <h2>A. 数字翻转 + +1上浮 <span class="tag">推荐</span></h2>
+    <p class="desc">徽章横向翻转（旧数字1→新数字2），同时金色"+1"上浮消散</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <span class="old-num">1</span>
+            <span class="new-num">2</span>
+          </div>
+          <div class="plus-one">+1</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-a')">重播动画</button>
+  </div>
+
+  <!-- 方案B: 数字弹跳放大 + +1弹出 -->
+  <div class="card-effect effect-b" id="effect-b">
+    <h2>B. 数字弹跳放大 + +1弹出</h2>
+    <p class="desc">徽章弹跳放大（旧数字缩小→新数字放大），绿色"+1"弹出消散</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <span class="old-num">1</span>
+            <span class="new-num">2</span>
+          </div>
+          <div class="plus-one">+1</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-b')">重播动画</button>
+  </div>
+
+  <!-- 方案C: 数字上滑替换 + +1上浮 -->
+  <div class="card-effect effect-c" id="effect-c">
+    <h2>C. 数字上滑替换 + +1上浮</h2>
+    <p class="desc">旧数字向上滑出，新数字从下方滑入，橙色"+1"上浮消散</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <span class="old-num">1</span>
+            <span class="new-num">2</span>
+          </div>
+          <div class="plus-one">+1</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-c')">重播动画</button>
+  </div>
+
+  <!-- 方案D: 闪光+数字渐变 + +1飞入 -->
+  <div class="card-effect effect-d" id="effect-d">
+    <h2>D. 闪光+数字渐变 + +1飞入</h2>
+    <p class="desc">白色闪光圈扩散，数字淡入淡出切换，金色"+1"从右上方飞入</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <span class="old-num">1</span>
+            <span class="new-num">2</span>
+          </div>
+          <div class="badge-flash"></div>
+          <div class="plus-one">+1</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-d')">重播动画</button>
+  </div>
+
+  <!-- 方案E: 徽章脉冲光圈 + 数字弹入 -->
+  <div class="card-effect effect-e" id="effect-e">
+    <h2>E. 徽章脉冲光圈 + 数字弹入</h2>
+    <p class="desc">徽章放大脉冲+红色光圈扩散，旧数字下落→新数字弹入</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <span class="old-num">1</span>
+            <span class="new-num">2</span>
+          </div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-e')">重播动画</button>
+  </div>
+
+  <!-- 方案F: 数字滚动计数 + +1弹出 -->
+  <div class="card-effect effect-f" id="effect-f">
+    <h2>F. 数字滚动计数 + +1弹出</h2>
+    <p class="desc">数字像计数器一样滚动递增（1→2），红色"+1"弹出消散</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge small-text">
+            <div class="num-display">
+              <div class="num-strip">
+                <span>1</span>
+                <span>2</span>
+              </div>
+            </div>
+          </div>
+          <div class="plus-one">+1</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('effect-f')">重播动画</button>
+  </div>
+
+</div>
+
+<p class="note">以上效果均为 CSS 动画模拟，实际 Flutter 实现可能略有差异。点击"重播动画"可重新播放效果。</p>
+
+<script>
+function replay(effectClass) {
+  const el = document.getElementById(effectClass);
+  const area = el.querySelector('.hand-area');
+  const clone = area.cloneNode(true);
+  area.parentNode.replaceChild(clone, area);
+}
+</script>
+
+</body>
+</html>

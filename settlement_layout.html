@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>结算页面布局 - 当前实现 vs 设计方案</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  font-family: 'Microsoft YaHei', sans-serif;
+  color: #fff;
+  padding: 20px;
+}
+
+.page-title {
+  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 10px;
+}
+.page-subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 30px;
+}
+
+.comparison {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
+.panel {
+  flex-shrink: 0;
+}
+.panel-label {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding: 6px 20px;
+  border-radius: 8px;
+}
+.panel-label.current { background: #ff6b6b33; color: #ff6b6b; border: 1px solid #ff6b6b55; }
+.panel-label.design { background: #4ecdc433; color: #4ecdc4; border: 1px solid #4ecdc455; }
+
+/* ===== 手机屏幕模拟 ===== */
+.phone {
+  width: 375px;
+  height: 720px;
+  background: #000;
+  border-radius: 24px;
+  border: 3px solid #333;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ===== 当前实现样式 ===== */
+.cur-container {
+  width: 92%;
+  max-height: 90%;
+  padding: 20px 24px 40px 24px;
+  background: linear-gradient(135deg, #1a5c2e, #0d3018);
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 30px rgba(255,215,0,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.cur-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 12px;
+}
+.cur-scroll {
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.cur-scroll::-webkit-scrollbar { width: 4px; }
+.cur-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 2px; }
+.cur-scroll::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.3); border-radius: 2px; }
+
+.cur-total-scores {
+  width: 100%;
+  padding: 14px;
+  background: rgba(255,215,0,0.1);
+  border-radius: 12px;
+  border: 2px solid #ffd700;
+  margin-bottom: 14px;
+}
+.cur-total-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 10px;
+}
+.cur-scores-row {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 10px;
+}
+.cur-player {
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 90px;
+}
+.cur-player.winner {
+  background: rgba(255,215,0,0.3);
+  border: 2px solid #ffd700;
+}
+.cur-player.loser {
+  background: rgba(0,0,0,0.3);
+}
+.cur-player-name {
+  font-size: 13px;
+  color: #fff;
+  margin-bottom: 3px;
+}
+.cur-player-score {
+  font-size: 18px;
+  font-weight: bold;
+}
+.cur-player-score.gold { color: #ffd700; }
+.cur-player-score.teal { color: #4ecdc4; }
+.cur-winner-text {
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffd700;
+}
+
+.cur-round {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  border-left: 3px solid #ffd700;
+}
+.cur-round-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 4px;
+}
+.cur-round-detail {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #ccc;
+}
+.cur-round-detail .hl { color: #4ecdc4; font-weight: bold; }
+.cur-round-detail .red { color: #ff6b6b; }
+.cur-round-detail .gold { color: #ffd700; }
+.cur-round-detail .gray { color: #aaa; font-size: 11px; }
+.cur-loser-tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+.cur-loser-tag { color: #ff6b6b; font-size: 11px; }
+
+.cur-confirm-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 70px;
+  height: 28px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* ===== 设计方案样式 ===== */
+.des-container {
+  width: 92%;
+  max-height: 90%;
+  padding: 20px 24px 24px 24px;
+  background: linear-gradient(135deg, #1a5c2e, #0d3018);
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 30px rgba(255,215,0,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.des-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 14px;
+}
+.des-section {
+  margin-bottom: 12px;
+}
+.des-section-title {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 3px;
+}
+.des-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  line-height: 1.8;
+  padding: 0 4px;
+}
+.des-row .label { color: #aaa; }
+.des-row .value { color: #fff; font-weight: bold; }
+.des-row .value.teal { color: #4ecdc4; }
+.des-row .value.red { color: #ff6b6b; }
+.des-row .value.gold { color: #ffd700; }
+
+.des-pay-detail {
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 6px;
+}
+.des-pay-row {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #ccc;
+}
+.des-pay-row .formula { color: #aaa; }
+.des-pay-row .result { color: #ffd700; font-weight: bold; }
+.des-pay-row .winner-result { color: #4ecdc4; font-weight: bold; }
+
+.des-scores {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 8px;
+}
+.des-score-item {
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  min-width: 80px;
+}
+.des-score-item.top {
+  background: rgba(255,215,0,0.2);
+  border: 1px solid #ffd700;
+}
+.des-score-item.normal {
+  background: rgba(0,0,0,0.2);
+}
+.des-score-name { font-size: 12px; color: #fff; }
+.des-score-val { font-size: 16px; font-weight: bold; }
+.des-score-val.gold { color: #ffd700; }
+.des-score-val.teal { color: #4ecdc4; }
+
+.des-btn-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 14px;
+}
+.des-btn {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.des-btn.primary {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  color: #fff;
+}
+.des-btn.secondary {
+  background: rgba(255,255,255,0.1);
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* ===== 总结算设计方案 ===== */
+.des-total-container {
+  width: 92%;
+  max-height: 90%;
+  padding: 20px 24px 24px 24px;
+  background: linear-gradient(135deg, #1a5c2e, #0d3018);
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 30px rgba(255,215,0,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.des-rank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+}
+.des-rank-item.rank1 { background: rgba(255,215,0,0.2); border: 1px solid #ffd700; }
+.des-rank-item.rank2 { background: rgba(192,192,192,0.15); border: 1px solid rgba(192,192,192,0.3); }
+.des-rank-item.rank3 { background: rgba(205,127,50,0.15); border: 1px solid rgba(205,127,50,0.3); }
+.des-rank-medal { font-size: 20px; }
+.des-rank-name { font-size: 14px; color: #fff; flex: 1; }
+.des-rank-score { font-size: 16px; font-weight: bold; }
+.des-rank-score.gold { color: #ffd700; }
+.des-rank-score.silver { color: #c0c0c0; }
+.des-rank-score.bronze { color: #cd7f32; }
+
+.des-stats {
+  margin-top: 12px;
+}
+.des-stat-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.des-stat-name {
+  color: #4ecdc4;
+  font-weight: bold;
+  min-width: 50px;
+}
+.des-stat-detail { color: #aaa; }
+
+/* ===== 差异标注 ===== */
+.diff-section {
+  margin-top: 30px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.diff-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.diff-table th {
+  background: rgba(255,215,0,0.15);
+  color: #ffd700;
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid rgba(255,215,0,0.2);
+}
+.diff-table td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  vertical-align: top;
+}
+.diff-table td.red { color: #ff6b6b; }
+.diff-table td.green { color: #4ecdc4; }
+
+/* Tab切换 */
+.tab-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 16px;
+}
+.tab-btn {
+  padding: 8px 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.tab-btn:first-child { border-radius: 8px 0 0 8px; }
+.tab-btn:last-child { border-radius: 0 8px 8px 0; }
+.tab-btn.active {
+  background: rgba(78,205,196,0.2);
+  border-color: #4ecdc4;
+  color: #4ecdc4;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="page-title">结算页面布局对比</div>
+<div class="page-subtitle">左侧：当前实现 (settlement_screen.dart) &nbsp;|&nbsp; 右侧：设计方案规范 (15.6 本局结算 + 15.7 总结算)</div>
+
+<div class="comparison">
+  <!-- 左侧：当前实现 -->
+  <div class="panel">
+    <div class="panel-label current">当前实现</div>
+    <div class="phone">
+      <div class="cur-container">
+        <div class="cur-title">游戏结算</div>
+        <div class="cur-scroll">
+          <div class="cur-total-scores">
+            <div class="cur-total-title">总结算</div>
+            <div class="cur-scores-row">
+              <div class="cur-player loser">
+                <div class="cur-player-name">玩家1</div>
+                <div class="cur-player-score teal">-12分</div>
+              </div>
+              <div class="cur-player winner">
+                <div class="cur-player-name">我</div>
+                <div class="cur-player-score gold">+38分</div>
+              </div>
+              <div class="cur-player loser">
+                <div class="cur-player-name">玩家2</div>
+                <div class="cur-player-score teal">-26分</div>
+              </div>
+            </div>
+            <div class="cur-winner-text">赢家: 我</div>
+          </div>
+
+          <div class="cur-round">
+            <div class="cur-round-title">第1局</div>
+            <div class="cur-round-detail">
+              赢家: <span class="hl">我</span><br>
+              <span class="red">清枯重台 自摸</span><br>
+              倍数: <span class="hl">8倍</span><br>
+              得分: <span class="gold">48分</span>
+              <div class="cur-loser-tags">
+                <span class="cur-loser-tag">玩家1输: 16分</span>
+                <span class="cur-loser-tag">玩家2输: 16分</span>
+              </div>
+              <div class="gray" style="margin-top:3px;">飘分: 玩家1(0) 我(2) 玩家2(0)</div>
+            </div>
+          </div>
+
+          <div class="cur-round">
+            <div class="cur-round-title">第2局 流局</div>
+            <div class="cur-round-detail">
+              <span style="color:#aaa;font-style:italic;">流局</span>
+            </div>
+          </div>
+
+          <div class="cur-round">
+            <div class="cur-round-title">第3局</div>
+            <div class="cur-round-detail">
+              赢家: <span class="hl">玩家2</span><br>
+              <span class="red">十对 点炮</span><br>
+              倍数: <span class="hl">4倍</span><br>
+              得分: <span class="gold">24分</span>
+              <div class="cur-loser-tags">
+                <span class="cur-loser-tag">我输: 24分</span>
+              </div>
+              <div class="gray" style="margin-top:3px;">飘分: 玩家1(0) 玩家2(3) 我(1)</div>
+            </div>
+          </div>
+
+          <div class="cur-round">
+            <div class="cur-round-title">第4局</div>
+            <div class="cur-round-detail">
+              赢家: <span class="hl">玩家1</span><br>
+              <span class="red">红元 点炮</span><br>
+              倍数: <span class="hl">2倍</span><br>
+              得分: <span class="gold">12分</span>
+              <div class="cur-loser-tags">
+                <span class="cur-loser-tag">我输: 12分</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cur-round">
+            <div class="cur-round-title">第5局</div>
+            <div class="cur-round-detail">
+              赢家: <span class="hl">我</span><br>
+              <span class="red">枯胡 自摸</span><br>
+              倍数: <span class="hl">4倍</span><br>
+              得分: <span class="gold">24分</span>
+              <div class="cur-loser-tags">
+                <span class="cur-loser-tag">玩家1输: 8分</span>
+                <span class="cur-loser-tag">玩家2输: 8分</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="cur-confirm-btn">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：设计方案 -->
+  <div class="panel">
+    <div class="panel-label design">设计方案规范</div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('round')">15.6 本局结算</button>
+      <button class="tab-btn" onclick="switchTab('total')">15.7 总结算</button>
+    </div>
+
+    <div id="tab-round" class="tab-content active">
+      <div class="phone">
+        <div class="des-container">
+          <div class="des-title">本局结算</div>
+
+          <div class="des-section">
+            <div class="des-row">
+              <span class="label">赢家</span>
+              <span class="value teal">我</span>
+            </div>
+          </div>
+
+          <div class="des-section">
+            <div class="des-row">
+              <span class="label">胡牌方式</span>
+              <span class="value">自摸</span>
+            </div>
+            <div class="des-row">
+              <span class="label">胡牌类型</span>
+              <span class="value red">红元4精</span>
+            </div>
+            <div class="des-row">
+              <span class="label">倍数</span>
+              <span class="value gold">自摸5倍</span>
+            </div>
+            <div class="des-row">
+              <span class="label">胡数</span>
+              <span class="value">25胡</span>
+            </div>
+          </div>
+
+          <div class="des-section">
+            <div class="des-section-title">支付详情</div>
+            <div class="des-pay-detail">
+              <div class="des-pay-row">
+                玩家1 支付: <span class="formula">10 + 5×5 + 10</span> = <span class="result">45分</span>
+              </div>
+              <div class="des-pay-row">
+                玩家2 支付: <span class="formula">10 + 5×5 + 0</span> = <span class="result">35分</span>
+              </div>
+              <div class="des-pay-row">
+                我 得分: <span class="winner-result">80分</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="des-section">
+            <div class="des-section-title">当前总分</div>
+            <div class="des-scores">
+              <div class="des-score-item normal">
+                <div class="des-score-name">玩家1</div>
+                <div class="des-score-val teal">40分</div>
+              </div>
+              <div class="des-score-item top">
+                <div class="des-score-name">我</div>
+                <div class="des-score-val gold">280分</div>
+              </div>
+              <div class="des-score-item normal">
+                <div class="des-score-name">玩家2</div>
+                <div class="des-score-val teal">-20分</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="des-btn-row">
+            <button class="des-btn primary">下一局</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-total" class="tab-content">
+      <div class="phone">
+        <div class="des-total-container">
+          <div class="des-title">总结算 (8局结束)</div>
+
+          <div class="des-section">
+            <div class="des-section-title">排名</div>
+            <div class="des-rank-item rank1">
+              <span class="des-rank-medal">🥇</span>
+              <span class="des-rank-name">我</span>
+              <span class="des-rank-score gold">520分</span>
+            </div>
+            <div class="des-rank-item rank2">
+              <span class="des-rank-medal">🥈</span>
+              <span class="des-rank-name">玩家1</span>
+              <span class="des-rank-score silver">180分</span>
+            </div>
+            <div class="des-rank-item rank3">
+              <span class="des-rank-medal">🥉</span>
+              <span class="des-rank-name">玩家2</span>
+              <span class="des-rank-score bronze">-70分</span>
+            </div>
+          </div>
+
+          <div class="des-stats">
+            <div class="des-section-title">详细统计</div>
+            <div class="des-stat-row">
+              <span class="des-stat-name">我</span>
+              <span class="des-stat-detail">胡牌3次, 被胡5次, 最大胡牌: 红元5精</span>
+            </div>
+            <div class="des-stat-row">
+              <span class="des-stat-name">玩家1</span>
+              <span class="des-stat-detail">胡牌2次, 被胡4次, 最大胡牌: 枯胡</span>
+            </div>
+            <div class="des-stat-row">
+              <span class="des-stat-name">玩家2</span>
+              <span class="des-stat-detail">胡牌1次, 被胡6次, 最大胡牌: 台胡</span>
+            </div>
+          </div>
+
+          <div class="des-btn-row">
+            <button class="des-btn primary">再来一局</button>
+            <button class="des-btn secondary">返回主菜单</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 差异对比表 -->
+<div class="diff-section">
+  <div class="diff-title">差异对比</div>
+  <table class="diff-table">
+    <tr>
+      <th>对比项</th>
+      <th>当前实现</th>
+      <th>设计方案规范</th>
+    </tr>
+    <tr>
+      <td>页面结构</td>
+      <td class="red">单一页面（总结算+各局详情）</td>
+      <td class="green">两个独立页面（本局结算 + 总结算）</td>
+    </tr>
+    <tr>
+      <td>显示时机</td>
+      <td class="red">所有局结束后统一显示</td>
+      <td class="green">每局结束显示本局结算，8局结束显示总结算</td>
+    </tr>
+    <tr>
+      <td>本局信息</td>
+      <td class="red">仅显示赢家/胡牌类型/倍数/得分</td>
+      <td class="green">完整信息：赢家/胡牌方式/胡牌类型+倍数/胡数/支付详情</td>
+    </tr>
+    <tr>
+      <td>支付详情</td>
+      <td class="red">只显示"xxx输: N分"</td>
+      <td class="green">显示完整公式：底分 + 倍数基数×倍数 + 飘分 = 总分</td>
+    </tr>
+    <tr>
+      <td>胡数显示</td>
+      <td class="red">未显示</td>
+      <td class="green">显示总胡数</td>
+    </tr>
+    <tr>
+      <td>当前总分</td>
+      <td class="red">仅在顶部总结算区域显示最终总分</td>
+      <td class="green">本局结算中显示当前累计总分</td>
+    </tr>
+    <tr>
+      <td>总结算排名</td>
+      <td class="red">横向排列，赢家高亮</td>
+      <td class="green">纵向排名，🥇🥈🥉奖牌</td>
+    </tr>
+    <tr>
+      <td>详细统计</td>
+      <td class="red">未显示</td>
+      <td class="green">胡牌次数/被胡次数/最大胡牌类型</td>
+    </tr>
+    <tr>
+      <td>操作按钮</td>
+      <td class="red">仅"确认"</td>
+      <td class="green">本局: [下一局] / 总结算: [再来一局]+[返回主菜单]</td>
+    </tr>
+    <tr>
+      <td>流局显示</td>
+      <td class="green">显示"流局"卡片</td>
+      <td class="green">设计方案未明确（可保留当前实现）</td>
+    </tr>
+  </table>
+</div>
+
+<script>
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  if (tab === 'round') {
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    document.getElementById('tab-round').classList.add('active');
+  } else {
+    document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    document.getElementById('tab-total').classList.add('active');
+  }
+}
+</script>
+
+</body>
+</html>

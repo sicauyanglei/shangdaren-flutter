@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>启动页面优化方案</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a1a;
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 { text-align: center; font-size: 24px; margin-bottom: 8px; color: #fff; }
+.subtitle { text-align: center; font-size: 14px; color: #888; margin-bottom: 30px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.card-effect {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+.card-effect h2 { font-size: 16px; margin-bottom: 4px; }
+.card-effect .tag { font-size: 11px; background: #00bcd4; color: #fff; padding: 1px 8px; border-radius: 10px; }
+.card-effect .desc { font-size: 12px; color: #888; margin-bottom: 16px; }
+
+.phone-frame {
+  width: 360px;
+  height: 640px;
+  margin: 0 auto;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid #333;
+}
+
+/* ===== 当前方案（原始） ===== */
+.original-screen {
+  width: 100%; height: 100%;
+  background: radial-gradient(circle at center, #1a5c2e, #0d3d1a 50%, #062810);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 20px;
+}
+.original-screen .logo {
+  width: 120px; height: 120px;
+  background: #2a5a3a;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; color: #ffd700; font-weight: bold;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+.original-screen .options {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.original-screen .option-row {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.original-screen .option-label {
+  font-size: 13px; color: rgba(255,255,255,0.9);
+}
+.original-screen .option-btns {
+  display: flex; gap: 6px;
+}
+.original-screen .opt-btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1);
+  cursor: pointer;
+}
+.original-screen .opt-btn.active {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-color: #4ecdc4;
+  font-weight: bold;
+}
+.original-screen .start-btn {
+  margin-top: 8px;
+  padding: 10px 40px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-radius: 20px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+}
+
+/* ===== 方案A: 居中竖排 + 字牌装饰 ===== */
+.style-a {
+  width: 100%; height: 100%;
+  background: radial-gradient(ellipse at 50% 30%, #1a5c2e, #0d3d1a 50%, #062810);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-a .deco-cards {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  opacity: 0.08;
+}
+.style-a .deco-card {
+  position: absolute;
+  width: 40px; height: 70px;
+  background: #f5f0e1;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: bold;
+}
+.style-a .deco-card.red { color: #d32f2f; }
+.style-a .deco-card.green { color: #2e7d32; }
+.style-a .deco-card.black { color: #333; }
+
+.style-a .logo-area {
+  width: 100px; height: 100px;
+  background: linear-gradient(135deg, #2a6b3e, #1a4a2a);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: #ffd700; font-weight: bold;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 40px rgba(78,205,196,0.15);
+  border: 2px solid rgba(255,215,0,0.3);
+  margin-bottom: 6px;
+}
+.style-a .game-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 2px 8px rgba(255,215,0,0.3);
+  margin-bottom: 4px;
+  letter-spacing: 6px;
+}
+.style-a .game-subtitle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+}
+.style-a .options-panel {
+  background: rgba(0,0,0,0.25);
+  border-radius: 12px;
+  padding: 16px 20px;
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(4px);
+}
+.style-a .option-group {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.style-a .option-group:last-child { margin-bottom: 0; }
+.style-a .option-label {
+  font-size: 12px; color: rgba(255,255,255,0.7);
+  min-width: 65px; text-align: right;
+}
+.style-a .option-btns { display: flex; gap: 6px; flex: 1; }
+.style-a .opt-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.style-a .opt-btn.active {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-color: #4ecdc4;
+  color: #fff;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(78,205,196,0.3);
+}
+.style-a .start-btn {
+  margin-top: 20px;
+  padding: 12px 60px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-radius: 25px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 4px 16px rgba(78,205,196,0.4);
+  letter-spacing: 4px;
+}
+
+/* ===== 方案B: 卡牌展示墙 + 浮动面板 ===== */
+.style-b {
+  width: 100%; height: 100%;
+  background: linear-gradient(180deg, #0a1628, #0d2818, #062810);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-b .card-wall {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: 4px;
+  padding: 10px;
+  opacity: 0.12;
+  pointer-events: none;
+}
+.style-b .wall-card {
+  width: 32px; height: 52px;
+  background: #f5f0e1;
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: bold;
+}
+.style-b .wall-card.red { color: #d32f2f; }
+.style-b .wall-card.green { color: #2e7d32; }
+.style-b .wall-card.black { color: #333; }
+
+.style-b .center-panel {
+  position: relative;
+  z-index: 2;
+  background: rgba(10,30,20,0.85);
+  border-radius: 16px;
+  padding: 24px 28px;
+  border: 1px solid rgba(255,215,0,0.2);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(78,205,196,0.08);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  width: 90%;
+  max-width: 320px;
+}
+.style-b .logo-row {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  margin-bottom: 16px;
+}
+.style-b .logo-icon {
+  width: 48px; height: 48px;
+  background: linear-gradient(135deg, #2a6b3e, #1a4a2a);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: #ffd700; font-weight: bold;
+  border: 1.5px solid rgba(255,215,0,0.3);
+}
+.style-b .title-text {
+  font-size: 24px; font-weight: 900; color: #ffd700;
+  text-shadow: 0 2px 8px rgba(255,215,0,0.3);
+  letter-spacing: 4px;
+}
+.style-b .divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,215,0,0.3), transparent);
+  margin: 12px 0;
+}
+.style-b .option-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.style-b .option-label {
+  font-size: 12px; color: rgba(255,255,255,0.6);
+}
+.style-b .option-btns { display: flex; gap: 4px; }
+.style-b .opt-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+}
+.style-b .opt-btn.active {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-color: #4ecdc4;
+  color: #fff; font-weight: bold;
+}
+.style-b .start-btn {
+  margin-top: 16px;
+  padding: 10px 50px;
+  background: linear-gradient(135deg, #ffd700, #f0a500);
+  border-radius: 25px;
+  color: #1a1a2e;
+  font-size: 16px;
+  font-weight: 900;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 4px 16px rgba(255,215,0,0.4);
+  letter-spacing: 4px;
+}
+
+/* ===== 方案C: 沉浸式牌桌 + 侧边设置 ===== */
+.style-c {
+  width: 100%; height: 100%;
+  background: radial-gradient(ellipse at 50% 60%, #1a5c2e, #0d3d1a 50%, #062810);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-c .table-top {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 40%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(26,92,46,0.8), rgba(13,61,26,0.9));
+  border-top: 2px solid rgba(255,215,0,0.15);
+}
+.style-c .table-felt {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 38%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 4px,
+    rgba(255,255,255,0.01) 4px,
+    rgba(255,255,255,0.01) 8px
+  );
+}
+
+.style-c .floating-cards {
+  position: absolute;
+  top: 8%; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 6px;
+  animation: floatCards 4s ease-in-out infinite;
+}
+@keyframes floatCards {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-8px); }
+}
+.style-c .float-card {
+  width: 44px; height: 72px;
+  background: #f5f0e1;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: bold;
+  box-shadow: 2px 4px 12px rgba(0,0,0,0.4);
+  transform: rotate(var(--rot));
+}
+.style-c .float-card.red { color: #d32f2f; }
+.style-c .float-card.green { color: #2e7d32; }
+.style-c .float-card.black { color: #333; }
+
+.style-c .title-area {
+  position: relative; z-index: 2;
+  text-align: center;
+  margin-bottom: 16px;
+}
+.style-c .game-title {
+  font-size: 32px; font-weight: 900; color: #ffd700;
+  text-shadow: 0 2px 12px rgba(255,215,0,0.4), 0 0 30px rgba(255,215,0,0.15);
+  letter-spacing: 8px;
+}
+.style-c .game-subtitle {
+  font-size: 11px; color: rgba(255,255,255,0.4);
+  letter-spacing: 3px; margin-top: 2px;
+}
+
+.style-c .settings-dock {
+  position: relative; z-index: 2;
+  background: rgba(0,0,0,0.35);
+  border-radius: 14px;
+  padding: 14px 18px;
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(6px);
+  margin-bottom: 12px;
+}
+.style-c .option-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.style-c .option-row:last-child { margin-bottom: 0; }
+.style-c .option-label {
+  font-size: 11px; color: rgba(255,255,255,0.6);
+}
+.style-c .option-btns { display: flex; gap: 4px; }
+.style-c .opt-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+}
+.style-c .opt-btn.active {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-color: #4ecdc4;
+  color: #fff; font-weight: bold;
+}
+.style-c .start-btn {
+  position: relative; z-index: 2;
+  padding: 12px 70px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-radius: 25px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 4px 20px rgba(78,205,196,0.5);
+  letter-spacing: 6px;
+}
+
+/* ===== 方案D: 古风卷轴 + 印章风格 ===== */
+.style-d {
+  width: 100%; height: 100%;
+  background: linear-gradient(180deg, #1a0a0a, #2a1515, #1a0a0a);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-d .bg-pattern {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  opacity: 0.04;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(255,215,0,0.5) 30px, rgba(255,215,0,0.5) 31px),
+    repeating-linear-gradient(90deg, transparent, transparent 30px, rgba(255,215,0,0.5) 30px, rgba(255,215,0,0.5) 31px);
+  pointer-events: none;
+}
+
+.style-d .scroll-frame {
+  position: relative; z-index: 2;
+  background: linear-gradient(180deg, rgba(40,25,15,0.9), rgba(30,18,10,0.95));
+  border: 2px solid rgba(255,215,0,0.25);
+  border-radius: 4px;
+  padding: 24px 22px;
+  width: 90%;
+  max-width: 320px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 0 30px rgba(255,215,0,0.03);
+}
+.style-d .scroll-frame::before,
+.style-d .scroll-frame::after {
+  content: '';
+  position: absolute;
+  left: 8px; right: 8px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255,215,0,0.4), transparent);
+}
+.style-d .scroll-frame::before { top: 6px; }
+.style-d .scroll-frame::after { bottom: 6px; }
+
+.style-d .corner-deco {
+  position: absolute;
+  width: 16px; height: 16px;
+  border-color: rgba(255,215,0,0.4);
+  border-style: solid;
+}
+.style-d .corner-deco.tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; }
+.style-d .corner-deco.tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; }
+.style-d .corner-deco.bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; }
+.style-d .corner-deco.br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; }
+
+.style-d .seal {
+  width: 56px; height: 56px;
+  margin: 0 auto 8px;
+  border: 2px solid #c0392b;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: #c0392b; font-weight: 900;
+  transform: rotate(-5deg);
+  letter-spacing: 2px;
+}
+.style-d .game-title {
+  font-size: 26px; font-weight: 900; color: #ffd700;
+  text-shadow: 0 2px 8px rgba(255,215,0,0.3);
+  letter-spacing: 8px;
+  margin-bottom: 4px;
+}
+.style-d .game-subtitle {
+  font-size: 10px; color: rgba(255,215,0,0.4);
+  letter-spacing: 3px; margin-bottom: 14px;
+}
+
+.style-d .option-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.style-d .option-label {
+  font-size: 12px; color: rgba(255,215,0,0.6);
+}
+.style-d .option-btns { display: flex; gap: 4px; }
+.style-d .opt-btn {
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,215,0,0.15);
+  background: rgba(255,215,0,0.03);
+  cursor: pointer;
+}
+.style-d .opt-btn.active {
+  background: rgba(192,57,43,0.3);
+  border-color: #c0392b;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.style-d .start-btn {
+  margin-top: 16px;
+  padding: 10px 50px;
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  border-radius: 4px;
+  color: #ffd700;
+  font-size: 16px;
+  font-weight: 900;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid rgba(255,215,0,0.3);
+  letter-spacing: 6px;
+  box-shadow: 0 4px 16px rgba(192,57,43,0.4);
+}
+
+/* ===== 方案E: 现代卡片式 + 渐变光效 ===== */
+.style-e {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, #0a1628, #0d2818, #062810);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-e .glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+.style-e .glow-orb.g1 {
+  width: 200px; height: 200px;
+  background: rgba(78,205,196,0.12);
+  top: -40px; right: -40px;
+  animation: orbFloat 6s ease-in-out infinite;
+}
+.style-e .glow-orb.g2 {
+  width: 160px; height: 160px;
+  background: rgba(255,215,0,0.08);
+  bottom: -30px; left: -30px;
+  animation: orbFloat 8s ease-in-out infinite reverse;
+}
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(15px, 15px); }
+}
+
+.style-e .main-card {
+  position: relative; z-index: 2;
+  background: rgba(15,30,25,0.8);
+  border-radius: 20px;
+  padding: 28px 24px;
+  width: 90%;
+  max-width: 320px;
+  border: 1px solid rgba(78,205,196,0.15);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.5), 0 0 40px rgba(78,205,196,0.06);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+.style-e .logo-badge {
+  width: 64px; height: 64px;
+  margin: 0 auto 10px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #fff; font-weight: bold;
+  box-shadow: 0 4px 16px rgba(78,205,196,0.4);
+}
+.style-e .game-title {
+  font-size: 24px; font-weight: 900; color: #fff;
+  letter-spacing: 4px; margin-bottom: 2px;
+}
+.style-e .game-subtitle {
+  font-size: 10px; color: rgba(255,255,255,0.4);
+  letter-spacing: 2px; margin-bottom: 18px;
+}
+
+.style-e .option-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.style-e .option-label {
+  font-size: 12px; color: rgba(255,255,255,0.5);
+}
+.style-e .option-btns { display: flex; gap: 5px; }
+.style-e .opt-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.style-e .opt-btn.active {
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-color: #4ecdc4;
+  color: #fff; font-weight: bold;
+  box-shadow: 0 2px 8px rgba(78,205,196,0.3);
+}
+
+.style-e .start-btn {
+  margin-top: 18px;
+  padding: 12px 60px;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  border-radius: 30px;
+  color: #fff;
+  font-size: 17px;
+  font-weight: bold;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 4px 20px rgba(78,205,196,0.5);
+  letter-spacing: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.style-e .start-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+  animation: shimmer 3s infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.note { text-align: center; margin-top: 20px; font-size: 13px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>启动页面优化方案</h1>
+<p class="subtitle">当前页面纯文字太单调，以下5种方案增加视觉层次和氛围感</p>
+
+<div class="grid">
+
+  <!-- 当前方案 -->
+  <div class="card-effect">
+    <h2>当前方案 <span class="tag" style="background:#888">原始</span></h2>
+    <p class="desc">Logo + 2x2选项网格 + 开始按钮，左右横排布局，纯文字选项</p>
+    <div class="phone-frame">
+      <div class="original-screen">
+        <div class="logo">LOGO</div>
+        <div class="options">
+          <div class="option-row">
+            <div class="option-label">底分:</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">游戏难度:</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">倍数基数分:</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">飘分设置:</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+          <button class="start-btn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案A: 居中竖排 + 字牌装饰 -->
+  <div class="card-effect">
+    <h2>A. 居中竖排 + 字牌装饰 <span class="tag">推荐</span></h2>
+    <p class="desc">竖排居中布局，背景散落半透明字牌装饰，选项面板毛玻璃效果</p>
+    <div class="phone-frame">
+      <div class="style-a">
+        <div class="deco-cards">
+          <div class="deco-card red" style="top:8%;left:5%;transform:rotate(-15deg)">上</div>
+          <div class="deco-card green" style="top:12%;left:25%;transform:rotate(10deg)">化</div>
+          <div class="deco-card black" style="top:5%;right:15%;transform:rotate(-8deg)">丘</div>
+          <div class="deco-card red" style="top:22%;right:8%;transform:rotate(20deg)">七</div>
+          <div class="deco-card green" style="bottom:30%;left:8%;transform:rotate(-12deg)">尔</div>
+          <div class="deco-card black" style="bottom:25%;right:12%;transform:rotate(5deg)">八</div>
+          <div class="deco-card red" style="bottom:12%;left:18%;transform:rotate(15deg)">佳</div>
+          <div class="deco-card green" style="bottom:8%;right:25%;transform:rotate(-10deg)">福</div>
+          <div class="deco-card black" style="top:35%;left:3%;transform:rotate(-20deg)">大</div>
+          <div class="deco-card red" style="top:40%;right:5%;transform:rotate(8deg)">三</div>
+        </div>
+        <div class="logo-area">LOGO</div>
+        <div class="game-title">上大人</div>
+        <div class="game-subtitle">SHANG DA REN CARD GAME</div>
+        <div class="options-panel">
+          <div class="option-group">
+            <div class="option-label">底分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-group">
+            <div class="option-label">难度</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-group">
+            <div class="option-label">倍数基数</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-group">
+            <div class="option-label">飘分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+        </div>
+        <button class="start-btn">开始游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案B: 卡牌展示墙 + 浮动面板 -->
+  <div class="card-effect">
+    <h2>B. 卡牌展示墙 + 浮动面板</h2>
+    <p class="desc">背景铺满半透明字牌，中央浮动深色面板，金色标题+金色开始按钮</p>
+    <div class="phone-frame">
+      <div class="style-b">
+        <div class="card-wall">
+          <div class="wall-card red">上</div><div class="wall-card green">化</div><div class="wall-card black">丘</div>
+          <div class="wall-card red">七</div><div class="wall-card green">尔</div><div class="wall-card black">八</div>
+          <div class="wall-card red">佳</div><div class="wall-card green">福</div><div class="wall-card black">大</div>
+          <div class="wall-card red">三</div><div class="wall-card green">千</div><div class="wall-card black">己</div>
+          <div class="wall-card red">十</div><div class="wall-card green">小</div><div class="wall-card black">九</div>
+          <div class="wall-card red">作</div><div class="wall-card green">禄</div><div class="wall-card black">人</div>
+          <div class="wall-card red">上</div><div class="wall-card green">化</div><div class="wall-card black">丘</div>
+          <div class="wall-card red">七</div><div class="wall-card green">尔</div><div class="wall-card black">八</div>
+          <div class="wall-card red">佳</div><div class="wall-card green">福</div><div class="wall-card black">大</div>
+          <div class="wall-card red">三</div><div class="wall-card green">千</div><div class="wall-card black">己</div>
+          <div class="wall-card red">十</div><div class="wall-card green">小</div><div class="wall-card black">九</div>
+          <div class="wall-card red">作</div><div class="wall-card green">禄</div><div class="wall-card black">人</div>
+          <div class="wall-card red">上</div><div class="wall-card green">化</div><div class="wall-card black">丘</div>
+          <div class="wall-card red">七</div><div class="wall-card green">尔</div><div class="wall-card black">八</div>
+          <div class="wall-card red">佳</div><div class="wall-card green">福</div><div class="wall-card black">大</div>
+          <div class="wall-card red">三</div><div class="wall-card green">千</div><div class="wall-card black">己</div>
+          <div class="wall-card red">十</div><div class="wall-card green">小</div><div class="wall-card black">九</div>
+          <div class="wall-card red">作</div><div class="wall-card green">禄</div><div class="wall-card black">人</div>
+        </div>
+        <div class="center-panel">
+          <div class="logo-row">
+            <div class="logo-icon">LOGO</div>
+            <div class="title-text">上大人</div>
+          </div>
+          <div class="divider"></div>
+          <div class="option-row">
+            <div class="option-label">底分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">难度</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">倍数基数</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">飘分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+          <button class="start-btn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案C: 沉浸式牌桌 + 浮动字牌 -->
+  <div class="card-effect">
+    <h2>C. 沉浸式牌桌 + 浮动字牌</h2>
+    <p class="desc">模拟牌桌视角，顶部浮动字牌动画，底部设置面板，沉浸感强</p>
+    <div class="phone-frame">
+      <div class="style-c">
+        <div class="table-top"></div>
+        <div class="table-felt"></div>
+        <div class="floating-cards">
+          <div class="float-card red" style="--rot:-8deg">上</div>
+          <div class="float-card green" style="--rot:3deg">化</div>
+          <div class="float-card black" style="--rot:-2deg">丘</div>
+          <div class="float-card red" style="--rot:6deg">七</div>
+          <div class="float-card green" style="--rot:-4deg">福</div>
+        </div>
+        <div class="title-area">
+          <div class="game-title">上大人</div>
+          <div class="game-subtitle">SHANG DA REN</div>
+        </div>
+        <div class="settings-dock">
+          <div class="option-row">
+            <div class="option-label">底分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">难度</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">倍数基数</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">飘分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+        </div>
+        <button class="start-btn">开始游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案D: 古风卷轴 + 印章风格 -->
+  <div class="card-effect">
+    <h2>D. 古风卷轴 + 印章风格</h2>
+    <p class="desc">深红古风配色，卷轴边框+角花装饰，红色印章Logo，中国风韵味</p>
+    <div class="phone-frame">
+      <div class="style-d">
+        <div class="bg-pattern"></div>
+        <div class="scroll-frame">
+          <div class="corner-deco tl"></div>
+          <div class="corner-deco tr"></div>
+          <div class="corner-deco bl"></div>
+          <div class="corner-deco br"></div>
+          <div class="seal">上大</div>
+          <div class="game-title">上大人</div>
+          <div class="game-subtitle">字 牌 游 戏</div>
+          <div class="option-row">
+            <div class="option-label">底分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">难度</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">倍数基数</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">飘分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+          <button class="start-btn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案E: 现代卡片式 + 渐变光效 -->
+  <div class="card-effect">
+    <h2>E. 现代卡片式 + 渐变光效</h2>
+    <p class="desc">现代UI风格，浮动光晕背景，圆角卡片面板，按钮流光动画</p>
+    <div class="phone-frame">
+      <div class="style-e">
+        <div class="glow-orb g1"></div>
+        <div class="glow-orb g2"></div>
+        <div class="main-card">
+          <div class="logo-badge">LOGO</div>
+          <div class="game-title">上大人</div>
+          <div class="game-subtitle">SHANG DA REN CARD GAME</div>
+          <div class="option-row">
+            <div class="option-label">底分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">5分</div>
+              <div class="opt-btn">10分</div>
+              <div class="opt-btn">20分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">难度</div>
+            <div class="option-btns">
+              <div class="opt-btn">简单</div>
+              <div class="opt-btn">中等</div>
+              <div class="opt-btn active">困难</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">倍数基数</div>
+            <div class="option-btns">
+              <div class="opt-btn active">2分</div>
+              <div class="opt-btn">5分</div>
+              <div class="opt-btn">10分</div>
+            </div>
+          </div>
+          <div class="option-row">
+            <div class="option-label">飘分</div>
+            <div class="option-btns">
+              <div class="opt-btn active">关闭</div>
+              <div class="opt-btn">打开</div>
+            </div>
+          </div>
+          <button class="start-btn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">所有方案保持相同的选项功能（底分/难度/倍数基数/飘分），仅优化视觉呈现和布局方式。</p>
+
+</body>
+</html>

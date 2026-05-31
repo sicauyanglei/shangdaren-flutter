@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>胡牌面板样式选择</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a1628;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.page-header {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a472a, #0d2818);
+  border-bottom: 2px solid #ffd700;
+}
+.page-header h1 {
+  font-size: 24px;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+.page-header p {
+  font-size: 14px;
+  color: #aaa;
+  margin-top: 8px;
+}
+.style-section {
+  padding: 20px;
+  margin: 16px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+}
+.style-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.style-number {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #ffd700, #f0c000);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: bold; color: #1a472a; font-size: 16px;
+}
+.style-name {
+  font-size: 18px; font-weight: bold; color: #ffd700;
+}
+.style-desc {
+  font-size: 13px; color: #aaa; margin-bottom: 12px;
+}
+.phone-frame {
+  width: 375px;
+  height: 667px;
+  margin: 0 auto;
+  border-radius: 24px;
+  border: 3px solid #333;
+  overflow: hidden;
+  position: relative;
+  background: #0d1a0d;
+}
+.phone-frame .game-bg {
+  width: 100%; height: 100%;
+  background: radial-gradient(ellipse at center, #1a3a1a 0%, #0d1a0d 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ============ 样式1: 经典金边 ============ */
+.hu-panel-style1 {
+  width: 340px;
+  background: linear-gradient(145deg, rgba(26,71,42,0.95), rgba(13,40,24,0.98));
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 30px rgba(255,215,0,0.2), inset 0 0 30px rgba(255,215,0,0.05);
+  padding: 24px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hu-panel-style1::before {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: radial-gradient(circle, rgba(255,215,0,0.06) 0%, transparent 60%);
+  animation: glow-rotate 4s linear infinite;
+}
+@keyframes glow-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.style1-close {
+  position: absolute; top: 8px; right: 8px;
+  width: 32px; height: 32px;
+  background: #cc0000; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 2;
+  font-size: 16px; color: #fff; font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+.style1-title {
+  font-size: 24px; font-weight: bold; color: #ffd700;
+  text-shadow: 0 0 15px rgba(255,215,0,0.5);
+  margin-bottom: 14px; position: relative; z-index: 1;
+}
+.style1-tags {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  margin-bottom: 14px; position: relative; z-index: 1;
+}
+.style1-tag {
+  padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold;
+}
+.style1-tag.method { background: rgba(255,255,255,0.15); color: #fff; }
+.style1-tag.hutype { background: rgba(78,205,196,0.2); color: #4ecdc4; }
+.style1-tag.hushu { background: rgba(255,215,0,0.2); color: #ffd700; }
+.style1-tag.multi { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+.style1-score {
+  margin: 12px 0; position: relative; z-index: 1;
+}
+.style1-score .num {
+  font-size: 42px; font-weight: bold; color: #ffd700;
+  text-shadow: 0 0 20px rgba(255,215,0,0.4);
+}
+.style1-score .unit {
+  font-size: 16px; color: rgba(255,215,0,0.7);
+}
+.style1-losers {
+  display: flex; justify-content: center; gap: 16px;
+  margin: 14px 0; position: relative; z-index: 1;
+}
+.style1-loser {
+  background: rgba(255,107,107,0.1); border-radius: 8px;
+  padding: 8px 16px; text-align: center;
+}
+.style1-loser .name { font-size: 12px; color: #aaa; }
+.style1-loser .score { font-size: 18px; color: #ff6b6b; font-weight: bold; }
+.style1-btn {
+  background: linear-gradient(135deg, #ffd700, #f0c000);
+  border: none; border-radius: 20px;
+  padding: 10px 50px; font-size: 15px; font-weight: bold;
+  color: #1a472a; cursor: pointer; position: relative; z-index: 1;
+  box-shadow: 0 2px 8px rgba(255,215,0,0.3);
+}
+
+/* ============ 样式2: 暗黑霓虹 ============ */
+.hu-panel-style2 {
+  width: 340px;
+  background: linear-gradient(145deg, rgba(20,20,40,0.97), rgba(10,10,30,0.99));
+  border-radius: 20px;
+  border: 1px solid rgba(78,205,196,0.4);
+  box-shadow: 0 0 40px rgba(78,205,196,0.15), 0 0 80px rgba(78,205,196,0.05);
+  padding: 24px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hu-panel-style2::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, #4ecdc4, #ffd700, #4ecdc4, transparent);
+  background-size: 200% 100%;
+  animation: neon-flow 3s linear infinite;
+}
+@keyframes neon-flow {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.style2-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 30px; height: 30px;
+  border: 1px solid rgba(78,205,196,0.5); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 2;
+  font-size: 14px; color: #4ecdc4;
+}
+.style2-title {
+  font-size: 26px; font-weight: bold; color: #4ecdc4;
+  text-shadow: 0 0 20px rgba(78,205,196,0.6), 0 0 40px rgba(78,205,196,0.3);
+  margin-bottom: 16px; letter-spacing: 4px;
+}
+.style2-info-row {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.style2-info-chip {
+  padding: 5px 14px; border-radius: 4px; font-size: 13px; font-weight: bold;
+  border: 1px solid;
+}
+.style2-info-chip.method { border-color: #4ecdc4; color: #4ecdc4; background: rgba(78,205,196,0.1); }
+.style2-info-chip.hutype { border-color: #ab47bc; color: #ab47bc; background: rgba(171,71,188,0.1); }
+.style2-info-chip.hushu { border-color: #ffd700; color: #ffd700; background: rgba(255,215,0,0.1); }
+.style2-info-chip.multi { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255,107,107,0.1); }
+.style2-score-box {
+  margin: 14px 0; padding: 14px;
+  background: rgba(78,205,196,0.05);
+  border: 1px solid rgba(78,205,196,0.2);
+  border-radius: 12px;
+}
+.style2-score-box .num {
+  font-size: 48px; font-weight: 900; color: #4ecdc4;
+  text-shadow: 0 0 30px rgba(78,205,196,0.5);
+  font-family: "Courier New", monospace;
+}
+.style2-score-box .unit {
+  font-size: 16px; color: rgba(78,205,196,0.6);
+}
+.style2-losers {
+  display: flex; justify-content: center; gap: 12px; margin: 14px 0;
+}
+.style2-loser {
+  background: rgba(255,107,107,0.08); border-radius: 6px;
+  padding: 8px 16px; text-align: center;
+  border: 1px solid rgba(255,107,107,0.2);
+}
+.style2-loser .name { font-size: 12px; color: rgba(255,255,255,0.5); }
+.style2-loser .score { font-size: 18px; color: #ff6b6b; font-weight: bold; text-shadow: 0 0 8px rgba(255,107,107,0.4); }
+.style2-btn {
+  background: transparent; border: 1px solid #4ecdc4;
+  border-radius: 20px; padding: 10px 50px;
+  font-size: 15px; font-weight: bold; color: #4ecdc4;
+  cursor: pointer; letter-spacing: 2px;
+  box-shadow: 0 0 15px rgba(78,205,196,0.2);
+  transition: all 0.3s;
+}
+.style2-btn:hover {
+  background: rgba(78,205,196,0.1);
+  box-shadow: 0 0 25px rgba(78,205,196,0.4);
+}
+
+/* ============ 样式3: 中国风红金 ============ */
+.hu-panel-style3 {
+  width: 340px;
+  background: linear-gradient(145deg, rgba(60,10,10,0.97), rgba(40,5,5,0.99));
+  border-radius: 12px;
+  border: 2px solid #c8a050;
+  box-shadow: 0 0 30px rgba(200,160,80,0.2), inset 0 0 20px rgba(200,160,80,0.05);
+  padding: 24px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hu-panel-style3::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8a050' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+.style3-close {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px;
+  border: 1px solid #c8a050; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 2;
+  font-size: 14px; color: #c8a050;
+}
+.style3-title {
+  font-size: 28px; font-weight: bold; color: #ffd700;
+  text-shadow: 0 0 15px rgba(255,215,0,0.4);
+  margin-bottom: 4px; position: relative; z-index: 1;
+  letter-spacing: 6px;
+}
+.style3-subtitle {
+  font-size: 13px; color: #c8a050; margin-bottom: 12px;
+  position: relative; z-index: 1;
+  letter-spacing: 2px;
+}
+.style3-divider {
+  width: 80%; height: 1px; margin: 10px auto;
+  background: linear-gradient(90deg, transparent, #c8a050, transparent);
+  position: relative; z-index: 1;
+}
+.style3-tags {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  margin: 12px 0; position: relative; z-index: 1;
+}
+.style3-tag {
+  padding: 4px 12px; font-size: 13px; font-weight: bold;
+  border: 1px solid; border-radius: 2px;
+}
+.style3-tag.method { border-color: #c8a050; color: #ffd700; background: rgba(200,160,80,0.1); }
+.style3-tag.hutype { border-color: #cc3333; color: #ff6b6b; background: rgba(204,51,51,0.1); }
+.style3-tag.hushu { border-color: #c8a050; color: #c8a050; background: rgba(200,160,80,0.1); }
+.style3-tag.multi { border-color: #cc3333; color: #ff4444; background: rgba(204,51,51,0.1); }
+.style3-score {
+  margin: 14px 0; position: relative; z-index: 1;
+}
+.style3-score .num {
+  font-size: 52px; font-weight: 900; color: #ffd700;
+  text-shadow: 0 2px 10px rgba(255,215,0,0.3);
+  font-family: "Georgia", serif;
+}
+.style3-score .unit {
+  font-size: 18px; color: #c8a050;
+}
+.style3-losers {
+  display: flex; justify-content: center; gap: 16px; margin: 14px 0;
+  position: relative; z-index: 1;
+}
+.style3-loser {
+  background: rgba(204,51,51,0.1); border-radius: 6px;
+  padding: 8px 16px; text-align: center;
+  border: 1px solid rgba(204,51,51,0.3);
+}
+.style3-loser .name { font-size: 12px; color: #c8a050; }
+.style3-loser .score { font-size: 18px; color: #ff6b6b; font-weight: bold; }
+.style3-btn {
+  background: linear-gradient(135deg, #c8a050, #a08030);
+  border: none; border-radius: 4px;
+  padding: 12px 60px; font-size: 15px; font-weight: bold;
+  color: #3c0a0a; cursor: pointer; position: relative; z-index: 1;
+  letter-spacing: 4px;
+  box-shadow: 0 2px 8px rgba(200,160,80,0.3);
+}
+
+/* ============ 样式4: 简约现代 ============ */
+.hu-panel-style4 {
+  width: 340px;
+  background: rgba(15,15,20,0.96);
+  border-radius: 24px;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  padding: 28px 24px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.style4-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 28px; height: 28px;
+  background: rgba(255,255,255,0.1); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 2;
+  font-size: 14px; color: rgba(255,255,255,0.5);
+}
+.style4-emoji {
+  font-size: 44px; margin-bottom: 6px;
+}
+.style4-title {
+  font-size: 22px; font-weight: 700; color: #fff;
+  margin-bottom: 18px; letter-spacing: 1px;
+}
+.style4-title .highlight {
+  color: #ffd700;
+}
+.style4-score-row {
+  display: flex; align-items: baseline; justify-content: center; gap: 4px;
+  margin-bottom: 18px;
+}
+.style4-score-row .num {
+  font-size: 56px; font-weight: 900; color: #ffd700;
+  line-height: 1;
+}
+.style4-score-row .unit {
+  font-size: 18px; color: rgba(255,215,0,0.6); font-weight: 600;
+}
+.style4-info-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-bottom: 18px;
+}
+.style4-info-item {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px; padding: 10px;
+}
+.style4-info-item .label {
+  font-size: 11px; color: rgba(255,255,255,0.4);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.style4-info-item .value {
+  font-size: 17px; font-weight: bold; margin-top: 2px;
+}
+.style4-info-item .value.teal { color: #4ecdc4; }
+.style4-info-item .value.gold { color: #ffd700; }
+.style4-info-item .value.red { color: #ff6b6b; }
+.style4-info-item .value.purple { color: #ab47bc; }
+.style4-losers {
+  display: flex; justify-content: center; gap: 12px; margin: 14px 0;
+}
+.style4-loser {
+  background: rgba(229,57,53,0.08); border-radius: 10px;
+  padding: 10px 20px; text-align: center;
+}
+.style4-loser .name { font-size: 12px; color: rgba(255,255,255,0.4); }
+.style4-loser .score { font-size: 20px; color: #ff6b6b; font-weight: bold; }
+.style4-btn {
+  background: #ffd700; border: none; border-radius: 14px;
+  padding: 14px 60px; font-size: 16px; font-weight: 700;
+  color: #000; cursor: pointer; letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(255,215,0,0.3);
+  transition: transform 0.2s;
+}
+.style4-btn:hover { transform: scale(1.05); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>胡牌面板样式选择</h1>
+  <p>请选择您喜欢的胡牌面板风格（不含卡牌显示）</p>
+</div>
+
+<!-- 样式1: 经典金边 -->
+<div class="style-section">
+  <div class="style-label">
+    <div class="style-number">1</div>
+    <div class="style-name">经典金边</div>
+  </div>
+  <div class="style-desc">传统麻将风格，深绿底色+金色边框，温暖经典</div>
+  <div class="phone-frame">
+    <div class="game-bg">
+      <div class="hu-panel-style1">
+        <div class="style1-close">✕</div>
+        <div class="style1-title">🎉 张三 胡牌!</div>
+        <div class="style1-tags">
+          <span class="style1-tag method">自摸</span>
+          <span class="style1-tag hutype">红元3精</span>
+          <span class="style1-tag hushu">胡数: 18</span>
+          <span class="style1-tag multi">3倍</span>
+        </div>
+        <div class="style1-score">
+          <span class="num">+120</span>
+          <span class="unit">分</span>
+        </div>
+        <div class="style1-losers">
+          <div class="style1-loser">
+            <div class="name">李四</div>
+            <div class="score">-60</div>
+          </div>
+          <div class="style1-loser">
+            <div class="name">王五</div>
+            <div class="score">-60</div>
+          </div>
+        </div>
+        <button class="style1-btn">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 样式2: 暗黑霓虹 -->
+<div class="style-section">
+  <div class="style-label">
+    <div class="style-number">2</div>
+    <div class="style-name">暗黑霓虹</div>
+  </div>
+  <div class="style-desc">科技感十足，深色底+霓虹发光边框，赛博朋克风</div>
+  <div class="phone-frame">
+    <div class="game-bg">
+      <div class="hu-panel-style2">
+        <div class="style2-close">✕</div>
+        <div class="style2-title">胡 牌</div>
+        <div class="style2-info-row">
+          <span class="style2-info-chip method">自摸</span>
+          <span class="style2-info-chip hutype">红元3精</span>
+          <span class="style2-info-chip hushu">18胡</span>
+          <span class="style2-info-chip multi">3倍</span>
+        </div>
+        <div class="style2-score-box">
+          <span class="num">+120</span>
+          <span class="unit">分</span>
+        </div>
+        <div class="style2-losers">
+          <div class="style2-loser">
+            <div class="name">李四</div>
+            <div class="score">-60</div>
+          </div>
+          <div class="style2-loser">
+            <div class="name">王五</div>
+            <div class="score">-60</div>
+          </div>
+        </div>
+        <button class="style2-btn">确 认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 样式3: 中国风红金 -->
+<div class="style-section">
+  <div class="style-label">
+    <div class="style-number">3</div>
+    <div class="style-name">中国风红金</div>
+  </div>
+  <div class="style-desc">喜庆中国风，暗红底+古铜金边，传统韵味</div>
+  <div class="phone-frame">
+    <div class="game-bg">
+      <div class="hu-panel-style3">
+        <div class="style3-close">✕</div>
+        <div class="style3-title">胡 牌</div>
+        <div class="style3-subtitle">— 张三 —</div>
+        <div class="style3-divider"></div>
+        <div class="style3-tags">
+          <span class="style3-tag method">自摸</span>
+          <span class="style3-tag hutype">红元3精</span>
+          <span class="style3-tag hushu">十八胡</span>
+          <span class="style3-tag multi">三倍</span>
+        </div>
+        <div class="style3-score">
+          <span class="num">+120</span>
+          <span class="unit">分</span>
+        </div>
+        <div class="style3-divider"></div>
+        <div class="style3-losers">
+          <div class="style3-loser">
+            <div class="name">李四</div>
+            <div class="score">-60</div>
+          </div>
+          <div class="style3-loser">
+            <div class="name">王五</div>
+            <div class="score">-60</div>
+          </div>
+        </div>
+        <button class="style3-btn">确 认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 样式4: 简约现代 -->
+<div class="style-section">
+  <div class="style-label">
+    <div class="style-number">4</div>
+    <div class="style-name">简约现代</div>
+  </div>
+  <div class="style-desc">极简设计，大字体+网格布局，清晰易读</div>
+  <div class="phone-frame">
+    <div class="game-bg">
+      <div class="hu-panel-style4">
+        <div class="style4-close">✕</div>
+        <div class="style4-emoji">🎉</div>
+        <div class="style4-title"><span class="highlight">张三</span> 胡牌</div>
+        <div class="style4-score-row">
+          <span class="num">+120</span>
+          <span class="unit">分</span>
+        </div>
+        <div class="style4-info-grid">
+          <div class="style4-info-item">
+            <div class="label">方式</div>
+            <div class="value teal">自摸</div>
+          </div>
+          <div class="style4-info-item">
+            <div class="label">牌型</div>
+            <div class="value purple">红元3精</div>
+          </div>
+          <div class="style4-info-item">
+            <div class="label">胡数</div>
+            <div class="value gold">18</div>
+          </div>
+          <div class="style4-info-item">
+            <div class="label">倍数</div>
+            <div class="value red">3倍</div>
+          </div>
+        </div>
+        <div class="style4-losers">
+          <div class="style4-loser">
+            <div class="name">李四</div>
+            <div class="score">-60</div>
+          </div>
+          <div class="style4-loser">
+            <div class="name">王五</div>
+            <div class="score">-60</div>
+          </div>
+        </div>
+        <button class="style4-btn">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

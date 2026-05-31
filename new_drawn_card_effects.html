@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新摸牌标识效果对比</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', sans-serif;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 30px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card-effect {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+
+.card-effect h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-effect .tag {
+  font-size: 11px;
+  background: #00bcd4;
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.card-effect .desc {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.hand-area {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 20px 10px;
+  background: #0f3460;
+  border-radius: 8px;
+  min-height: 320px;
+  position: relative;
+}
+
+.sentence-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.hand-card {
+  width: 60px;
+  height: 224px;
+  background: #f5f0e1;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+  position: relative;
+  box-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+
+.hand-card.red { color: #d32f2f; }
+.hand-card.green { color: #2e7d32; }
+.hand-card.black { color: #333; }
+
+.hand-card.stacked {
+  margin-top: -160px;
+}
+
+.hand-card.stacked:first-child {
+  margin-top: 0;
+}
+
+.hand-card.selected {
+  transform: translateY(-28px);
+}
+
+/* ===== 方案A: 顶部脉冲光带 ===== */
+.effect-a .new-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, transparent, #ff9800, #ffb74d, #ff9800, transparent);
+  border-radius: 6px 6px 0 0;
+  animation: pulse-bar 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-bar {
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 8px rgba(255, 152, 0, 0.3); }
+  50% { opacity: 1; box-shadow: 0 0 16px rgba(255, 152, 0, 0.7); }
+}
+
+/* ===== 方案B: 左侧竖向发光条 ===== */
+.effect-b .new-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  bottom: 0;
+  width: 4px;
+  background: #4caf50;
+  border-radius: 2px;
+  animation: pulse-side 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+}
+
+@keyframes pulse-side {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 6px rgba(76, 175, 80, 0.3); }
+  50% { opacity: 1; box-shadow: 0 0 14px rgba(76, 175, 80, 0.7); }
+}
+
+/* ===== 方案C: 右上角"新"标签 ===== */
+.effect-c .new-card::after {
+  content: '新';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  background: #ff1744;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badge-pulse 1.2s ease-in-out infinite;
+  z-index: 5;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 4px rgba(255, 23, 68, 0.5); }
+  50% { transform: scale(1.15); box-shadow: 0 0 10px rgba(255, 23, 68, 0.8); }
+}
+
+/* ===== 方案D: 背景半透明色块 ===== */
+.effect-d .new-card {
+  z-index: 2;
+  position: relative;
+}
+
+.effect-d .new-card::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: rgba(33, 150, 243, 0.2);
+  border-radius: 10px;
+  animation: pulse-bg 1.5s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes pulse-bg {
+  0%, 100% { background: rgba(33, 150, 243, 0.15); }
+  50% { background: rgba(33, 150, 243, 0.35); }
+}
+
+/* ===== 方案E: 边框发光脉冲 ===== */
+.effect-e .new-card {
+  border: 2px solid rgba(100, 181, 246, 0.8);
+  animation: glow-border 1.5s ease-in-out infinite;
+}
+
+@keyframes glow-border {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(100, 181, 246, 0.3), 3px 3px 6px rgba(0,0,0,0.3);
+    border-color: rgba(100, 181, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(100, 181, 246, 0.7), 0 0 24px rgba(100, 181, 246, 0.3), 3px 3px 6px rgba(0,0,0,0.3);
+    border-color: rgba(100, 181, 246, 1);
+  }
+}
+
+/* ===== 方案F: 微幅上浮 ===== */
+.effect-f .new-card {
+  animation: float-up 1.8s ease-in-out infinite;
+  z-index: 3;
+}
+
+@keyframes float-up {
+  0%, 100% {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5), 3px 3px 6px rgba(0,0,0,0.3);
+  }
+  50% {
+    transform: translateY(-16px);
+    box-shadow: 0 14px 28px rgba(0,0,0,0.6), 3px 3px 6px rgba(0,0,0,0.3);
+  }
+}
+
+/* ===== 方案G: 入场滑入动画 ===== */
+.effect-g .new-card {
+  animation: slide-in 0.6s ease-out forwards;
+  z-index: 3;
+}
+
+@keyframes slide-in {
+  0% {
+    transform: translateX(80px) scale(0.9);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-5px) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===== 方案H: 底部光晕 ===== */
+.effect-h .new-card {
+  position: relative;
+  z-index: 2;
+}
+
+.effect-h .new-card::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 20px;
+  background: radial-gradient(ellipse, rgba(255, 215, 0, 0.5) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: glow-bottom 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes glow-bottom {
+  0%, 100% { opacity: 0.4; transform: translateX(-50%) scaleX(0.8); }
+  50% { opacity: 1; transform: translateX(-50%) scaleX(1.2); }
+}
+
+.note {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #666;
+}
+</style>
+</head>
+<body>
+
+<h1>新摸牌标识效果对比</h1>
+<p class="subtitle">人类玩家手牌中新摸上来的牌的视觉标识方案 — 请选择最合适的效果</p>
+
+<div class="grid">
+
+  <!-- 方案A: 顶部脉冲光带 -->
+  <div class="card-effect effect-a">
+    <h2>A. 顶部脉冲光带 <span class="tag">推荐</span></h2>
+    <p class="desc">卡牌顶部显示橙色水平脉冲发光条，呼吸式闪烁，醒目且不影响卡牌内容</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案B: 左侧竖向发光条 -->
+  <div class="card-effect effect-b">
+    <h2>B. 左侧竖向发光条</h2>
+    <p class="desc">卡牌左侧显示绿色竖向发光条，静态+微弱脉冲，类似书签标记</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案C: 右上角"新"标签 -->
+  <div class="card-effect effect-c">
+    <h2>C. 右上角"新"标签</h2>
+    <p class="desc">卡牌右上角显示红色"新"字圆形标签，脉冲闪烁，类似通知角标</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案D: 背景半透明色块 -->
+  <div class="card-effect effect-d">
+    <h2>D. 背景半透明色块</h2>
+    <p class="desc">卡牌底部添加蓝色半透明高亮色块背景，脉冲动画，不改变卡牌本身</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案E: 边框发光脉冲 -->
+  <div class="card-effect effect-e">
+    <h2>E. 边框发光脉冲</h2>
+    <p class="desc">卡牌整体蓝色边框发光脉冲，1.5s周期，类似选中但颜色不同</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案F: 微幅上浮 -->
+  <div class="card-effect effect-f">
+    <h2>F. 微幅上浮</h2>
+    <p class="desc">卡牌微微上浮10-16px + 阴影加深，悬浮效果，与选中效果区分</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案G: 入场滑入动画 -->
+  <div class="card-effect effect-g">
+    <h2>G. 入场滑入动画</h2>
+    <p class="desc">新牌从右侧滑入到手牌位置（一次性动画），有物理感（刷新页面重播）</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案H: 底部光晕 -->
+  <div class="card-effect effect-h">
+    <h2>H. 底部光晕</h2>
+    <p class="desc">卡牌底部显示向上扩散的金色光晕，类似地面反光，温暖醒目</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">丘</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">以上效果均为 CSS 动画模拟，实际 Flutter 实现可能略有差异。手牌布局模拟实际游戏：按组排列、同字叠放、新摸牌在最后一组最底部。</p>
+
+</body>
+</html>

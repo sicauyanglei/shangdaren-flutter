@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新摸牌"新"字标记效果</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', sans-serif;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 { text-align: center; font-size: 24px; margin-bottom: 8px; color: #fff; }
+.subtitle { text-align: center; font-size: 14px; color: #888; margin-bottom: 30px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card-effect {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a4a;
+}
+
+.card-effect h2 { font-size: 16px; margin-bottom: 4px; }
+.card-effect .tag { font-size: 11px; background: #00bcd4; color: #fff; padding: 1px 8px; border-radius: 10px; }
+.card-effect .desc { font-size: 12px; color: #888; margin-bottom: 16px; }
+
+.hand-area {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 20px 10px;
+  background: #0f3460;
+  border-radius: 8px;
+  min-height: 320px;
+  position: relative;
+}
+
+.sentence-group { display: flex; flex-direction: column; align-items: center; gap: 0; position: relative; }
+
+.hand-card {
+  width: 60px; height: 224px;
+  background: #f5f0e1; border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 32px; font-weight: bold;
+  position: relative;
+  box-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+
+.hand-card.red { color: #d32f2f; }
+.hand-card.green { color: #2e7d32; }
+.hand-card.black { color: #333; }
+.hand-card.stacked { margin-top: -160px; }
+.hand-card.stacked:first-child { margin-top: 0; }
+
+.badge {
+  position: absolute; top: 2px; right: 0px;
+  width: 36px; height: 36px;
+  background: #FF4444; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 20px; font-weight: bold; z-index: 5;
+}
+
+/* ===== "新"字标记基础样式 ===== */
+.new-badge {
+  position: absolute;
+  z-index: 8;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #FF4444;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: bold; color: #333;
+  pointer-events: none;
+}
+
+/* 方案1: 左上角 - 与徽章不重叠 */
+.style-1 .new-badge {
+  top: 2px; left: 2px;
+}
+
+/* 方案2: 左上角偏下 - 避开卡牌圆角 */
+.style-2 .new-badge {
+  top: 12px; left: 2px;
+}
+
+/* 方案3: 左上角 + 微弱脉冲 */
+.style-3 .new-badge {
+  top: 2px; left: 2px;
+  animation: new-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes new-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 3px rgba(255, 68, 68, 0.4); }
+  50% { transform: scale(1.1); box-shadow: 0 0 8px rgba(255, 68, 68, 0.7); }
+}
+
+/* 方案4: 左上角 + 1.5秒后淡出 */
+.style-4 .new-badge {
+  top: 2px; left: 2px;
+  animation: new-fadeout 3s ease-out forwards;
+}
+
+@keyframes new-fadeout {
+  0% { opacity: 1; transform: scale(0.5); }
+  10% { opacity: 1; transform: scale(1.1); }
+  15% { transform: scale(1.0); }
+  50% { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.8); }
+}
+
+/* 方案5: 左上角 + 白色描边 */
+.style-5 .new-badge {
+  top: 2px; left: 2px;
+  border: 1.5px solid #fff;
+}
+
+/* 方案6: 左上角 + 发光阴影 */
+.style-6 .new-badge {
+  top: 2px; left: 2px;
+  box-shadow: 0 0 6px rgba(255, 68, 68, 0.6);
+}
+
+.note { text-align: center; margin-top: 20px; font-size: 13px; color: #666; }
+.replay-btn {
+  display: block; margin: 16px auto 0; padding: 6px 16px;
+  background: #0f3460; color: #e0e0e0; border: 1px solid #2a2a4a;
+  border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.replay-btn:hover { background: #1a4a7a; }
+</style>
+</head>
+<body>
+
+<h1>新摸牌"新"字标记效果</h1>
+<p class="subtitle">滑入动画1.5秒后，左上角叠加红色圆圈"新"字标记 — 请选择最合适的效果</p>
+
+<div class="grid">
+
+  <!-- 方案1: 左上角基础 -->
+  <div class="card-effect style-1" id="style-1">
+    <h2>1. 左上角基础 <span class="tag">推荐</span></h2>
+    <p class="desc">红色圆圈"新"字位于左上角，与右上角计数徽章不重叠，简洁清晰</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked new-card">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案2: 左上角偏下 -->
+  <div class="card-effect style-2" id="style-2">
+    <h2>2. 左上角偏下</h2>
+    <p class="desc">红色圆圈"新"字下移10px，避开卡牌圆角区域</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案3: 左上角+脉冲 -->
+  <div class="card-effect style-3" id="style-3">
+    <h2>3. 左上角+脉冲</h2>
+    <p class="desc">红色圆圈"新"字微弱脉冲闪烁，持续提醒</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案4: 左上角+1.5秒后淡出 -->
+  <div class="card-effect style-4" id="style-4">
+    <h2>4. 左上角+淡出消失</h2>
+    <p class="desc">红色圆圈"新"字1.5秒后淡出消失（模拟实际效果：滑入1.5s + 显示1.5s = 3s后消失）</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="replay('style-4')">重播动画</button>
+  </div>
+
+  <!-- 方案5: 左上角+白色描边 -->
+  <div class="card-effect style-5" id="style-5">
+    <h2>5. 左上角+白色描边</h2>
+    <p class="desc">红色圆圈"新"字加白色描边，在浅色卡牌上更醒目</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案6: 左上角+发光阴影 -->
+  <div class="card-effect style-6" id="style-6">
+    <h2>6. 左上角+发光阴影</h2>
+    <p class="desc">红色圆圈"新"字带红色发光阴影，在深色背景区域更醒目</p>
+    <div class="hand-area">
+      <div class="sentence-group">
+        <div class="hand-card red">上</div>
+        <div class="hand-card red stacked">大</div>
+        <div class="hand-card red stacked">人</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card green">化</div>
+        <div class="hand-card green stacked">三</div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black" style="position:relative">
+          丘
+          <div class="badge">2</div>
+          <div class="new-badge">新</div>
+        </div>
+      </div>
+      <div class="sentence-group">
+        <div class="hand-card black">尔</div>
+        <div class="hand-card black stacked">小</div>
+        <div class="hand-card black stacked">生</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">所有方案：红色圆圈(20px)、黑色"新"字(11px)、位于卡牌左上角，与右上角计数徽章不重叠。滑入动画1.5秒后显示"新"字标记。</p>
+
+<script>
+function replay(id) {
+  const el = document.getElementById(id);
+  const area = el.querySelector('.hand-area');
+  const clone = area.cloneNode(true);
+  area.parentNode.replaceChild(clone, area);
+}
+</script>
+
+</body>
+</html>
