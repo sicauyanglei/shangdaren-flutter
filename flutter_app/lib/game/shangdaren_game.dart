@@ -28,12 +28,12 @@ class ShangdarenGame extends FlameGame {
   static const double designWidth = 1280.0;
   static const double designHeight = 720.0;
 
-  static const double avatar0ScoreX = 9.6 + 20 + 80 + 12 + 30;
-  static const double avatar0ScoreY = 4.8 + 14 + 24 + 4 + 10;
-  static const double avatar1ScoreX = 10 + 20 + 80 + 12 + 30;
-  static const double avatar1ScoreY = 720.0 - 5 - 14 - 24 - 4 - 10;
-  static const double avatar2ScoreX = 1280.0 - 9.6 - 20 - 30;
-  static const double avatar2ScoreY = 4.8 + 14 + 24 + 4 + 10;
+  static const double avatar0ScoreX = 9.6 + 20 + 80 + 12 + 60 + 8 + 25;
+  static const double avatar0ScoreY = 4.8 + 14 + 24 + 4;
+  static const double avatar1ScoreX = 10 + 20 + 80 + 12 + 60 + 8 + 25;
+  static const double avatar1ScoreY = 720.0 - 5 - 14 - 24 - 4 - 20;
+  static const double avatar2ScoreX = 1280.0 - 9.6 - 20 - 60 - 8 - 25;
+  static const double avatar2ScoreY = 4.8 + 14 + 24 + 4;
   static const double huPanelScoreX = 640.0;
   static const double huPanelScoreY = 360.0 + 50.0;
 
@@ -104,6 +104,11 @@ class ShangdarenGame extends FlameGame {
     _isDragging = true;
     _dragStartX = gamePos.x;
     _dragStartY = gamePos.y;
+
+    if (_gameController!.lastDrawnCard != null &&
+        hitCard.id == _gameController!.lastDrawnCard!.id) {
+      _gameController!.clearLastDrawnCard();
+    }
 
     final cardPos = _gameBoard!.getCardPosition(hitCard);
     if (cardPos != null) {
@@ -176,7 +181,9 @@ class ShangdarenGame extends FlameGame {
         gamePos.y < handArea.top ||
         gamePos.y > handArea.bottom;
 
-    if (isOutside && _dragCardIndex != null) {
+    final hitCard = _gameBoard!.hitTestHand(gamePos.x, gamePos.y);
+
+    if (isOutside && hitCard == null && _dragCardIndex != null) {
       _gameController!.discardCard(_dragCardIndex!);
     }
 
@@ -264,8 +271,7 @@ class ShangdarenGame extends FlameGame {
         ),
       );
 
-  @override
-  bool get isLoaded => _loaded;
+  bool get gameLoaded => _loaded;
 
   double get viewScaleX {
     final vp = camera.viewport;
@@ -349,7 +355,11 @@ class ShangdarenGame extends FlameGame {
     _gameController!.onCardAnimation = _onCardAnimation;
     _gameController!.onMeldAnimation = _onMeldAnimation;
 
-    await AudioManager().init();
+    // 音频初始化不阻塞游戏加载，在模拟器上可能卡住
+    AudioManager()
+        .init()
+        .timeout(const Duration(seconds: 3), onTimeout: () {})
+        .catchError((_) {});
 
     _loaded = true;
   }
@@ -688,6 +698,10 @@ class ShangdarenGame extends FlameGame {
     _gameBoard!.clearAll();
     _gameBoard!.dealingComplete = state.isDealingComplete;
     _gameBoard!.lastPlayedCard = _lastPlayedCard;
+    _gameBoard!.newDrawnCardId =
+        (state.isMyTurn && _gameController!.lastDrawnCard != null)
+        ? _gameController!.lastDrawnCard!.id
+        : null;
 
     _gameBoard!.showHuDisplay = state.showHuResult || state.showLiujuResult;
 

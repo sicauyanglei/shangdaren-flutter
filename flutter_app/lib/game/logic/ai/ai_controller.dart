@@ -56,4 +56,16 @@ class AIController {
   bool shouldZhaoFromHand(Player player, String character, GameState state) {
     return _strategy.shouldZhaoFromHand(player, character, state);
   }
+
+  bool shouldChi(Player player, Card card, GameState state) {
+    return _strategy.shouldChi(player, card, state);
+  }
+
+  bool shouldPeng(Player player, Card card, GameState state) {
+    return _strategy.shouldPeng(player, card, state);
+  }
+
+  bool shouldZhao(Player player, Card card, GameState state) {
+    return _strategy.shouldZhao(player, card, state);
+  }
 }

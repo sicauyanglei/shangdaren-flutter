@@ -160,7 +160,7 @@ class _GameHomePageState extends State<GameHomePage>
     String difficulty,
     bool piaoEnabled,
   ) {
-    if (!_game.isLoaded) return;
+    if (!_game.gameLoaded) return;
     setState(() => _showStartScreen = false);
     _game.overlays.add('gameOverlay');
     _game.startGame(

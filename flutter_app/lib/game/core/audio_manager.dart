@@ -83,7 +83,7 @@ class AudioManager {
         audioFocus: AndroidAudioFocus.none,
       ),
       iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.ambient,
+        category: AVAudioSessionCategory.playback,
         options: {AVAudioSessionOptions.mixWithOthers},
       ),
     );

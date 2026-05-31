@@ -659,9 +659,10 @@ class FlyingScore {
   void Function()? onArrive;
   bool _arrived = false;
   double _arriveElapsed = 0;
-  static const double arriveDuration = 0.4;
+  static const double arriveDuration = 1.2;
 
-  static const double fontSize = 36.0;
+  static const double flyFontSize = 36.0;
+  static const double arriveFontSize = 20.0;
 
   FlyingScore({
     required this.scoreChange,
@@ -701,25 +702,52 @@ class FlyingScore {
   }
 
   void render(Canvas canvas) {
-    final text = isGain ? '+$scoreChange' : '-$scoreChange';
-    final color = isGain ? const Color(0xFFffd700) : const Color(0xFFff6b6b);
-
-    double alpha = 1.0;
     if (_arrived) {
       final at = _arriveElapsed / arriveDuration;
-      alpha = 1.0 - at;
+      double alpha = 1.0;
+      if (at > 0.7) {
+        alpha = 1.0 - (at - 0.7) / 0.3;
+      }
+      final text = isGain ? '+$scoreChange' : '-$scoreChange';
+      final color = isGain ? const Color(0xFFffd700) : const Color(0xFFff6b6b);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            fontSize: arriveFontSize,
+            fontWeight: FontWeight.bold,
+            color: color.withValues(alpha: alpha),
+            shadows: [
+              Shadow(
+                color: const Color(0x88000000).withValues(alpha: alpha),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      canvas.save();
+      canvas.translate(x - tp.width / 2, y - tp.height);
+      tp.paint(canvas, Offset.zero);
+      canvas.restore();
+      return;
     }
+
+    final text = isGain ? '+$scoreChange' : '-$scoreChange';
+    final color = isGain ? const Color(0xFFffd700) : const Color(0xFFff6b6b);
 
     final tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
-          fontSize: fontSize,
+          fontSize: flyFontSize,
           fontWeight: FontWeight.bold,
-          color: color.withValues(alpha: alpha),
+          color: color,
           shadows: [
-            Shadow(color: color.withValues(alpha: 0.6 * alpha), blurRadius: 12),
-            Shadow(color: color.withValues(alpha: 0.3 * alpha), blurRadius: 24),
+            Shadow(color: color.withValues(alpha: 0.6), blurRadius: 12),
+            Shadow(color: color.withValues(alpha: 0.3), blurRadius: 24),
             Shadow(color: const Color(0x88000000), blurRadius: 4),
           ],
         ),

@@ -60,6 +60,43 @@ class GameState {
 
   Map<String, int> publicCardCount;
 
+  // 增量维护的全局统计
+  /// 全局已见牌总数（所有公开牌+当前玩家手牌），用于快速计算unknown
+  int totalVisibleCards = 0;
+
+  /// 增量更新：某字牌公开数量变化
+  void addPublicCount(String character, int count) {
+    publicCardCount[character] = (publicCardCount[character] ?? 0) + count;
+    totalVisibleCards += count;
+  }
+
+  /// 增量更新：某字牌公开数量减少
+  void removePublicCount(String character, int count) {
+    final current = publicCardCount[character] ?? 0;
+    final newCount = current - count;
+    if (newCount <= 0) {
+      publicCardCount.remove(character);
+    } else {
+      publicCardCount[character] = newCount;
+    }
+    totalVisibleCards -= count;
+    if (totalVisibleCards < 0) totalVisibleCards = 0;
+  }
+
+  /// 获取某张牌的全局剩余张数（4 - 公开数量 - 玩家手牌数量）
+  int remainingCount(String character, Player player) {
+    final visible = (publicCardCount[character] ?? 0) +
+        player.hand.where((c) => c.character == character).length;
+    final rem = 4 - visible;
+    return rem > 0 ? rem : 0;
+  }
+
+  /// 获取未知牌总数（96 - 公开牌 - 当前玩家手牌）
+  int unknownCards(Player player) {
+    final unknown = 96 - totalVisibleCards - player.hand.length;
+    return unknown > 0 ? unknown : 1;
+  }
+
   GameState({
     List<Player>? players,
     this.currentPlayerIndex = 0,
@@ -160,6 +197,7 @@ class GameState {
     showLiujuResult = false;
     roundHistory.clear();
     publicCardCount.clear();
+    totalVisibleCards = 0;
   }
 
   void nextRound() {
@@ -183,10 +221,13 @@ class GameState {
       player.tingCards.clear();
     }
     publicCardCount.clear();
+    totalVisibleCards = 0;
   }
 
   Player currentTurnPlayer() => players[currentPlayerIndex];
 
+  /// 构建玩家可见的牌数表（公开牌 + 自己手牌）
+  /// 保留旧接口兼容性，但内部使用增量维护的数据
   Map<String, int> buildVisibleCount(Player player) {
     final count = Map<String, int>.from(publicCardCount);
     for (final card in player.hand) {
@@ -195,16 +236,9 @@ class GameState {
     return count;
   }
 
+  /// 计算未知牌总数（使用增量维护的数据，避免遍历）
   int totalUnknownCards(Player player) {
-    int visible = player.hand.length;
-    for (final p in players) {
-      visible += p.discards.length;
-      for (final meld in p.melds) {
-        visible += meld.cards.length;
-      }
-    }
-    final unknown = 96 - visible;
-    return unknown > 0 ? unknown : 1;
+    return unknownCards(player);
   }
 
   @override

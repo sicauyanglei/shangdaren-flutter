@@ -41,12 +41,22 @@ class GameController {
   Timer? _countdownTimer;
   int _countdownTimerId = 0;
   Card? _lastDrawnCard;
+  Card? get lastDrawnCard => _lastDrawnCard;
+  void clearLastDrawnCard() => _lastDrawnCard = null;
 
   bool _hasDealerPlayedFirstTurn = false;
   bool _skipDraw = false;
   bool _isStartingRound = false;
   bool _isDealing = false;
   bool _isPaused = false;
+
+  Card? _pendingDrawCard;
+  int? _pendingDrawPlayerId;
+
+  Card? _pendingDiscardCard;
+  int? _pendingDiscardPlayerId;
+
+  VoidCallback? _pendingMeldAction;
 
   Map<int, List<String>>? _pendingAIResponses;
   Card? _pendingResponseCard;
@@ -57,7 +67,9 @@ class GameController {
       aiController = aiCtrl ?? AIController();
 
   void startGame() {
+    print('=== GameController.startGame called ===');
     state.reset();
+    _isStartingRound = false;
     if (state.difficulty == 'hard') {
       aiController = AIController(strategy: AIStrategyHard());
     } else {
@@ -71,10 +83,13 @@ class GameController {
     state.dealerIndex = 0;
     state.roundNumber = 0;
     state.gameStarted = true;
+    print('=== calling startRound ===');
     startRound();
+    print('=== startRound done ===');
   }
 
   void startRound() {
+    print('=== startRound called, _isStartingRound=$_isStartingRound ===');
     if (_isStartingRound) return;
     _isStartingRound = true;
 
@@ -230,7 +245,7 @@ class GameController {
         }
         onStateChanged?.call();
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (_isPaused || !state.gameStarted) return;
+          if (!state.gameStarted) return;
           _isStartingRound = false;
           _startTurn();
         });
@@ -248,7 +263,7 @@ class GameController {
 
       dealIdx++;
       Future.delayed(const Duration(milliseconds: 30), () {
-        if (_isPaused || !state.gameStarted) return;
+        if (!state.gameStarted) return;
         dealNext();
       });
     }
@@ -303,6 +318,8 @@ class GameController {
 
     final card = state.deck.removeLast();
     _lastDrawnCard = card;
+    _pendingDrawCard = card;
+    _pendingDrawPlayerId = 1;
     final player = state.players[1];
 
     onCardAnimation?.call(card, 1, 'draw');
@@ -312,23 +329,29 @@ class GameController {
 
     Future.delayed(const Duration(milliseconds: 2100), () {
       if (_isPaused || !state.gameStarted) return;
-      player.addCard(card);
-      onPlayerDraw?.call(1);
-
-      final tingResult = TingChecker.checkTing(player);
-      player.isTing = tingResult.isTing;
-      player.tingCards = tingResult.tingCards;
-      player.huCount = HuCalculator.calculateTotalHu(player);
-
-      state.isDrawing = false;
-      state.isMyTurn = true;
-
-      _checkMyActionsAfterDraw();
-      state.hideTingBadge = state.canHu;
-
-      onStateChanged?.call();
-      startCountdown();
+      _completeDrawForHuman(card, player);
     });
+  }
+
+  void _completeDrawForHuman(Card card, Player player) {
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+    player.addCard(card);
+    onPlayerDraw?.call(1);
+
+    final tingResult = TingChecker.checkTing(player);
+    player.isTing = tingResult.isTing;
+    player.tingCards = tingResult.tingCards;
+    player.huCount = HuCalculator.calculateTotalHu(player);
+
+    state.isDrawing = false;
+    state.isMyTurn = true;
+
+    _checkMyActionsAfterDraw();
+    state.hideTingBadge = state.canHu;
+
+    onStateChanged?.call();
+    startCountdown();
   }
 
   void _checkMyActionsAfterDraw() {
@@ -358,21 +381,49 @@ class GameController {
     }
 
     final card = state.deck.removeLast();
+    _pendingDrawCard = card;
+    _pendingDrawPlayerId = player.id;
 
     onCardAnimation?.call(card, player.id, 'draw');
 
     Future.delayed(const Duration(milliseconds: 2100), () {
       if (_isPaused || !state.gameStarted) return;
-      player.addCard(card);
-      onPlayerDraw?.call(player.id);
-
-      final tingResult = TingChecker.checkTing(player);
-      player.isTing = tingResult.isTing;
-      player.tingCards = tingResult.tingCards;
-      player.huCount = HuCalculator.calculateTotalHu(player);
-
-      _aiContinueAfterDraw(player, drawnCard: card);
+      _completeDrawForAI(card, player);
     });
+  }
+
+  void _completeDrawForAI(Card card, Player player) {
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+    player.addCard(card);
+    onPlayerDraw?.call(player.id);
+
+    final tingResult = TingChecker.checkTing(player);
+    player.isTing = tingResult.isTing;
+    player.tingCards = tingResult.tingCards;
+    player.huCount = HuCalculator.calculateTotalHu(player);
+
+    _aiContinueAfterDraw(player, drawnCard: card);
+  }
+
+  void _completeDrawAfterZhaoForHuman(Card card, Player player) {
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+    _lastDrawnCard = card;
+    player.addCard(card);
+    onPlayerDraw?.call(player.id);
+
+    final tingResult = TingChecker.checkTing(player);
+    player.isTing = tingResult.isTing;
+    player.tingCards = tingResult.tingCards;
+    player.huCount = HuCalculator.calculateTotalHu(player);
+
+    state.isMyTurn = true;
+    state.isDrawing = false;
+    _checkMyActionsAfterDraw();
+    state.hideTingBadge = state.canHu;
+    onStateChanged?.call();
+    startCountdown();
   }
 
   void _aiContinueAfterDraw(Player player, {Card? drawnCard}) {
@@ -424,31 +475,41 @@ class GameController {
     onCardAnimation?.call(card, player.id, 'discard');
     _audio.playDiscard(card.character);
 
+    _pendingDiscardCard = card;
+    _pendingDiscardPlayerId = player.id;
+
     Future.delayed(const Duration(milliseconds: 350), () {
       if (_isPaused || !state.gameStarted) return;
-      player.removeCard(card);
-      player.discards.add(card);
-      _addToPublicCount(card.character, 1);
-      state.lastDiscardedCard = card;
-      state.lastDiscardPlayerIndex = player.id;
-      state.isMyTurn = false;
+      _completeDiscard(player, card);
+    });
+  }
 
-      final tingResult = TingChecker.checkTing(player);
-      player.isTing = tingResult.isTing;
-      player.tingCards = tingResult.tingCards;
-      player.huCount = HuCalculator.calculateTotalHu(player);
+  void _completeDiscard(Player player, Card card) {
+    _pendingDiscardCard = null;
+    _pendingDiscardPlayerId = null;
+    player.removeCard(card);
+    player.discards.add(card);
+    _addToPublicCount(card.character, 1);
+    state.lastDiscardedCard = card;
+    state.lastDiscardPlayerIndex = player.id;
+    state.isMyTurn = false;
+    _lastDrawnCard = null;
 
-      if (player.type == PlayerType.human) {
-        state.hideTingBadge = !player.isTing;
-      }
+    final tingResult = TingChecker.checkTing(player);
+    player.isTing = tingResult.isTing;
+    player.tingCards = tingResult.tingCards;
+    player.huCount = HuCalculator.calculateTotalHu(player);
 
-      onPlayerDiscard?.call(card);
-      onStateChanged?.call();
+    if (player.type == PlayerType.human) {
+      state.hideTingBadge = !player.isTing;
+    }
 
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (_isPaused || !state.gameStarted) return;
-        _checkResponses(card, player.id);
-      });
+    onPlayerDiscard?.call(card);
+    onStateChanged?.call();
+
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (_isPaused || !state.gameStarted) return;
+      _checkResponses(card, player.id);
     });
   }
 
@@ -463,44 +524,41 @@ class GameController {
       if (_canHuWith(p, card) && p.isTing) {
         actions.add('hu');
       }
-      if (_canZhaoWith(p, card)) {
-        actions.add('zhao');
-      }
-      if (_canPengWith(p, card)) {
-        actions.add('peng');
-      }
-      if (_canChiWith(p, i, card, discardPlayerId)) {
-        if (p.type == PlayerType.ai && state.difficulty == 'hard') {
-          if (!_shouldChiHard(p, card)) {
-            responses[i] = actions;
-            continue;
+
+      // AI玩家使用策略判断碰/招/吃
+      if (p.type == PlayerType.ai) {
+        if (_canZhaoWith(p, card)) {
+          if (aiController.shouldZhao(p, card, state)) {
+            actions.add('zhao');
           }
         }
-        actions.add('chi');
+        if (_canPengWith(p, card)) {
+          if (aiController.shouldPeng(p, card, state)) {
+            actions.add('peng');
+          }
+        }
+        if (_canChiWith(p, i, card, discardPlayerId)) {
+          if (aiController.shouldChi(p, card, state)) {
+            actions.add('chi');
+          }
+        }
+      } else {
+        // 人类玩家：只要能碰/招/吃就加入选项
+        if (_canZhaoWith(p, card)) {
+          actions.add('zhao');
+        }
+        if (_canPengWith(p, card)) {
+          actions.add('peng');
+        }
+        if (_canChiWith(p, i, card, discardPlayerId)) {
+          actions.add('chi');
+        }
       }
+
       responses[i] = actions;
     }
 
     _processResponses(responses, card, discardPlayerId);
-  }
-
-  bool _shouldChiHard(Player player, Card card) {
-    final sameSentence = player.hand
-        .where((c) => c.sentence == card.sentence)
-        .toList();
-
-    final charCount = <String, int>{};
-    for (final c in sameSentence) {
-      charCount[c.character] = (charCount[c.character] ?? 0) + 1;
-    }
-
-    final allSingle = charCount.values.every((count) => count == 1);
-    if (!allSingle) return true;
-
-    final hasFullSentence = charCount.length == 3;
-    if (!hasFullSentence) return true;
-
-    return false;
   }
 
   void _processResponses(
@@ -955,9 +1013,8 @@ class GameController {
     }
 
     final totalHu = HuCalculator.calculateTotalHu(winner);
-    final B = totalHu ~/ 10;
     final huTypeMultiplier = isZimo ? huTypeResult.zimo : huTypeResult.dianpao;
-    final displayMultiplier = B + huTypeMultiplier;
+    final displayMultiplier = huTypeMultiplier;
     final method = isZimo ? '自摸' : '点炮';
 
     state.roundHistory.add({
@@ -1057,10 +1114,65 @@ class GameController {
     _isPaused = false;
     if (!state.gameStarted) return;
     if (state.showHuResult || state.showLiujuResult) return;
+    if (state.isHandlingHu) return;
+    if (_isDealing || _isStartingRound) return;
 
-    if (state.isMyTurn && !state.isDrawing) {
-      startCountdown();
+    if (state.waitingForResponse) {
+      if (state.lastDiscardedCard != null &&
+          state.lastDiscardPlayerIndex != null) {
+        _checkResponses(
+          state.lastDiscardedCard!,
+          state.lastDiscardPlayerIndex!,
+        );
+      }
+      return;
     }
+
+    if (state.isDrawing) {
+      if (_pendingDrawCard != null && _pendingDrawPlayerId != null) {
+        final player = state.players[_pendingDrawPlayerId!];
+        if (_pendingDrawPlayerId == 1) {
+          if (_skipDraw) {
+            _completeDrawAfterZhaoForHuman(_pendingDrawCard!, player);
+          } else {
+            _completeDrawForHuman(_pendingDrawCard!, player);
+          }
+        } else {
+          _completeDrawForAI(_pendingDrawCard!, player);
+        }
+      } else {
+        state.isDrawing = false;
+        if (state.isMyTurn) {
+          _checkMyActionsAfterDraw();
+          onStateChanged?.call();
+          startCountdown();
+        } else {
+          _startTurn();
+        }
+      }
+      return;
+    }
+
+    if (_pendingDiscardCard != null && _pendingDiscardPlayerId != null) {
+      final player = state.players[_pendingDiscardPlayerId!];
+      _completeDiscard(player, _pendingDiscardCard!);
+      return;
+    }
+
+    if (_pendingMeldAction != null) {
+      _pendingMeldAction!.call();
+      _pendingMeldAction = null;
+      return;
+    }
+
+    if (state.isMyTurn) {
+      _checkMyActionsAfterDraw();
+      onStateChanged?.call();
+      startCountdown();
+      return;
+    }
+
+    _startTurn();
   }
 
   void _handleZhaoFromHand(Player player, {String? character}) {
@@ -1085,8 +1197,7 @@ class GameController {
     onMeldAnimation?.call(zhaoCards, player.id, 'zhao');
     _audio.playZhao();
 
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (_isPaused || !state.gameStarted) return;
+    _pendingMeldAction = () {
       final meld = Meld(
         cards: List.from(zhaoCards),
         type: MeldType.zhao,
@@ -1099,8 +1210,14 @@ class GameController {
       _addToPublicCount(targetChar!, 4);
       onPlayerMeld?.call(zhaoCards, player.id);
       onStateChanged?.call();
-
+      _pendingMeldAction = null;
       _drawAfterZhao(player);
+    };
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (_isPaused || !state.gameStarted) return;
+      _pendingMeldAction?.call();
+      _pendingMeldAction = null;
     });
   }
 
@@ -1120,22 +1237,12 @@ class GameController {
 
       onCardAnimation?.call(card, player.id, 'draw');
 
+      _pendingDrawCard = card;
+      _pendingDrawPlayerId = player.id;
+
       Future.delayed(const Duration(milliseconds: 2100), () {
         if (_isPaused || !state.gameStarted) return;
-        player.addCard(card);
-        onPlayerDraw?.call(player.id);
-
-        final tingResult = TingChecker.checkTing(player);
-        player.isTing = tingResult.isTing;
-        player.tingCards = tingResult.tingCards;
-        player.huCount = HuCalculator.calculateTotalHu(player);
-
-        state.isMyTurn = true;
-        state.isDrawing = false;
-        _checkMyActionsAfterDraw();
-        state.hideTingBadge = state.canHu;
-        onStateChanged?.call();
-        startCountdown();
+        _completeDrawAfterZhaoForHuman(card, player);
       });
     } else {
       player.addCard(card);
@@ -1179,8 +1286,7 @@ class GameController {
     onMeldAnimation?.call(zhaoCards, playerIndex, 'zhao');
     _audio.playZhao();
 
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (_isPaused || !state.gameStarted) return;
+    _pendingMeldAction = () {
       discarder.discards.remove(card);
       _addToPublicCount(card.character, -1);
 
@@ -1215,8 +1321,15 @@ class GameController {
       state.canHu = false;
       state.currentPlayerIndex = playerIndex;
       onStateChanged?.call();
+      _pendingMeldAction = null;
 
       _drawAfterZhao(player);
+    };
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (_isPaused || !state.gameStarted) return;
+      _pendingMeldAction?.call();
+      _pendingMeldAction = null;
     });
   }
 
@@ -1232,8 +1345,7 @@ class GameController {
       onMeldAnimation?.call(pengCards, playerIndex, 'peng');
       _audio.playPeng();
 
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (_isPaused || !state.gameStarted) return;
+      _pendingMeldAction = () {
         final discarder = state.players[discardPlayerId];
         discarder.discards.remove(card);
         _addToPublicCount(card.character, -1);
@@ -1255,6 +1367,7 @@ class GameController {
         _skipDraw = true;
         player.huCount = HuCalculator.calculateTotalHu(player);
         onStateChanged?.call();
+        _pendingMeldAction = null;
 
         if (player.type == PlayerType.human) {
           state.isMyTurn = true;
@@ -1268,6 +1381,12 @@ class GameController {
             _aiContinueAfterDraw(player);
           });
         }
+      };
+
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (_isPaused || !state.gameStarted) return;
+        _pendingMeldAction?.call();
+        _pendingMeldAction = null;
       });
     }
   }
@@ -1282,8 +1401,7 @@ class GameController {
       onMeldAnimation?.call(meldCards, playerIndex, 'chi');
       _audio.playChi();
 
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (_isPaused || !state.gameStarted) return;
+      _pendingMeldAction = () {
         final discarder = state.players[discardPlayerId];
         discarder.discards.remove(card);
         _addToPublicCount(card.character, -1);
@@ -1309,6 +1427,7 @@ class GameController {
         _skipDraw = true;
         player.huCount = HuCalculator.calculateTotalHu(player);
         onStateChanged?.call();
+        _pendingMeldAction = null;
 
         if (player.type == PlayerType.human) {
           state.isMyTurn = true;
@@ -1322,6 +1441,12 @@ class GameController {
             _aiContinueAfterDraw(player);
           });
         }
+      };
+
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (_isPaused || !state.gameStarted) return;
+        _pendingMeldAction?.call();
+        _pendingMeldAction = null;
       });
     }
   }
@@ -1415,21 +1540,19 @@ class GameController {
   }
 
   void _addToPublicCount(String character, int count) {
-    state.publicCardCount[character] =
-        (state.publicCardCount[character] ?? 0) + count;
+    state.addPublicCount(character, count);
   }
 
   void _rebuildPublicCardCount() {
     state.publicCardCount.clear();
+    state.totalVisibleCards = 0;
     for (final p in state.players) {
       for (final card in p.discards) {
-        state.publicCardCount[card.character] =
-            (state.publicCardCount[card.character] ?? 0) + 1;
+        state.addPublicCount(card.character, 1);
       }
       for (final meld in p.melds) {
         for (final card in meld.cards) {
-          state.publicCardCount[card.character] =
-              (state.publicCardCount[card.character] ?? 0) + 1;
+          state.addPublicCount(card.character, 1);
         }
       }
     }

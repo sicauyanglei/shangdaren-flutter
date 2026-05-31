@@ -34,18 +34,14 @@ class HuCalculator {
     final aSet = <Meld>[];
     final bSet = <Meld>[];
     final cSet = <Meld>[];
-    final dSet = <Meld>[];
-    final eSet = <Card>[];
+    final dSet = <Card>[];
 
     extractJu(remaining, aSet);
-    extractZhao(remaining, bSet);
-    extractKan(remaining, cSet);
-    extractDuiAndKao(remaining, dSet);
-    eSet.addAll(remaining);
+    extractKan(remaining, bSet);
+    extractDuiAndKao(remaining, cSet);
+    dSet.addAll(remaining);
 
-    if (eSet.isEmpty && dSet.isEmpty) return true;
-    if (dSet.isEmpty && eSet.length == 1) return true;
-    if (dSet.length == 1 && eSet.isEmpty) return true;
+    if (cSet.length == 1 && dSet.isEmpty) return true;
 
     final byChar = <String, int>{};
     for (final card in hand) {
@@ -854,6 +850,23 @@ class HuCalculator {
       final count = aCharCount[card.character] ?? 0;
       if (count == 2) bonus += 3;
     }
+
+    final aSentenceCount = <int, int>{};
+    for (final meld in aSet) {
+      if (meld.type == MeldType.ju) {
+        final s = meld.cards.first.sentence;
+        aSentenceCount[s] = (aSentenceCount[s] ?? 0) + 1;
+      }
+    }
+    aSentenceCount.forEach((s, count) {
+      if (count >= 3) {
+        if (s == 1 || s == 8) {
+          bonus += 6;
+        } else {
+          bonus += 9;
+        }
+      }
+    });
 
     return bonus;
   }

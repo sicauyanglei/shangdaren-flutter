@@ -66,6 +66,11 @@ class GameBoard extends Component {
   final List<CardRender> _player2Melds = [];
 
   Card? lastPlayedCard;
+  int? newDrawnCardId;
+  int? badgeAnimCardId;
+  int badgeOldCount = 0;
+  double badgeAnimTimer = 0.0;
+  static const double badgeAnimDuration = 0.5;
   double _player2MeldRightEdge = 0;
   double _player0HandHeight = 0;
   double _player2HandHeight = 0;
@@ -189,13 +194,43 @@ class GameBoard extends Component {
 
   void setPlayerHand(int playerIndex, List<Card> cards) {
     final handList = _handList(playerIndex);
+    if (playerIndex == 1) {
+      if (newDrawnCardId != null) {
+        Card? newCard;
+        for (final c in cards) {
+          if (c.id == newDrawnCardId) {
+            newCard = c;
+            break;
+          }
+        }
+        if (newCard != null) {
+          int oldCount = 0;
+          for (final cr in handList) {
+            if (cr.card != null && cr.card!.character == newCard.character) {
+              oldCount++;
+            }
+          }
+          if (oldCount > 0) {
+            badgeAnimCardId = newCard.id;
+            badgeOldCount = oldCount;
+            badgeAnimTimer = 0.0;
+          }
+        }
+      }
+    }
     for (final cr in handList) {
       CardRender.pool.release(cr);
     }
     handList.clear();
     final isFaceUp = playerIndex == 1;
     for (final card in cards) {
-      handList.add(acquireCardRender(card, faceUp: isFaceUp));
+      final cr = acquireCardRender(card, faceUp: isFaceUp);
+      if (playerIndex == 1 &&
+          newDrawnCardId != null &&
+          card.id == newDrawnCardId) {
+        cr.isNewDrawn = true;
+      }
+      handList.add(cr);
     }
     updateLayout();
   }
@@ -452,7 +487,11 @@ class GameBoard extends Component {
     }
     discardList.clear();
     for (final card in cards) {
-      discardList.add(acquireCardRender(card, faceUp: true));
+      final cr = acquireCardRender(card, faceUp: true);
+      if (lastPlayedCard != null && card.id == lastPlayedCard!.id) {
+        cr.isLastDiscard = true;
+      }
+      discardList.add(cr);
     }
     updateLayout();
   }
@@ -936,6 +975,17 @@ class GameBoard extends Component {
   void update(double dt) {
     for (final cr in _allCardRenders) {
       cr.update(dt);
+      if (cr.isNewDrawn && !cr.showNewBadge) {
+        cr.showNewBadge = true;
+        cr.newBadgeTimer = 0.0;
+      }
+    }
+    if (badgeAnimTimer < badgeAnimDuration) {
+      badgeAnimTimer += dt;
+      if (badgeAnimTimer > badgeAnimDuration) {
+        badgeAnimTimer = badgeAnimDuration;
+        badgeAnimCardId = null;
+      }
     }
   }
 
@@ -1335,13 +1385,6 @@ class GameBoard extends Component {
     canvas.save();
     canvas.translate(cr.position.x, cr.position.y);
 
-    if (cr.isLastDiscard) {
-      final s = cr.pulseScale;
-      canvas.translate(cardW / 2, cardH / 2);
-      canvas.scale(s, s);
-      canvas.translate(-cardW / 2, -cardH / 2);
-    }
-
     final smallImg = _smallCardImages[cr.card!.character];
     if (smallImg != null) {
       final imgW = smallImg.width.toDouble();
@@ -1380,38 +1423,31 @@ class GameBoard extends Component {
     }
 
     if (cr.isLastDiscard) {
-      final discardRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, cardW, cardH),
-        const Radius.circular(3),
-      );
+      final t = (cr.pulseTimer % 0.5) / 0.5;
+      double shakeX;
+      if (t < 0.15) {
+        shakeX = -2.0 * (t / 0.15);
+      } else if (t < 0.30) {
+        shakeX = -2.0 + 4.0 * ((t - 0.15) / 0.15);
+      } else if (t < 0.45) {
+        shakeX = 2.0 - 3.0 * ((t - 0.30) / 0.15);
+      } else if (t < 0.60) {
+        shakeX = -1.0 + 2.0 * ((t - 0.45) / 0.15);
+      } else {
+        shakeX = 1.0 - 1.0 * ((t - 0.60) / 0.40);
+      }
+      canvas.translate(shakeX, 0);
+
       final borderPaint = Paint()
-        ..color = const Color(0xFFFFD700)
+        ..color = const Color(0xFFFF9800)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
-      canvas.drawRRect(discardRRect, borderPaint);
-
-      final t = (cr.pulseScale - 1.0) / 0.1;
-      final glowAlpha1 = 0.8 + 0.2 * t;
-      final glowAlpha2 = 0.4 + 0.2 * t;
-      final glowPaint1 = Paint()
-        ..color = Color.fromRGBO(255, 215, 0, glowAlpha1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(-2, -2, cardW + 4, cardH + 4),
-          const Radius.circular(5),
+          Rect.fromLTWH(0, 0, cardW, cardH),
+          const Radius.circular(3),
         ),
-        glowPaint1,
-      );
-      final glowPaint2 = Paint()
-        ..color = Color.fromRGBO(255, 215, 0, glowAlpha2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(-4, -4, cardW + 8, cardH + 8),
-          const Radius.circular(7),
-        ),
-        glowPaint2,
+        borderPaint,
       );
     }
 
@@ -1457,6 +1493,10 @@ class GameBoard extends Component {
 
       canvas.save();
       canvas.translate(offsetX, offsetY);
+
+      if (cr.isNewDrawn) {
+        cr.cardOpacity = 1.0;
+      }
 
       final shadowPaint = Paint()
         ..color = const Color(0x66000000)
@@ -1663,7 +1703,7 @@ class GameBoard extends Component {
         double curY = startY;
         for (int i = 0; i < sg.length; i++) {
           final stack = sg[i];
-          final cardX = curX;
+          final cardX = curX - cw;
           Card drawCard = stack[0];
           if (highlightCard != null) {
             for (final c in stack) {
@@ -2067,23 +2107,146 @@ class GameBoard extends Component {
             Paint()..color = const Color(0xFFFF4444),
           );
 
-          final text = '${stack.length}';
+          bool isAnimating = false;
+          double animProgress = 1.0;
+          int oldCount = 0;
+          if (badgeAnimCardId != null) {
+            for (final s in stack) {
+              if (s.card?.id == badgeAnimCardId) {
+                isAnimating = badgeAnimTimer < badgeAnimDuration;
+                animProgress = (badgeAnimTimer / badgeAnimDuration).clamp(
+                  0.0,
+                  1.0,
+                );
+                oldCount = badgeOldCount;
+                break;
+              }
+            }
+          }
+
+          if (isAnimating) {
+            canvas.save();
+            canvas.clipRect(
+              Rect.fromCircle(
+                center: Offset(badgeCx, badgeCy),
+                radius: badgeR - 1,
+              ),
+            );
+
+            final oldText = '$oldCount';
+            final oldTp = TextPainter(
+              text: TextSpan(
+                text: oldText,
+                style: TextStyle(
+                  color: const Color(0xFFFFFFFF),
+                  fontSize: oldText.length > 1 ? 20.0 : 28.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            oldTp.layout();
+            final oldOpacity = 1.0 - animProgress;
+            final oldSlideY = -badgeR * 2 * animProgress;
+            oldTp.paint(
+              canvas,
+              Offset(
+                badgeCx - oldTp.width / 2,
+                badgeCy - oldTp.height / 2 + oldSlideY,
+              ),
+            );
+
+            final newText = '${stack.length}';
+            final newTp = TextPainter(
+              text: TextSpan(
+                text: newText,
+                style: TextStyle(
+                  color: const Color(0xFFFFFFFF),
+                  fontSize: newText.length > 1 ? 20.0 : 28.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            newTp.layout();
+            final newSlideY = badgeR * 2 * (1.0 - animProgress);
+            newTp.paint(
+              canvas,
+              Offset(
+                badgeCx - newTp.width / 2,
+                badgeCy - newTp.height / 2 + newSlideY,
+              ),
+            );
+
+            canvas.restore();
+          } else {
+            final text = '${stack.length}';
+            final tp = TextPainter(
+              text: TextSpan(
+                text: text,
+                style: TextStyle(
+                  color: const Color(0xFFFFFFFF),
+                  fontSize: text.length > 1 ? 20.0 : 28.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            tp.layout();
+            tp.paint(
+              canvas,
+              Offset(badgeCx - tp.width / 2, badgeCy - tp.height / 2),
+            );
+          }
+        }
+
+        CardRender? newBadgeCr;
+        for (final s in stack) {
+          if (s.showNewBadge) {
+            newBadgeCr = s;
+            break;
+          }
+        }
+        if (newBadgeCr != null) {
+          final badgeR = 10.0;
+          final badgeCx = badgeR + 2;
+          final badgeCy = badgeR + 2;
+          final pulseT = (newBadgeCr.newBadgeTimer % 1.5) / 1.5;
+          final pulseScale = 1.0 + 0.1 * math.sin(pulseT * math.pi);
+          final pulseBlur = 3.0 + 5.0 * math.sin(pulseT * math.pi);
+
+          canvas.save();
+          canvas.translate(badgeCx, badgeCy);
+          canvas.scale(pulseScale, pulseScale);
+
+          canvas.drawCircle(
+            Offset.zero,
+            badgeR,
+            Paint()
+              ..color = const Color(0xFFFF4444)
+              ..maskFilter = MaskFilter.blur(BlurStyle.normal, pulseBlur),
+          );
+          canvas.drawCircle(
+            Offset.zero,
+            badgeR,
+            Paint()..color = const Color(0xFFFF4444),
+          );
+
           final tp = TextPainter(
-            text: TextSpan(
-              text: text,
+            text: const TextSpan(
+              text: '新',
               style: TextStyle(
-                color: const Color(0xFFFFFFFF),
-                fontSize: text.length > 1 ? 20.0 : 28.0,
+                color: Color(0xFF333333),
+                fontSize: 11.0,
                 fontWeight: FontWeight.bold,
               ),
             ),
             textDirection: TextDirection.ltr,
           );
           tp.layout();
-          tp.paint(
-            canvas,
-            Offset(badgeCx - tp.width / 2, badgeCy - tp.height / 2),
-          );
+          tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+
+          canvas.restore();
         }
 
         canvas.restore();
@@ -2092,6 +2255,67 @@ class GameBoard extends Component {
   }
 
   void _renderSmallOverlays(Canvas canvas) {}
+
+  static List<TextSpan> _buildTagSpans(
+    String text,
+    Color color,
+    double fontSize,
+    double numFontSize,
+  ) {
+    final numRegExp = RegExp(r'(\d+)');
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (final match in numRegExp.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastEnd, match.start),
+            style: TextStyle(
+              fontSize: fontSize,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(0),
+          style: TextStyle(
+            fontSize: numFontSize,
+            color: color,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastEnd),
+          style: TextStyle(
+            fontSize: fontSize,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+    if (spans.isEmpty) {
+      spans.add(
+        TextSpan(
+          text: text,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+    return spans;
+  }
 
   static Color _getHuTypeColor(String huTypeName) {
     switch (huTypeName) {
@@ -2303,13 +2527,13 @@ class GameBoard extends Component {
       ),
     );
 
-    final titleY = panelY + 36;
+    final titleY = panelY + 32;
     final titleText = '$huWinnerName 胡牌!';
     final titleTp = TextPainter(
       text: TextSpan(
         text: titleText,
         style: TextStyle(
-          fontSize: 28,
+          fontSize: 24,
           color: const Color(0xFFffd700),
           fontWeight: FontWeight.bold,
           shadows: [Shadow(color: const Color(0x80ffd700), blurRadius: 15)],
@@ -2323,11 +2547,12 @@ class GameBoard extends Component {
       Offset(cx - titleTp.width / 2, titleY - titleTp.height / 2),
     );
 
-    final tagsY = panelY + 78;
-    final tagFontSize = 16.0;
-    const tagPadH = 12.0;
-    const tagPadV = 5.0;
-    const tagRadius = 12.0;
+    final tagsY = panelY + 72;
+    final tagFontSize = 14.0;
+    final tagNumFontSize = 17.0;
+    const tagPadH = 10.0;
+    const tagPadV = 4.0;
+    const tagRadius = 10.0;
 
     final tags = <MapEntry<String, Color>>[];
     if (huMethod == '点炮' && huDianpaoName.isNotEmpty) {
@@ -2349,11 +2574,14 @@ class GameBoard extends Component {
     final tagWidths = <double>[];
     double totalTagW = 0;
     for (int i = 0; i < tags.length; i++) {
+      final spans = _buildTagSpans(
+        tags[i].key,
+        tags[i].value,
+        tagFontSize,
+        tagNumFontSize,
+      );
       final tp = TextPainter(
-        text: TextSpan(
-          text: tags[i].key,
-          style: TextStyle(fontSize: tagFontSize, fontWeight: FontWeight.bold),
-        ),
+        text: TextSpan(children: spans),
         textDirection: TextDirection.ltr,
       );
       tp.layout();
@@ -2366,13 +2594,9 @@ class GameBoard extends Component {
     var tagX = cx - totalTagW / 2;
     for (int i = 0; i < tags.length; i++) {
       final tw = tagWidths[i];
+      final tagH = tagNumFontSize + tagPadV * 2;
       final tagR = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          tagX,
-          tagsY - (tagFontSize + tagPadV * 2) / 2,
-          tw,
-          tagFontSize + tagPadV * 2,
-        ),
+        Rect.fromLTWH(tagX, tagsY - tagH / 2, tw, tagH),
         const Radius.circular(tagRadius),
       );
       canvas.drawRRect(tagR, Paint()..color = tagBgColors[i]);
@@ -2383,15 +2607,14 @@ class GameBoard extends Component {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
+      final spans = _buildTagSpans(
+        tags[i].key,
+        tags[i].value,
+        tagFontSize,
+        tagNumFontSize,
+      );
       final tp = TextPainter(
-        text: TextSpan(
-          text: tags[i].key,
-          style: TextStyle(
-            fontSize: tagFontSize,
-            color: tags[i].value,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        text: TextSpan(children: spans),
         textDirection: TextDirection.ltr,
       );
       tp.layout();
@@ -2402,16 +2625,22 @@ class GameBoard extends Component {
       tagX += tw + 8;
     }
 
-    final scoreY = panelY + 130;
+    final scoreY = panelY + 128;
     final scoreText = '+$huScore';
+    final scorePaint = Paint()
+      ..shader = LinearGradient(
+        colors: [const Color(0xFFffd700), const Color(0xFFff8c00)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(0, 0, 200, 60));
     final scoreTp = TextPainter(
       text: TextSpan(
         text: scoreText,
         style: TextStyle(
-          fontSize: 48,
-          color: const Color(0xFFffd700),
-          fontWeight: FontWeight.bold,
-          shadows: [Shadow(color: const Color(0x66ffd700), blurRadius: 20)],
+          fontSize: 60,
+          fontWeight: FontWeight.w900,
+          foreground: scorePaint,
+          shadows: [Shadow(color: const Color(0x80ffd700), blurRadius: 24)],
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -2421,7 +2650,7 @@ class GameBoard extends Component {
       text: const TextSpan(
         text: '分',
         style: TextStyle(
-          fontSize: 18,
+          fontSize: 20,
           color: Color(0xB3ffd700),
           fontWeight: FontWeight.bold,
         ),
@@ -2430,21 +2659,17 @@ class GameBoard extends Component {
     );
     unitTp.layout();
     final totalScoreW = scoreTp.width + 4 + unitTp.width;
-    scoreTp.paint(
-      canvas,
-      Offset(cx - totalScoreW / 2, scoreY - scoreTp.height / 2),
-    );
+    final scoreOffsetX = cx - totalScoreW / 2;
+    final scoreOffsetY = scoreY - scoreTp.height / 2;
+    scoreTp.paint(canvas, Offset(scoreOffsetX, scoreOffsetY));
     unitTp.paint(
       canvas,
-      Offset(
-        cx - totalScoreW / 2 + scoreTp.width + 4,
-        scoreY - unitTp.height / 2 + 12,
-      ),
+      Offset(scoreOffsetX + scoreTp.width + 4, scoreY - unitTp.height / 2 + 14),
     );
 
-    final losersY = panelY + 190;
-    final loserFontSize = 14.0;
-    final loserScoreFontSize = 20.0;
+    final losersY = panelY + 196;
+    final loserFontSize = 13.0;
+    final loserScoreFontSize = 24.0;
     final loserPadH = 16.0;
     final loserPadV = 8.0;
     final loserGap = 16.0;
@@ -2537,9 +2762,10 @@ class GameBoard extends Component {
           text: TextSpan(
             text: '${losers[i].value}',
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 24,
               color: Color(0xFFff6b6b),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w900,
+              shadows: [Shadow(color: Color(0x66ff6b6b), blurRadius: 6)],
             ),
           ),
           textDirection: TextDirection.ltr,

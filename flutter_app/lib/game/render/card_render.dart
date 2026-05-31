@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flame/components.dart';
 import '../core/atlas_loader.dart';
@@ -23,15 +24,12 @@ class CardRender extends PositionComponent {
   int meldGroupId = -1;
   double cardOpacity = 1.0;
   bool faceUp = true;
-  double _pulseTimer = 0.0;
+  double pulseTimer = 0.0;
+  bool isNewDrawn = false;
+  bool showNewBadge = false;
+  double newBadgeTimer = 0.0;
 
   CardRender() : super(size: Vector2(cardWidth, cardHeight));
-
-  double get pulseScale {
-    if (!isLastDiscard) return 1.0;
-    final t = (_pulseTimer % 1.5) / 1.5;
-    return 1.0 + 0.1 * (0.5 - 0.5 * (1.0 - (2 * t - 1).abs()));
-  }
 
   void setup(
     Card card, {
@@ -52,7 +50,10 @@ class CardRender extends PositionComponent {
     showTingBadge = false;
     isMeldCard = false;
     cardOpacity = 1.0;
-    _pulseTimer = 0.0;
+    pulseTimer = 0.0;
+    isNewDrawn = false;
+    showNewBadge = false;
+    newBadgeTimer = 0.0;
   }
 
   void reset() {
@@ -67,15 +68,46 @@ class CardRender extends PositionComponent {
     meldGroupId = -1;
     cardOpacity = 1.0;
     faceUp = true;
-    _pulseTimer = 0.0;
+    pulseTimer = 0.0;
+    isNewDrawn = false;
+    showNewBadge = false;
+    newBadgeTimer = 0.0;
   }
 
   @override
   void update(double dt) {
     if (isLastDiscard) {
-      _pulseTimer += dt;
+      pulseTimer += dt;
     } else {
-      _pulseTimer = 0.0;
+      pulseTimer = 0.0;
+    }
+    if (showNewBadge) {
+      newBadgeTimer += dt;
+    }
+  }
+
+  static int _cardColorGroup(String char) {
+    if (char == '上' || char == '大' || char == '人') return 0; // 红色
+    if (char == '化' ||
+        char == '三' ||
+        char == '千' ||
+        char == '七' ||
+        char == '十' ||
+        char == '土')
+      return 1; // 绿色
+    return 2; // 黑色
+  }
+
+  /// 获取卡牌颜色组的边框色
+  static Color _cardBorderColor(String char) {
+    final group = _cardColorGroup(char);
+    switch (group) {
+      case 0:
+        return const Color(0xFFFF4444); // 红色边框
+      case 1:
+        return const Color(0xFF33BB33); // 绿色边框
+      default:
+        return const Color(0xFF666666); // 黑色边框
     }
   }
 
@@ -83,10 +115,10 @@ class CardRender extends PositionComponent {
   void render(Canvas canvas) {
     if (card == null || atlasImage == null || atlasLoader == null) return;
     canvas.save();
-    if (isSelected) canvas.translate(0, -20);
 
-    if (isLastDiscard) {
-      canvas.scale(pulseScale, pulseScale);
+    // 选中效果：上移
+    if (isSelected) {
+      canvas.translate(0, -20);
     }
 
     final paint = Paint()
@@ -108,6 +140,18 @@ class CardRender extends PositionComponent {
           paint,
         );
       }
+      // 绘制颜色边框区分红/绿/黑
+      final borderColor = _cardBorderColor(card!.character);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, width, height),
+          const Radius.circular(3),
+        ),
+        Paint()
+          ..color = borderColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      );
     } else {
       final info = atlasLoader!.getSprite('back');
       if (info != null) {
@@ -131,20 +175,6 @@ class CardRender extends PositionComponent {
           ..strokeWidth = 2;
         canvas.drawRect(Rect.fromLTWH(2, 2, width - 4, height - 4), paint);
       }
-    }
-
-    if (isLastDiscard) {
-      final borderPaint = Paint()
-        ..color = const Color(0xFFFFD700)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, width, height),
-          const Radius.circular(3),
-        ),
-        borderPaint,
-      );
     }
 
     if (showTingBadge) {

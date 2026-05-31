@@ -36,37 +36,35 @@ class TingChecker {
     final aSet = <Meld>[];
     final bSet = <Meld>[];
     final cSet = <Meld>[];
-    final dSet = <Meld>[];
-    final eSet = <Card>[];
+    final dSet = <Card>[];
 
     HuCalculator.extractJu(remaining, aSet);
-    HuCalculator.extractZhao(remaining, bSet);
-    HuCalculator.extractKan(remaining, cSet);
-    HuCalculator.extractDuiAndKao(remaining, dSet);
-    eSet.addAll(remaining);
+    HuCalculator.extractKan(remaining, bSet);
+    HuCalculator.extractDuiAndKao(remaining, cSet);
+    dSet.addAll(remaining);
 
-    if (dSet.isEmpty && eSet.length == 1) {
+    if (cSet.isEmpty && dSet.length == 1) {
       return _BasicTingResult(
         met: true,
         type: _BasicTingType.singleWait,
-        dSet: dSet,
-        eSet: eSet,
+        dSet: cSet,
+        eSet: dSet,
       );
     }
-    if (dSet.length == 2 && eSet.isEmpty) {
+    if (cSet.length == 2 && dSet.isEmpty) {
       return _BasicTingResult(
         met: true,
         type: _BasicTingType.pairWait,
-        dSet: dSet,
-        eSet: eSet,
+        dSet: cSet,
+        eSet: dSet,
       );
     }
 
     return _BasicTingResult(
       met: false,
       type: _BasicTingType.none,
-      dSet: dSet,
-      eSet: eSet,
+      dSet: cSet,
+      eSet: dSet,
     );
   }
 
@@ -260,19 +258,15 @@ class TingChecker {
     final aSet = <Meld>[];
     final bSet = <Meld>[];
     final cSet = <Meld>[];
-    final dSet = <Meld>[];
-    final eSet = <Card>[];
+    final dSet = <Card>[];
 
     HuCalculator.extractJu(remaining, aSet);
-    HuCalculator.extractZhao(remaining, bSet);
-    HuCalculator.extractKan(remaining, cSet);
-    HuCalculator.extractDuiAndKao(remaining, dSet);
-    eSet.addAll(remaining);
+    HuCalculator.extractKan(remaining, bSet);
+    HuCalculator.extractDuiAndKao(remaining, cSet);
+    dSet.addAll(remaining);
 
     bool structuralOk = false;
-    if (eSet.isEmpty && dSet.isEmpty) structuralOk = true;
-    if (dSet.isEmpty && eSet.length == 1) structuralOk = true;
-    if (dSet.length == 1 && eSet.isEmpty) structuralOk = true;
+    if (cSet.length == 1 && dSet.isEmpty) structuralOk = true;
 
     final pairCount = _countPairs(hand);
     if (pairCount >= 10) structuralOk = true;
