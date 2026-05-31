@@ -281,6 +281,7 @@ class GameController {
 
     if (player.type == PlayerType.ai) {
       state.isMyTurn = false;
+      startCountdown();
       final delay = 800 + _rng.nextInt(500);
       Future.delayed(Duration(milliseconds: delay), () {
         if (_isPaused || !state.gameStarted) return;
