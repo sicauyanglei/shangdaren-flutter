@@ -256,6 +256,63 @@ class HuCalculator {
     }
   }
 
+  static void extractKaoFirst(List<Card> remaining, List<Meld> out) {
+    final bySentence = <int, List<Card>>{};
+    for (final card in remaining) {
+      bySentence.putIfAbsent(card.sentence, () => []).add(card);
+    }
+
+    for (var s = 1; s <= 8; s++) {
+      final cards = bySentence[s];
+      if (cards == null || cards.length < 2) continue;
+
+      final byPos = <int, Card>{};
+      for (final c in cards) {
+        byPos[c.position] = c;
+      }
+
+      final positions = byPos.keys.toList()..sort();
+      for (var i = 0; i < positions.length - 1; i++) {
+        for (var j = i + 1; j < positions.length; j++) {
+          final p1 = positions[i];
+          final p2 = positions[j];
+          if (p1 == p2) continue;
+          final c1 = byPos[p1]!;
+          final c2 = byPos[p2]!;
+          final hasJing = c1.isJing || c2.isJing;
+          out.add(Meld(cards: [c1, c2], type: MeldType.kao, isJing: hasJing));
+          remaining.remove(c1);
+          remaining.remove(c2);
+          extractKaoFirst(remaining, out);
+          return;
+        }
+      }
+    }
+
+    final byChar = <String, List<Card>>{};
+    for (final card in remaining) {
+      byChar.putIfAbsent(card.character, () => []).add(card);
+    }
+
+    for (final entry in byChar.entries) {
+      if (entry.value.length >= 2) {
+        final duiCards = entry.value.sublist(0, 2);
+        out.add(
+          Meld(
+            cards: duiCards,
+            type: MeldType.dui,
+            isJing: duiCards.first.isJing,
+          ),
+        );
+        for (final c in duiCards) {
+          remaining.remove(c);
+        }
+        extractKaoFirst(remaining, out);
+        return;
+      }
+    }
+  }
+
   static int _singleHu(Card card) {
     if (card.isJing) return 4;
     if (isYinChar(card.character)) return 0;

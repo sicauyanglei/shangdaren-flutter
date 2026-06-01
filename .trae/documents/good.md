@@ -1,12 +1,5 @@
 # AI策略改进计划
 
-## 当前架构
-
-- **简单模式** `ai_strategy_simple.dart`：基于简单规则的贪心策略
-- **困难模式** `ai_strategy_hard.dart`：包含深度评估、2步前瞻、防守意识的综合策略
-
----
-
 ## 一、出牌策略（selectDiscard）
 
 ### 当前实现
