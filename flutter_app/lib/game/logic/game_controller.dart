@@ -80,7 +80,7 @@ class GameController {
       Player(id: 1, name: '我', type: PlayerType.human),
       Player(id: 2, name: '玩家2', type: PlayerType.ai),
     ]);
-    state.dealerIndex = 0;
+    state.dealerIndex = Random().nextInt(3);
     state.roundNumber = 0;
     state.gameStarted = true;
     print('=== calling startRound ===');
@@ -1033,8 +1033,8 @@ class GameController {
       'dianpaoIndex': dianpaoIndex,
     });
 
-    if (!isZimo && dianpaoIndex != null && winnerIndex != state.dealerIndex) {
-      state.dealerIndex = winnerIndex;
+    if (winnerIndex != state.dealerIndex) {
+      state.dealerIndex = (state.dealerIndex + 1) % 3;
     }
 
     state.isHandlingHu = false;
