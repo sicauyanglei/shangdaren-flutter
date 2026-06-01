@@ -51,7 +51,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
               left: 40,
               top: 25,
               right: 40,
-              bottom: 60,
+              bottom: 20,
             ),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
