@@ -99,6 +99,7 @@ class GameBoard extends Component {
   Card? huZimoCard;
   Map<int, int> huScoreChanges = {};
   List<String> _playerNames = [];
+  bool meldAnimInProgress = false;
 
   Rect _huPanelCloseBtnRect = Rect.zero;
   Rect _huPanelRect = Rect.zero;
@@ -178,14 +179,23 @@ class GameBoard extends Component {
       _player0Discards,
       _player1Discards,
       _player2Discards,
-      _player0Melds,
-      _player1Melds,
-      _player2Melds,
     ]) {
       for (final cr in list) {
         CardRender.pool.release(cr);
       }
       list.clear();
+    }
+    if (!meldAnimInProgress) {
+      for (final list in [
+        _player0Melds,
+        _player1Melds,
+        _player2Melds,
+      ]) {
+        for (final cr in list) {
+          CardRender.pool.release(cr);
+        }
+        list.clear();
+      }
     }
     deckCount = 0;
     _player0HandHeight = 0;
@@ -300,9 +310,15 @@ class GameBoard extends Component {
 
   void addMeld(int playerIndex, Meld meld) {
     final meldList = _meldList(playerIndex);
+    int maxGroupId = -1;
+    for (final cr in meldList) {
+      if (cr.meldGroupId > maxGroupId) maxGroupId = cr.meldGroupId;
+    }
+    final groupId = maxGroupId + 1;
     for (final card in meld.cards) {
       final cr = acquireCardRender(card, faceUp: true);
       cr.isMeldCard = true;
+      cr.meldGroupId = groupId;
       meldList.add(cr);
     }
     lastPlayedCard = null;
@@ -497,6 +513,7 @@ class GameBoard extends Component {
   }
 
   void setPlayerMelds(int playerIndex, List<Meld> melds) {
+    if (meldAnimInProgress) return;
     final meldList = _meldList(playerIndex);
     for (final cr in meldList) {
       CardRender.pool.release(cr);
@@ -1287,40 +1304,6 @@ class GameBoard extends Component {
       }
     }
 
-    if (showHuDisplay && huWinnerIndex == 1 && huMethod == '自摸') {
-      final label = '自摸';
-      final labelColor = const Color(0xFFffd700);
-      final bgPaint = Paint()..color = const Color(0xCC000000);
-      final bgW = hCardW * 0.6;
-      final bgH = hCardH * 0.7;
-      final bgX = (hCardW - bgW) / 2;
-      final bgY = (hCardH - bgH) / 2;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(bgX, bgY, bgW, bgH),
-          const Radius.circular(6),
-        ),
-        bgPaint,
-      );
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            fontSize: 18.0,
-            fontWeight: FontWeight.bold,
-            color: labelColor,
-            shadows: [Shadow(color: const Color(0xFF000000), blurRadius: 4)],
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      tp.layout();
-      tp.paint(
-        canvas,
-        Offset(hCardW / 2 - tp.width / 2, hCardH / 2 - tp.height / 2),
-      );
-    }
-
     canvas.restore();
   }
 
@@ -1656,6 +1639,14 @@ class GameBoard extends Component {
         highlightCard = huDianpaoCard;
         highlightLabel = '炮';
       } else if (huMethod == '自摸' && huZimoCard != null) {
+        if (!cards.any((c) => c.id == huZimoCard!.id)) {
+          cards.add(huZimoCard!);
+          cards.sort((a, b) {
+            if (a.sentence != b.sentence)
+              return a.sentence.compareTo(b.sentence);
+            return a.position.compareTo(b.position);
+          });
+        }
         highlightCard = huZimoCard;
         highlightLabel = '自摸';
       }

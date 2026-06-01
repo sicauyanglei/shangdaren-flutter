@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flame/camera.dart';
 import 'package:flame/extensions.dart';
 import 'package:flame/src/effects/provider_interfaces.dart';

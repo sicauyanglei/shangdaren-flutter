@@ -623,6 +623,8 @@ class ShangdarenGame extends FlameGame {
   void _onMeldAnimation(List<Card> cards, int playerId, String meldType) {
     if (_animationSystem == null || _gameBoard == null) return;
 
+    _gameBoard!.meldAnimInProgress = true;
+
     if (playerId == 1) {
       _gameBoard!.setTingBadge(1, false);
     }
@@ -656,6 +658,24 @@ class ShangdarenGame extends FlameGame {
         : MeldType.kan;
     final isJing = cards.any((c) => c.isJing);
     final meld = Meld(cards: cards, type: meldTypeEnum, isJing: isJing);
+
+    if (meldType == 'zhao') {
+      final firstChar = cards.first.character;
+      final meldList = _gameBoard!.getPlayerMelds(playerId);
+      final existingKanCards = <CardRender>[];
+      for (final cr in meldList) {
+        if (cr.card != null && cr.card!.character == firstChar) {
+          existingKanCards.add(cr);
+        }
+      }
+      if (existingKanCards.length == 3) {
+        for (final cr in existingKanCards) {
+          meldList.remove(cr);
+          CardRender.pool.release(cr);
+        }
+      }
+    }
+
     _gameBoard!.addMeld(playerId, meld);
 
     final meldList = _gameBoard!.getPlayerMelds(playerId);
@@ -684,9 +704,9 @@ class ShangdarenGame extends FlameGame {
       meldPositions: meldPositions,
       meldScales: meldScales,
       onComplete: () {
-        for (int i = 0; i < savedPositions.length; i++) {
-          final cr = meldList[startIdx + i];
-          cr.position.setFrom(savedPositions[i]);
+        _gameBoard?.meldAnimInProgress = false;
+        if (_gameController != null && _gameBoard != null) {
+          _syncBoard();
         }
       },
     );
