@@ -476,3 +476,179 @@ class HandIndex {
 | 前瞻剪枝 (28) | 504次→100次 (5x减少) |
 | 阶段合并 (29) | 构造次数减半 |
 | **综合预期** | **整体加速 20-50x** |
+
+---
+
+## 十、渲染性能优化
+
+### 改进项
+
+#### 34. HuOverlay 每帧重建 RadialGradient 导致过度重绘 ⭐⭐⭐
+
+**文件**: `hu_overlay.dart:112-133`
+
+**问题**: `AnimatedBuilder` 每0.3秒触发一次重建，创建新的 `RadialGradient` 和 `Container`，即使 opacity 变化极小也会触发完整重绘。3秒循环的脉冲动画在胡牌面板显示期间持续运行。
+
+**方案**: 改用 `CustomPainter` + `RepaintBoundary`，只重绘发光层而非整个面板。或降低动画频率（如1秒周期），在面板关闭时停止动画。
+
+#### 35. GameBoard.updateLayout 每次操作全量重排9个区域 ⭐⭐⭐
+
+**文件**: `game_board.dart:554-564`
+
+**问题**: `updateLayout()` 每次调用都重排3个手牌+3个组合牌+3个弃牌共9个区域。一次出牌操作会触发 `setPlayerHand` + `addDiscard` = 2次全量重排，碰/吃操作更频繁。
+
+**方案**: 增量布局：只重排变化的区域。传入 `dirtyFlags` 标记哪些区域需要重排，未变化区域跳过。例如出牌只影响自己手牌+弃牌区。
+
+#### 36. _groupHandBySentence / _groupStackByChar 每次布局都重新分组 ⭐⭐
+
+**文件**: `game_board.dart:566-591`
+
+**问题**: `_groupHandBySentence` 和 `_groupStackByChar` 每次布局调用都遍历手牌构建分组Map，在 `updateLayout` 中被多次调用。
+
+**方案**: 缓存分组结果，只在手牌变化时（`setPlayerHand`/`addCardToHand`/`removeCardFromHand`）重新计算。布局时直接使用缓存的分组。
+
+#### 37. HuOverlay 手牌显示每次 build 都重新排序和分组 ⭐⭐
+
+**文件**: `hu_overlay.dart:332-369`
+
+**问题**: `_buildHandDisplay` 每次 `build` 都对 `winnerHand` 排序+分组+重排胡牌卡牌位置，产生大量临时列表。
+
+**方案**: 在 `initState` 中预处理手牌排序和分组，`build` 时直接使用缓存结果。胡牌面板是 `StatefulWidget`，数据不会在显示期间变化。
+
+---
+
+## 十一、布局精度优化
+
+### 改进项
+
+#### 38. AI手牌非胡牌时 position 设为 (-9999,-9999) 浪费渲染 ⭐⭐⭐
+
+**文件**: `game_board.dart:652-654, 678-680`
+
+**问题**: AI手牌非胡牌显示时将 position 设为 `(-9999, -9999)`，CardRender 仍然在 `update` 和 `render` 中被处理，只是画在屏幕外。
+
+**方案**: 增加 `visible` 标志位，`render` 和 `update` 中检查 `visible`，不可见时直接跳过。或从 `children` 中移除不可见的 CardRender。
+
+#### 39. 玩家1手牌布局 startY 计算可能导致手牌溢出屏幕 ⭐⭐
+
+**文件**: `game_board.dart:593-629`
+
+**问题**: `startY = designHeight - totalH + 60`，当手牌很多（多组多叠放）时，`totalH` 可能很大，导致 `startY` 过小，手牌顶部超出设计区域，与操作按钮或头像区域重叠。
+
+**方案**: 增加 `startY` 的下限保护：确保手牌不与操作按钮区域重叠。计算操作按钮的顶部Y坐标，作为 `startY` 的最小值。
+
+#### 40. 玩家2组合牌区域从右往左排列，换行逻辑未对齐右边缘 ⭐⭐
+
+**文件**: `game_board.dart - _layoutPlayer2Melds / _layoutPlayer2Discards`
+
+**问题**: 规则要求"玩家2组牌区域按照组从右往左方向增加"且"弃牌区域右边缘与组合牌区域右边缘对齐"。当前 `_layoutPlayer2Melds` 的换行逻辑需要确认是否正确实现了右对齐和从右往左排列。
+
+**方案**: 审查玩家2组合牌和弃牌的布局逻辑，确保：1) 组合牌从右往左增长；2) 换行后新行也从右边缘开始；3) 弃牌右边缘与组合牌右边缘对齐。
+
+---
+
+## 十二、动画体验优化
+
+### 改进项
+
+#### 41. _CountdownTimer 动画持续运行即使用户不在倒计时状态 ⭐⭐
+
+**文件**: `game_overlay.dart:1067-1186`
+
+**问题**: `_CountdownTimer` 的 `AnimationController` 以800ms周期无限循环 `..repeat()`，即使 `countdown=0` 或非警告状态也在持续动画，浪费GPU资源。
+
+**方案**: 只在 `countdown <= 5`（警告状态）时启动动画循环，非警告状态使用静态显示。在 `didUpdateWidget` 中根据 `countdown` 值控制动画启停。
+
+#### 42. 缺少出牌/摸牌的过渡动画，卡牌瞬间出现/消失 ⭐⭐
+
+**文件**: `game_board.dart:253-263, animation_system.dart`
+
+**问题**: `FlyingCard` 动画系统已实现，但 `game_board.dart` 中 `setPlayerHand`/`addDiscard` 等方法直接设置位置，没有与动画系统联动。卡牌从手牌到弃牌区的移动是瞬间的。
+
+**方案**: 在 `addDiscard` 时，先创建 `FlyingCard` 动画（从手牌位置飞到弃牌区位置），动画完成后再更新 `CardRender` 位置。同理，摸牌时从牌堆位置飞到手牌位置。
+
+#### 43. 分数飞动动画缺少缓动效果，视觉不够流畅 ⭐
+
+**文件**: `shangdaren_game.dart - 分数飞动动画部分`
+
+**问题**: 规则8要求"分数飞动动画时长1.5秒"，但当前飞动动画可能使用线性插值，缺乏缓入缓出效果，视觉上显得生硬。
+
+**方案**: 使用 `Curves.easeInOutCubic` 或 `Curves.fastOutSlowIn` 缓动曲线，让分数飞动先加速后减速，更自然。
+
+---
+
+## 十三、交互体验优化
+
+### 改进项
+
+#### 44. 手牌 hitTest 只检测最上面的牌，叠放时缺少视觉提示 ⭐⭐⭐
+
+**文件**: `game_board.dart:330-351`
+
+**问题**: `hitTestHand` 对叠放的牌只返回最上面（最后一张）的牌。当同字有3-4张叠放时，用户无法直观看到叠放数量。
+
+**方案**: 当前规则下出牌总是出最上面一张，hitTest 逻辑正确。但可以增加视觉提示：点击叠放区域时，短暂展开叠放的牌让用户看到数量，然后收回。
+
+#### 45. HuOverlay / LiujuOverlay / SettlementScreen 拖拽关闭体验不一致 ⭐⭐
+
+**文件**: `hu_overlay.dart, liuju_overlay.dart, settlement_screen.dart`
+
+**问题**: 三个面板都实现了垂直拖拽关闭，但：1) `HuOverlay` 有两层 GestureDetector（背景层+内容层），拖拽时可能误触背景层关闭；2) 拖拽阈值100px，但没有视觉反馈告诉用户可以拖拽关闭。
+
+**方案**: 1) 统一拖拽关闭行为，增加拖拽时的透明度渐变反馈；2) 在面板顶部增加拖拽指示条（小横条），暗示可拖拽关闭；3) 确保内容层拖拽不会穿透到背景层。
+
+#### 46. 出牌操作缺少确认机制，误触容易出错 ⭐⭐
+
+**文件**: `shangdaren_game.dart - handleDragEnd / tap处理`
+
+**问题**: 当前出牌是点击即出，没有二次确认。在听牌状态下，误触出牌可能导致错失胡牌机会。特别是手牌区域较大，容易误触。
+
+**方案**: 听牌状态下，出牌前增加确认提示（如"确定出这张牌？将失去听牌状态"）。或采用"先选中再确认"的两步操作：第一次点击选中，第二次点击确认出牌。
+
+#### 47. AI玩家操作时人类玩家无法区分"等待中"和"可操作" ⭐
+
+**文件**: `game_overlay.dart`
+
+**问题**: AI玩家思考/操作期间，人类玩家看到的是静态界面，无法区分"AI正在操作"和"轮到我了但没什么可做"。缺少"等待对手操作"的视觉提示。
+
+**方案**: 在AI操作期间显示"等待中..."提示，或在当前出牌玩家头像旁显示思考动画（如旋转的圆圈）。让人类玩家知道游戏正在进行中。
+
+---
+
+## 十四、视觉细节优化
+
+### 改进项
+
+#### 48. withOpacity 每次调用创建新 Color 对象，高频 build 中应缓存 ⭐⭐
+
+**文件**: `game_overlay.dart, hu_overlay.dart, liuju_overlay.dart`
+
+**问题**: 大量使用 `Colors.black.withOpacity(0.5)`、`Color(0xFFffd700).withOpacity(0.7)` 等，每次 `build` 都创建新的 Color 对象。Flutter 的 `withOpacity` 会分配新对象，在频繁 rebuild 的 Widget 中造成GC压力。
+
+**方案**: 将常用颜色定义为 `static const`，避免每次 build 重新创建：
+```dart
+static const _black50 = Color(0x80000000);
+static const _gold70 = Color(0xB3ffd700);
+```
+
+---
+
+## 界面优化优先级排序
+
+| 优先级 | 编号 | 改进项 | 类别 | 预期收益 |
+|-------|------|--------|------|---------|
+| P0 | 34 | HuOverlay 过度重绘 | 渲染性能 | 减少30%+GPU开销 |
+| P0 | 35 | updateLayout 全量重排 | 渲染性能 | 减少50%+布局计算 |
+| P0 | 38 | AI手牌不可见仍渲染 | 布局+性能 | 减少20%+渲染量 |
+| P0 | 44 | 叠放手牌交互提示 | 交互体验 | 提升操作信心 |
+| P1 | 36 | 手牌分组缓存 | 渲染性能 | 减少重复计算 |
+| P1 | 37 | HuOverlay手牌预处理 | 渲染性能 | 减少build开销 |
+| P1 | 39 | 手牌溢出保护 | 布局精度 | 避免UI重叠 |
+| P1 | 40 | 玩家2布局方向验证 | 布局精度 | 符合设计规范 |
+| P1 | 41 | 倒计时动画优化 | 动画+性能 | 减少无效动画 |
+| P1 | 42 | 出牌/摸牌飞行动画 | 动画体验 | 提升游戏感 |
+| P1 | 45 | 面板关闭体验统一 | 交互体验 | 一致性提升 |
+| P1 | 46 | 听牌出牌确认机制 | 交互体验 | 防止误操作 |
+| P1 | 48 | withOpacity颜色缓存 | 渲染性能 | 减少GC压力 |
+| P2 | 43 | 分数飞动缓动效果 | 动画体验 | 视觉流畅度 |
+| P2 | 47 | AI操作等待提示 | 交互体验 | 减少困惑 |
