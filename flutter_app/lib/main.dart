@@ -113,7 +113,9 @@ class _GameHomePageState extends State<GameHomePage>
     if (appState == AppLifecycleState.paused) {
       _game.pauseGame();
     } else if (appState == AppLifecycleState.resumed) {
-      _game.resumeGame();
+      if (!_showSettlement) {
+        _game.resumeGame();
+      }
     }
   }
 
