@@ -325,7 +325,7 @@ class GameController {
         _skipDraw = false;
         state.isMyTurn = true;
         state.isDrawing = false;
-        _checkMyActionsAfterDraw();
+        _checkMyActionsAfterDraw(skipZimoCheck: true);
         onStateChanged?.call();
         startCountdown();
       } else if (!_hasDealerPlayedFirstTurn &&
@@ -333,7 +333,13 @@ class GameController {
         _hasDealerPlayedFirstTurn = true;
         state.isMyTurn = true;
         state.isDrawing = false;
-        _checkMyActionsAfterDraw();
+        _checkMyActionsAfterDraw(skipZimoCheck: true);
+        onStateChanged?.call();
+        startCountdown();
+      } else if (_getTotalCardCount(state.players[1]) >= 20) {
+        state.isMyTurn = true;
+        state.isDrawing = false;
+        _checkMyActionsAfterDraw(skipZimoCheck: true);
         onStateChanged?.call();
         startCountdown();
       } else {
@@ -391,9 +397,9 @@ class GameController {
     startCountdown();
   }
 
-  void _checkMyActionsAfterDraw() {
+  void _checkMyActionsAfterDraw({bool skipZimoCheck = false}) {
     final player = state.players[1];
-    state.canHu = _canZimo(player);
+    state.canHu = !skipZimoCheck && _canZimo(player);
     state.isZimoOpportunity = state.canHu;
     state.canZhao = _canZhaoAfterDraw(player) && !state.canHu;
   }
@@ -408,14 +414,19 @@ class GameController {
 
     if (_skipDraw) {
       _skipDraw = false;
-      _aiContinueAfterDraw(player);
+      _aiContinueAfterDraw(player, skipZimoCheck: true);
       return;
     }
 
     if (!_hasDealerPlayedFirstTurn &&
         state.currentPlayerIndex == state.dealerIndex) {
       _hasDealerPlayedFirstTurn = true;
-      _aiContinueAfterDraw(player);
+      _aiContinueAfterDraw(player, skipZimoCheck: true);
+      return;
+    }
+
+    if (_getTotalCardCount(player) >= 20) {
+      _aiContinueAfterDraw(player, skipZimoCheck: true);
       return;
     }
 
@@ -470,18 +481,22 @@ class GameController {
     startCountdown();
   }
 
-  void _aiContinueAfterDraw(Player player, {Card? drawnCard}) {
+  void _aiContinueAfterDraw(
+    Player player, {
+    Card? drawnCard,
+    bool skipZimoCheck = false,
+  }) {
     if (player.hand.isEmpty) {
       _nextTurn();
       return;
     }
 
-    if (_canZimo(player)) {
+    if (!skipZimoCheck && _canZimo(player)) {
       _handleHu(player.id, isZimo: true, zimoCard: drawnCard);
       return;
     }
 
-    if (_canZhaoAfterDraw(player)) {
+    if (!skipZimoCheck && _canZhaoAfterDraw(player)) {
       final candidates = _getZhaoCandidates(player);
       bool shouldZhao = true;
       for (final ch in candidates) {
@@ -1503,6 +1518,9 @@ class GameController {
       state.canHu = false;
       state.currentPlayerIndex = playerIndex;
       _skipDraw = true;
+      final tingResult = TingChecker.checkTing(player);
+      player.isTing = tingResult.isTing;
+      player.tingCards = tingResult.tingCards;
       player.huCount = HuCalculator.calculateTotalHu(player);
       onStateChanged?.call();
       _pendingMeldAction = null;
@@ -1518,7 +1536,7 @@ class GameController {
         Future.delayed(Duration(milliseconds: delay), () {
           if (_isPaused || !state.gameStarted) return;
           if (_aiContinueVersion != version) return;
-          _aiContinueAfterDraw(player);
+          _aiContinueAfterDraw(player, skipZimoCheck: true);
         });
       }
     };
@@ -1574,6 +1592,9 @@ class GameController {
       state.canHu = false;
       state.currentPlayerIndex = playerIndex;
       _skipDraw = true;
+      final tingResult = TingChecker.checkTing(player);
+      player.isTing = tingResult.isTing;
+      player.tingCards = tingResult.tingCards;
       player.huCount = HuCalculator.calculateTotalHu(player);
       onStateChanged?.call();
       _pendingMeldAction = null;
@@ -1589,7 +1610,7 @@ class GameController {
         Future.delayed(Duration(milliseconds: delay), () {
           if (_isPaused || !state.gameStarted) return;
           if (_aiContinueVersion != version) return;
-          _aiContinueAfterDraw(player);
+          _aiContinueAfterDraw(player, skipZimoCheck: true);
         });
       }
     };
@@ -1619,7 +1640,12 @@ class GameController {
     return byChar.entries.where((e) => e.value == 4).map((e) => e.key).toList();
   }
 
+  int _getTotalCardCount(Player player) {
+    return player.hand.length + player.melds.length * 3;
+  }
+
   bool _canHuWith(Player player, Card card) {
+    if (_getTotalCardCount(player) >= 20) return false;
     final testHand = List<Card>.from(player.hand)..add(card);
     return HuCalculator.canHu(testHand, player.melds);
   }

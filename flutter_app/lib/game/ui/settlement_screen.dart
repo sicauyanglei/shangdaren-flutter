@@ -69,37 +69,33 @@ class _SettlementScreenState extends State<SettlementScreen> {
                 ),
               ],
             ),
-            child: Stack(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '游戏结算',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFffd700),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildTotalScores(),
-                            const SizedBox(height: 20),
-                            _buildRoundResults(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                const Text(
+                  '游戏结算',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFffd700),
+                  ),
                 ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
+                const SizedBox(height: 20),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 50),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTotalScores(),
+                        const SizedBox(height: 20),
+                        _buildRoundResults(),
+                      ],
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
                   child: Container(
                     width: 90,
                     height: 36,

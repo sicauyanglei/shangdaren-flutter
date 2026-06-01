@@ -85,7 +85,8 @@ class GameState {
 
   /// 获取某张牌的全局剩余张数（4 - 公开数量 - 玩家手牌数量）
   int remainingCount(String character, Player player) {
-    final visible = (publicCardCount[character] ?? 0) +
+    final visible =
+        (publicCardCount[character] ?? 0) +
         player.hand.where((c) => c.character == character).length;
     final rem = 4 - visible;
     return rem > 0 ? rem : 0;

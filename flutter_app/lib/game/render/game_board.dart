@@ -14,7 +14,7 @@ class GameBoard extends Component {
   static const double designHeight = 720.0;
 
   // 手牌尺寸 - 与H5版本CSS对应(2.5rem x 10.5rem)
-  static const double handCardW = 60.0;
+  static const double handCardW = 65.0;
   static const double handCardH = 224.0;
   static const double smallCardW = 28.0;
   static const double smallCardH = 48.0;
@@ -25,13 +25,13 @@ class GameBoard extends Component {
   static const double deckCardW = 160.0;
   static const double deckCardH = 40.0;
 
-  static const double handStackVisible = 64.0;
+  static const double handStackVisible = 68.0;
   static const double handSentenceGap = 2.0;
   static const double selectedOffsetY = 28.0;
 
-  static const double huAiHandCardW = 32.4;
-  static const double huAiHandCardH = 134.4;
-  static const double huAiHandStackVisible = 20.0;
+  static const double huAiHandCardW = 43.2;
+  static const double huAiHandCardH = 179.2;
+  static const double huAiHandStackVisible = 35.0;
   static const double huAiHandSentenceGap = 0.0;
 
   static const double leftMaxW = 340.0;
@@ -186,11 +186,7 @@ class GameBoard extends Component {
       list.clear();
     }
     if (!meldAnimInProgress) {
-      for (final list in [
-        _player0Melds,
-        _player1Melds,
-        _player2Melds,
-      ]) {
+      for (final list in [_player0Melds, _player1Melds, _player2Melds]) {
         for (final cr in list) {
           CardRender.pool.release(cr);
         }

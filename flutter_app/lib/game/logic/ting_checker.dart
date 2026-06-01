@@ -14,6 +14,10 @@ class TingChecker {
     final hand = List<Card>.from(player.hand);
     final melds = player.melds;
 
+    if (hand.length + melds.length * 3 >= 20) {
+      return TingResult(isTing: false, tingCards: []);
+    }
+
     final basicResult = _checkBasicTing(hand);
     if (!basicResult.met) return TingResult(isTing: false, tingCards: []);
 
