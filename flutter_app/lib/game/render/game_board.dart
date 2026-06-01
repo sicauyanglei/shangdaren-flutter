@@ -2473,7 +2473,7 @@ class GameBoard extends Component {
         ..strokeWidth = 2,
     );
 
-    final closeBtnSize = 44.0;
+    final closeBtnSize = 60.0;
     final closeBtnX = panelX + panelW - closeBtnSize - 8;
     final closeBtnY = panelY + 8;
     _huPanelRect = Rect.fromLTWH(panelX, panelY, panelW, panelH);
