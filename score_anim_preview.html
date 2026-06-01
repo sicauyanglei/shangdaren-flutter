@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分数加减动画效果选择</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #fff; font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+h1 { text-align: center; margin-bottom: 30px; font-size: 28px; color: #ffd700; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+.card { background: #16213e; border-radius: 16px; padding: 20px; border: 2px solid #333; cursor: pointer; transition: all 0.3s; }
+.card:hover { border-color: #ffd700; transform: translateY(-4px); box-shadow: 0 8px 24px rgba(255,215,0,0.2); }
+.card.selected { border-color: #ffd700; background: #1a2744; }
+.card h3 { color: #ffd700; margin-bottom: 8px; font-size: 18px; }
+.card p { color: #aaa; font-size: 14px; margin-bottom: 16px; line-height: 1.5; }
+.demo { position: relative; height: 120px; background: #0f0f23; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.demo-label { position: absolute; bottom: 8px; right: 12px; color: #4ecdc4; font-size: 20px; font-weight: bold; }
+.fly-score { position: absolute; font-size: 28px; font-weight: bold; }
+.btn-row { text-align: center; margin-top: 30px; }
+.btn { background: linear-gradient(135deg, #ffd700, #daa520); color: #1a1a2e; border: none; padding: 14px 40px; font-size: 18px; font-weight: bold; border-radius: 12px; cursor: pointer; }
+.btn:hover { transform: scale(1.05); }
+.replay-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.15); border: none; color: #fff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.replay-btn:hover { background: rgba(255,255,255,0.3); }
+</style>
+</head>
+<body>
+<h1>分数加减动画效果选择</h1>
+<div class="grid" id="grid"></div>
+<div class="btn-row">
+  <button class="btn" onclick="confirm()">确认选择</button>
+</div>
+<script>
+const effects = [
+  {
+    id: 1,
+    name: '效果1：飞入 + 弹跳缩放',
+    desc: '分数从面板飞到总分位置，到达后弹跳缩放3次，逐渐淡出。模拟"砸"到总分上的感觉。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => {
+        score.style.left = targetX + 'px';
+      });
+      setTimeout(() => {
+        score.style.transition = 'transform 0.15s ease-out';
+        score.style.transform = 'translateY(-50%) scale(1.5)';
+        setTimeout(() => { score.style.transform = 'translateY(-50%) scale(0.9)'; }, 150);
+        setTimeout(() => { score.style.transform = 'translateY(-50%) scale(1.3)'; }, 300);
+        setTimeout(() => { score.style.transform = 'translateY(-50%) scale(1)'; }, 450);
+        setTimeout(() => {
+          score.style.transition = 'opacity 0.5s';
+          score.style.opacity = '0';
+          label.style.transition = 'transform 0.3s';
+          label.style.transform = 'scale(1.3)';
+          label.style.color = '#ffd700';
+          setTimeout(() => { label.style.transform = 'scale(1)'; label.style.color = '#4ecdc4'; }, 300);
+        }, 700);
+      }, 1500);
+    }
+  },
+  {
+    id: 2,
+    name: '效果2：飞入 + 数字滚动',
+    desc: '分数飞到总分位置后，总分数字快速滚动到新值，类似老虎机效果。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => { score.style.left = targetX + 'px'; });
+      setTimeout(() => {
+        score.style.transition = 'opacity 0.3s';
+        score.style.opacity = '0';
+        const oldVal = 100, newVal = 130;
+        let cur = oldVal;
+        const step = Math.ceil((newVal - oldVal) / 10);
+        label.style.color = '#ffd700';
+        const iv = setInterval(() => {
+          cur += step;
+          if (cur >= newVal) { cur = newVal; clearInterval(iv); label.style.color = '#4ecdc4'; }
+          label.textContent = cur + '分';
+        }, 60);
+      }, 1500);
+    }
+  },
+  {
+    id: 3,
+    name: '效果3：飞入 + 闪光爆炸',
+    desc: '分数飞到总分位置后，产生金色闪光爆炸粒子效果，然后淡出。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => { score.style.left = targetX + 'px'; });
+      setTimeout(() => {
+        for (let i = 0; i < 12; i++) {
+          const p = document.createElement('div');
+          p.style.cssText = `position:absolute;width:6px;height:6px;border-radius:50%;background:#ffd700;left:${targetX+20}px;top:50%;`;
+          el.appendChild(p);
+          const angle = (i / 12) * Math.PI * 2;
+          const dist = 30 + Math.random() * 30;
+          p.style.transition = 'all 0.6s ease-out';
+          requestAnimationFrame(() => {
+            p.style.left = (targetX + 20 + Math.cos(angle) * dist) + 'px';
+            p.style.top = (50 + Math.sin(angle) * dist * 0.5) + '%';
+            p.style.opacity = '0';
+            p.style.transform = 'scale(0)';
+          });
+          setTimeout(() => p.remove(), 600);
+        }
+        score.style.transition = 'opacity 0.3s';
+        score.style.opacity = '0';
+        label.style.transition = 'transform 0.3s';
+        label.style.transform = 'scale(1.4)';
+        label.style.color = '#ffd700';
+        setTimeout(() => { label.style.transform = 'scale(1)'; label.style.color = '#4ecdc4'; }, 400);
+      }, 1500);
+    }
+  },
+  {
+    id: 4,
+    name: '效果4：飞入 + 波纹扩散',
+    desc: '分数飞到总分位置后，产生波纹圆环向外扩散，同时总分闪烁变色。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => { score.style.left = targetX + 'px'; });
+      setTimeout(() => {
+        for (let r = 0; r < 3; r++) {
+          const ring = document.createElement('div');
+          ring.style.cssText = `position:absolute;left:${targetX}px;top:50%;transform:translate(-50%,-50%);width:20px;height:20px;border:2px solid #ffd700;border-radius:50%;opacity:1;`;
+          el.appendChild(ring);
+          setTimeout(() => {
+            ring.style.transition = 'all 0.8s ease-out';
+            requestAnimationFrame(() => {
+              ring.style.width = '80px';
+              ring.style.height = '80px';
+              ring.style.opacity = '0';
+            });
+          }, r * 150);
+          setTimeout(() => ring.remove(), 800 + r * 150);
+        }
+        score.style.transition = 'opacity 0.3s';
+        score.style.opacity = '0';
+        label.style.transition = 'transform 0.2s';
+        label.style.transform = 'scale(1.3)';
+        label.style.color = '#ffd700';
+        setTimeout(() => { label.style.transform = 'scale(1)'; }, 200);
+        setTimeout(() => { label.style.transform = 'scale(1.15)'; label.style.color = '#ffd700'; }, 400);
+        setTimeout(() => { label.style.transform = 'scale(1)'; label.style.color = '#4ecdc4'; }, 600);
+      }, 1500);
+    }
+  },
+  {
+    id: 5,
+    name: '效果5：飞入 + 倒计时合并',
+    desc: '分数飞到总分位置后，+30和130两个数字同时显示，然后合并成160，有缩放弹跳效果。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => { score.style.left = targetX + 'px'; });
+      setTimeout(() => {
+        const merge = document.createElement('div');
+        merge.style.cssText = 'position:absolute;right:12px;bottom:8px;font-size:20px;font-weight:bold;color:#ffd700;';
+        merge.textContent = '130 + 30 = ?';
+        el.appendChild(merge);
+        setTimeout(() => {
+          merge.textContent = '= 160';
+          merge.style.fontSize = '24px';
+          merge.style.transition = 'transform 0.2s';
+          merge.style.transform = 'scale(1.3)';
+          setTimeout(() => { merge.style.transform = 'scale(1)'; }, 200);
+          setTimeout(() => {
+            merge.style.transition = 'opacity 0.4s';
+            merge.style.opacity = '0';
+            label.textContent = '160分';
+            label.style.color = '#ffd700';
+            label.style.transition = 'transform 0.2s';
+            label.style.transform = 'scale(1.2)';
+            setTimeout(() => { label.style.transform = 'scale(1)'; label.style.color = '#4ecdc4'; }, 300);
+          }, 600);
+        }, 500);
+        score.style.transition = 'opacity 0.3s';
+        score.style.opacity = '0';
+      }, 1500);
+    }
+  },
+  {
+    id: 6,
+    name: '效果6：飞入 + 震动反馈',
+    desc: '分数飞到总分位置后，总分标签产生左右震动效果，模拟受到冲击的感觉，同时变色。',
+    animate: (el, label) => {
+      const score = document.createElement('div');
+      score.className = 'fly-score';
+      score.textContent = '+30';
+      score.style.color = '#ffd700';
+      score.style.left = '10px';
+      score.style.top = '50%';
+      score.style.transform = 'translateY(-50%)';
+      score.style.transition = 'all 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      el.appendChild(score);
+      const targetX = el.offsetWidth - 80;
+      requestAnimationFrame(() => { score.style.left = targetX + 'px'; });
+      setTimeout(() => {
+        score.style.transition = 'opacity 0.3s';
+        score.style.opacity = '0';
+        label.style.color = '#ffd700';
+        const shakes = [4, -4, 3, -3, 2, -2, 1, -1, 0];
+        shakes.forEach((s, i) => {
+          setTimeout(() => { label.style.transform = `translateX(${s}px)`; }, i * 50);
+        });
+        setTimeout(() => {
+          label.style.transition = 'transform 0.3s';
+          label.style.transform = 'scale(1.2)';
+          setTimeout(() => { label.style.transform = 'scale(1)'; label.style.color = '#4ecdc4'; }, 300);
+        }, 450);
+      }, 1500);
+    }
+  }
+];
+
+let selected = null;
+const grid = document.getElementById('grid');
+
+effects.forEach(eff => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h3>${eff.name}</h3>
+    <p>${eff.desc}</p>
+    <div class="demo" id="demo-${eff.id}">
+      <button class="replay-btn" onclick="event.stopPropagation();replay(${eff.id})">↻</button>
+      <div class="demo-label" id="label-${eff.id}">130分</div>
+    </div>
+  `;
+  card.onclick = () => {
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selected = eff.id;
+  };
+  grid.appendChild(card);
+  setTimeout(() => replay(eff.id), 300 + eff.id * 200);
+});
+
+function replay(id) {
+  const demo = document.getElementById('demo-' + id);
+  const label = document.getElementById('label-' + id);
+  demo.querySelectorAll('.fly-score, div:not(.demo-label):not(.replay-btn)').forEach(e => e.remove());
+  label.textContent = '130分';
+  label.style.color = '#4ecdc4';
+  label.style.transform = '';
+  label.style.transition = '';
+  const eff = effects.find(e => e.id === id);
+  eff.animate(demo, label);
+}
+
+function confirm() {
+  if (!selected) { alert('请先选择一个效果'); return; }
+  const eff = effects.find(e => e.id === selected);
+  document.querySelectorAll('.card').forEach(c => {
+    const id = parseInt(c.querySelector('.demo').id.split('-')[1]);
+    if (id === selected) {
+      c.style.border = '3px solid #ffd700';
+      c.style.boxShadow = '0 0 20px rgba(255,215,0,0.4)';
+    } else {
+      c.style.opacity = '0.3';
+    }
+  });
+  alert('已选择: ' + eff.name);
+}
+</script>
+</body>
+</html>

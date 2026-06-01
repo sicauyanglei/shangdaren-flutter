@@ -1,0 +1,1 @@
+﻿05-25 05:49:33.126  2361  2361 D PhoneSwitcherNetworkRequstListener: got request NetworkRequest [ TRACK_DEFAULT id=969, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Unwanted:  Uid: 10045] ] with score 30

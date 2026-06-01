@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上大人字牌 - UI优化建议</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #fff; font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+h1 { text-align: center; color: #ffd700; font-size: 28px; margin-bottom: 30px; text-shadow: 0 0 20px rgba(255,215,0,0.3); }
+.section { margin-bottom: 40px; border: 1px solid #333; border-radius: 16px; overflow: hidden; }
+.section-header { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+.section-header h2 { color: #ffd700; font-size: 20px; }
+.section-header .tag { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+.tag-high { background: #ff6b6b; color: #fff; }
+.tag-medium { background: #ffd700; color: #333; }
+.tag-low { background: #4ecdc4; color: #333; }
+.section-body { padding: 24px; background: #111; }
+.compare { display: flex; gap: 20px; margin-bottom: 16px; }
+.compare > div { flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid #333; }
+.compare-label { padding: 8px 16px; font-size: 13px; font-weight: bold; text-align: center; }
+.label-before { background: #333; color: #aaa; }
+.label-after { background: #1a5c2e; color: #ffd700; }
+.compare-content { padding: 16px; min-height: 200px; display: flex; align-items: center; justify-content: center; }
+.desc { color: #aaa; font-size: 14px; line-height: 1.8; margin-bottom: 12px; padding: 12px 16px; background: #1a1a1a; border-radius: 8px; border-left: 3px solid #ffd700; }
+.vote { display: flex; gap: 12px; margin-top: 16px; }
+.vote-btn { padding: 10px 24px; border: 2px solid #444; border-radius: 8px; background: transparent; color: #fff; font-size: 14px; cursor: pointer; transition: all 0.3s; }
+.vote-btn:hover { border-color: #ffd700; color: #ffd700; }
+.vote-btn.selected { background: #ffd700; color: #333; border-color: #ffd700; font-weight: bold; }
+
+/* ===== 页面1: 开始页面 ===== */
+.start-before { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 30px; width: 100%; }
+.start-before .logo { width: 80px; height: 80px; background: #ffd700; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; color: #333; }
+.start-before .options { display: flex; gap: 20px; flex-wrap: wrap; }
+.start-before .opt-group { margin-top: 12px; }
+.start-before .opt-label { color: rgba(255,255,255,0.7); font-size: 12px; margin-bottom: 6px; }
+.start-before .opt-btns { display: flex; gap: 6px; }
+.start-before .opt-btn { padding: 6px 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff; font-size: 12px; background: rgba(255,255,255,0.1); }
+.start-before .opt-btn.active { background: linear-gradient(135deg, #4ecdc4, #3db8b0); border-color: #4ecdc4; }
+.start-before .start-btn { margin-top: 16px; padding: 10px 40px; background: linear-gradient(135deg, #4ecdc4, #3db8b0); border-radius: 20px; color: #fff; font-weight: bold; font-size: 16px; text-align: center; }
+
+.start-after { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 30px; width: 100%; }
+.start-after .logo-area { text-align: center; margin-bottom: 20px; }
+.start-after .logo { width: 100px; height: 100px; background: linear-gradient(135deg, #ffd700, #f0c000); border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 40px; font-weight: bold; color: #333; box-shadow: 0 0 30px rgba(255,215,0,0.4); }
+.start-after .game-title { color: #ffd700; font-size: 24px; font-weight: bold; margin-top: 10px; text-shadow: 0 0 15px rgba(255,215,0,0.5); }
+.start-after .subtitle { color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 4px; }
+.start-after .card-deco { display: flex; justify-content: center; gap: 8px; margin: 16px 0; }
+.start-after .mini-card { width: 32px; height: 48px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: #fff; }
+.start-after .mini-card.red { background: linear-gradient(135deg, #cc0000, #990000); }
+.start-after .mini-card.green { background: linear-gradient(135deg, #228822, #116611); }
+.start-after .mini-card.gold { background: linear-gradient(135deg, #cc8800, #996600); }
+.start-after .options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.start-after .opt-group { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,215,0,0.15); }
+.start-after .opt-label { color: #ffd700; font-size: 13px; margin-bottom: 8px; font-weight: bold; }
+.start-after .opt-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.start-after .opt-btn { padding: 8px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: rgba(255,255,255,0.7); font-size: 13px; background: rgba(255,255,255,0.05); transition: all 0.2s; }
+.start-after .opt-btn.active { background: linear-gradient(135deg, #ffd700, #f0c000); border-color: #ffd700; color: #333; font-weight: bold; box-shadow: 0 0 10px rgba(255,215,0,0.3); }
+.start-after .start-btn { margin-top: 20px; padding: 14px 48px; background: linear-gradient(135deg, #ffd700, #f0c000); border-radius: 30px; color: #333; font-weight: bold; font-size: 18px; text-align: center; box-shadow: 0 4px 20px rgba(255,215,0,0.4); letter-spacing: 4px; }
+
+/* ===== 页面2: 胡牌面板 ===== */
+.hu-before { background: rgba(0,0,0,0.8); padding: 20px; width: 100%; border-radius: 8px; }
+.hu-before .hu-title { color: #ffd700; font-size: 18px; text-align: center; margin-bottom: 10px; }
+.hu-before .hu-tags { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+.hu-before .hu-tag { padding: 3px 8px; border-radius: 8px; font-size: 10px; }
+.hu-before .hu-score { text-align: center; font-size: 28px; color: #ffd700; font-weight: bold; margin-bottom: 10px; }
+.hu-before .hu-cards { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+.hu-before .hu-card { width: 24px; height: 50px; background: #228822; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+.hu-before .hu-losers { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+.hu-before .hu-loser { font-size: 11px; color: #ff6b6b; }
+.hu-before .hu-btn { text-align: center; padding: 6px 30px; background: linear-gradient(135deg, #ffd700, #f0c000); border-radius: 16px; color: #333; font-weight: bold; font-size: 12px; display: inline-block; }
+
+.hu-after { background: rgba(0,0,0,0.8); padding: 20px; width: 100%; border-radius: 8px; border: 2px solid rgba(255,215,0,0.3); position: relative; }
+.hu-after::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,215,0,0.08) 0%, transparent 60%); pointer-events: none; }
+.hu-after .hu-title { color: #ffd700; font-size: 20px; text-align: center; margin-bottom: 12px; text-shadow: 0 0 15px rgba(255,215,0,0.5); }
+.hu-after .hu-type-badge { display: inline-block; padding: 4px 14px; background: linear-gradient(135deg, #4ecdc4, #3db8b0); border-radius: 12px; color: #fff; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
+.hu-after .hu-info-row { display: flex; justify-content: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.hu-after .hu-info-item { background: rgba(0,0,0,0.4); padding: 4px 10px; border-radius: 6px; font-size: 11px; }
+.hu-after .hu-info-item .val { color: #ffd700; font-weight: bold; }
+.hu-after .hu-score { text-align: center; margin-bottom: 12px; }
+.hu-after .hu-score .num { font-size: 36px; color: #ffd700; font-weight: bold; text-shadow: 0 0 20px rgba(255,215,0,0.5); }
+.hu-after .hu-score .unit { font-size: 14px; color: rgba(255,215,0,0.7); }
+.hu-after .hu-cards { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+.hu-after .hu-card { width: 28px; height: 56px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; font-weight: bold; }
+.hu-after .hu-card.red { background: linear-gradient(135deg, #cc0000, #990000); }
+.hu-after .hu-card.green { background: linear-gradient(135deg, #228822, #116611); }
+.hu-after .hu-card.hu-highlight { box-shadow: 0 0 10px rgba(255,215,0,0.6); border: 2px solid #ffd700; }
+.hu-after .hu-losers { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.hu-after .hu-loser { background: rgba(255,107,107,0.15); padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #ff6b6b; }
+.hu-after .hu-loser .name { color: #aaa; }
+.hu-after .hu-loser .score { color: #ff6b6b; font-weight: bold; }
+.hu-after .hu-btn { text-align: center; padding: 8px 36px; background: linear-gradient(135deg, #ffd700, #f0c000); border-radius: 20px; color: #333; font-weight: bold; font-size: 13px; display: inline-block; box-shadow: 0 2px 10px rgba(255,215,0,0.3); }
+
+/* ===== 页面3: 流局面板 ===== */
+.liuju-before { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 24px; width: 100%; border: 2px solid #ffd700; border-radius: 12px; }
+.liuju-before .liuju-title { font-size: 48px; color: #ffd700; text-align: center; font-weight: bold; margin-bottom: 8px; }
+.liuju-before .liuju-sub { text-align: center; color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 16px; }
+.liuju-before .liuju-players { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; }
+.liuju-before .liuju-player { margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 6px; }
+.liuju-before .liuju-player-name { color: #ffd700; font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+.liuju-before .liuju-player-cards { display: flex; gap: 3px; flex-wrap: wrap; }
+.liuju-before .liuju-card { width: 28px; height: 40px; background: #228822; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+.liuju-before .liuju-btn { margin-top: 12px; padding: 10px 40px; background: #ffd700; border-radius: 16px; color: #333; font-weight: bold; font-size: 16px; text-align: center; }
+
+.liuju-after { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 24px; width: 100%; border: 2px solid #ffd700; border-radius: 12px; position: relative; overflow: hidden; }
+.liuju-after::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, transparent, #ffd700, transparent); }
+.liuju-after .liuju-title { font-size: 42px; color: #ffd700; text-align: center; font-weight: bold; text-shadow: 0 0 20px rgba(255,215,0,0.4); margin-bottom: 4px; }
+.liuju-after .liuju-sub { text-align: center; color: rgba(255,255,255,0.6); font-size: 16px; margin-bottom: 6px; }
+.liuju-after .liuju-rule { text-align: center; color: #4ecdc4; font-size: 13px; margin-bottom: 16px; padding: 6px 16px; background: rgba(78,205,196,0.1); border-radius: 20px; display: inline-block; width: 100%; }
+.liuju-after .liuju-players { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; }
+.liuju-after .liuju-player { margin-bottom: 8px; padding: 10px; background: rgba(255,255,255,0.08); border-radius: 8px; border-left: 3px solid #ffd700; }
+.liuju-after .liuju-player-name { color: #ffd700; font-size: 14px; font-weight: bold; margin-bottom: 6px; }
+.liuju-after .liuju-player-cards { display: flex; gap: 3px; flex-wrap: wrap; }
+.liuju-after .liuju-card { width: 28px; height: 40px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; font-weight: bold; }
+.liuju-after .liuju-card.red { background: linear-gradient(135deg, #cc0000, #990000); }
+.liuju-after .liuju-card.green { background: linear-gradient(135deg, #228822, #116611); }
+.liuju-after .liuju-btn { margin-top: 14px; padding: 12px 40px; background: linear-gradient(135deg, #ffd700, #f0c000); border-radius: 24px; color: #333; font-weight: bold; font-size: 16px; text-align: center; box-shadow: 0 2px 12px rgba(255,215,0,0.3); }
+
+/* ===== 页面4: 结算页面 ===== */
+.settle-before { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 20px; width: 100%; border: 3px solid #ffd700; border-radius: 16px; max-height: 300px; overflow-y: auto; }
+.settle-before .settle-title { color: #ffd700; font-size: 22px; text-align: center; margin-bottom: 12px; }
+.settle-before .settle-round { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #ffd700; }
+.settle-before .round-header { color: #ffd700; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+.settle-before .round-detail { font-size: 11px; color: #aaa; line-height: 1.6; }
+.settle-before .settle-total { background: rgba(255,215,0,0.1); padding: 14px; border-radius: 12px; border: 2px solid #ffd700; margin-top: 12px; }
+.settle-before .total-header { color: #ffd700; font-size: 18px; text-align: center; margin-bottom: 10px; }
+.settle-before .total-scores { display: flex; justify-content: space-around; }
+.settle-before .player-total { text-align: center; padding: 8px 16px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+.settle-before .player-total.winner { background: rgba(255,215,0,0.3); border: 2px solid #ffd700; }
+.settle-before .player-name { font-size: 12px; color: #fff; display: block; }
+.settle-before .player-score { font-size: 18px; font-weight: bold; color: #4ecdc4; display: block; }
+.settle-before .player-total.winner .player-score { color: #ffd700; }
+
+.settle-after { background: linear-gradient(135deg, #1a5c2e, #0d3018); padding: 20px; width: 100%; border: 3px solid #ffd700; border-radius: 16px; max-height: 300px; overflow-y: auto; }
+.settle-after .settle-title { color: #ffd700; font-size: 22px; text-align: center; margin-bottom: 16px; text-shadow: 0 0 15px rgba(255,215,0,0.3); }
+.settle-after .settle-total { background: rgba(255,215,0,0.1); padding: 16px; border-radius: 12px; border: 2px solid #ffd700; margin-bottom: 16px; }
+.settle-after .total-header { color: #ffd700; font-size: 20px; text-align: center; margin-bottom: 12px; }
+.settle-after .total-scores { display: flex; justify-content: space-around; gap: 10px; }
+.settle-after .player-total { text-align: center; padding: 12px 20px; background: rgba(0,0,0,0.3); border-radius: 10px; flex: 1; position: relative; }
+.settle-after .player-total.winner { background: linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,215,0,0.1)); border: 2px solid #ffd700; box-shadow: 0 0 15px rgba(255,215,0,0.2); }
+.settle-after .player-total.winner::after { content: '👑'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 16px; }
+.settle-after .player-rank { font-size: 10px; color: #4ecdc4; display: block; margin-bottom: 2px; }
+.settle-after .player-name { font-size: 13px; color: #fff; display: block; margin-bottom: 4px; }
+.settle-after .player-score { font-size: 22px; font-weight: bold; color: #4ecdc4; display: block; }
+.settle-after .player-total.winner .player-score { color: #ffd700; }
+.settle-after .winner-announce { text-align: center; color: #ffd700; font-size: 16px; font-weight: bold; margin-top: 10px; }
+.settle-after .settle-round { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-bottom: 6px; border-left: 3px solid #ffd700; }
+.settle-after .round-header { color: #ffd700; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+.settle-after .round-detail { font-size: 11px; color: #aaa; line-height: 1.6; }
+.settle-after .round-winner { color: #4ecdc4; font-weight: bold; }
+
+/* ===== 页面5: 设置页面 ===== */
+.settings-before { background: linear-gradient(135deg, #2d2d2d, #1a1a1a); padding: 20px; width: 100%; border-radius: 12px; max-width: 280px; }
+.settings-before .settings-title { color: #fff; font-size: 18px; text-align: center; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); margin-bottom: 16px; }
+.settings-before .settings-section { margin-bottom: 16px; }
+.settings-before .settings-label { color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 8px; }
+.settings-before .settings-slider { height: 8px; background: rgba(255,255,255,0.3); border-radius: 4px; position: relative; }
+.settings-before .settings-slider-fill { height: 100%; width: 70%; background: #ffd700; border-radius: 4px; }
+.settings-before .settings-slider-thumb { width: 16px; height: 16px; background: #ffd700; border-radius: 50%; position: absolute; top: -4px; left: 68%; }
+.settings-before .settings-volume { color: #ffd700; font-size: 14px; font-weight: bold; margin-left: 10px; }
+.settings-before .settings-radios { display: flex; gap: 12px; }
+.settings-before .settings-radio { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #fff; }
+.settings-before .settings-radio-dot { width: 14px; height: 14px; border: 2px solid #666; border-radius: 50%; }
+.settings-before .settings-radio-dot.active { border-color: #ffd700; }
+.settings-before .settings-radio-dot.active::after { content: ''; width: 8px; height: 8px; background: #ffd700; border-radius: 50%; display: block; margin: 1px; }
+.settings-before .exit-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #e74c3c, #c0392b); border-radius: 6px; color: #fff; font-size: 14px; text-align: center; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 20px; }
+
+.settings-after { background: linear-gradient(135deg, #2d2d2d, #1a1a1a); padding: 24px; width: 100%; border-radius: 16px; max-width: 320px; border: 1px solid rgba(255,215,0,0.2); }
+.settings-after .settings-title { color: #ffd700; font-size: 20px; text-align: center; padding-bottom: 14px; border-bottom: 1px solid rgba(255,215,0,0.2); margin-bottom: 20px; }
+.settings-after .settings-section { margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; }
+.settings-after .settings-label { color: #ffd700; font-size: 14px; margin-bottom: 10px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+.settings-after .settings-label .icon { font-size: 16px; }
+.settings-after .settings-slider-row { display: flex; align-items: center; gap: 10px; }
+.settings-after .settings-slider { flex: 1; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; position: relative; }
+.settings-after .settings-slider-fill { height: 100%; width: 70%; background: linear-gradient(90deg, #4ecdc4, #ffd700); border-radius: 3px; }
+.settings-after .settings-slider-thumb { width: 20px; height: 20px; background: #ffd700; border-radius: 50%; position: absolute; top: -7px; left: 68%; box-shadow: 0 0 8px rgba(255,215,0,0.4); }
+.settings-after .settings-volume { color: #ffd700; font-size: 16px; font-weight: bold; min-width: 40px; text-align: right; }
+.settings-after .settings-radios { display: flex; gap: 8px; }
+.settings-after .settings-radio { flex: 1; padding: 8px 4px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; font-size: 12px; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); transition: all 0.2s; }
+.settings-after .settings-radio.active { border-color: #ffd700; color: #ffd700; background: rgba(255,215,0,0.1); font-weight: bold; }
+.settings-after .exit-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #e74c3c, #c0392b); border-radius: 10px; color: #fff; font-size: 15px; text-align: center; margin-top: 20px; font-weight: bold; letter-spacing: 2px; box-shadow: 0 2px 8px rgba(231,76,60,0.3); }
+
+/* ===== 页面6: 飘分选择 ===== */
+.piao-before { background: rgba(0,0,0,0.7); padding: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+.piao-before .piao-title { color: #ffd700; font-size: 18px; margin-bottom: 12px; }
+.piao-before .piao-btns { display: flex; gap: 10px; }
+.piao-before .piao-btn { padding: 8px 20px; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; color: #fff; font-size: 14px; background: rgba(255,255,255,0.1); }
+.piao-before .piao-btn.active { background: #4ecdc4; border-color: #4ecdc4; }
+
+.piao-after { background: rgba(0,0,0,0.7); padding: 24px; width: 100%; display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255,215,0,0.2); border-radius: 12px; }
+.piao-after .piao-title { color: #ffd700; font-size: 20px; margin-bottom: 6px; text-shadow: 0 0 10px rgba(255,215,0,0.3); }
+.piao-after .piao-subtitle { color: rgba(255,255,255,0.5); font-size: 12px; margin-bottom: 16px; }
+.piao-after .piao-btns { display: flex; gap: 10px; }
+.piao-after .piao-btn { padding: 12px 24px; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; color: rgba(255,255,255,0.7); font-size: 16px; background: rgba(255,255,255,0.05); transition: all 0.2s; position: relative; }
+.piao-after .piao-btn.active { background: linear-gradient(135deg, #ff6b6b, #e74c3c); border-color: #ff6b6b; color: #fff; font-weight: bold; box-shadow: 0 0 15px rgba(255,107,107,0.3); }
+.piao-after .piao-btn .piao-val { font-size: 22px; font-weight: bold; display: block; }
+.piao-after .piao-btn .piao-label { font-size: 10px; display: block; margin-top: 2px; }
+.piao-after .piao-hint { color: rgba(255,255,255,0.4); font-size: 11px; margin-top: 12px; }
+
+.summary { background: #1a1a1a; padding: 20px; border-radius: 12px; margin-top: 30px; border: 1px solid #333; }
+.summary h3 { color: #ffd700; font-size: 18px; margin-bottom: 12px; }
+.summary table { width: 100%; border-collapse: collapse; }
+.summary th, .summary td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #333; font-size: 13px; }
+.summary th { color: #ffd700; }
+.summary td { color: #aaa; }
+.summary .priority-high { color: #ff6b6b; }
+.summary .priority-medium { color: #ffd700; }
+.summary .priority-low { color: #4ecdc4; }
+</style>
+</head>
+<body>
+
+<h1>🎮 上大人字牌 - UI优化建议</h1>
+
+<!-- 页面1: 开始页面 -->
+<div class="section">
+  <div class="section-header">
+    <h2>1. 开始页面</h2>
+    <span class="tag tag-medium">中优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>当前开始页面布局偏平，logo和选项横向排列不够突出。优化后：<br>
+      ① Logo居中放大，增加游戏标题和装饰性字牌<br>
+      ② 选项改为卡片式分组布局，选中态更醒目（金色高亮）<br>
+      ③ "开始游戏"按钮更突出，使用金色渐变+发光效果
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="start-before" style="display:flex;align-items:center;gap:20px;">
+            <div class="logo">上</div>
+            <div>
+              <div class="options">
+                <div class="opt-group">
+                  <div class="opt-label">底分:</div>
+                  <div class="opt-btns">
+                    <div class="opt-btn">5分</div>
+                    <div class="opt-btn active">10分</div>
+                    <div class="opt-btn">20分</div>
+                  </div>
+                </div>
+                <div class="opt-group">
+                  <div class="opt-label">倍数基数分:</div>
+                  <div class="opt-btns">
+                    <div class="opt-btn active">2分</div>
+                    <div class="opt-btn">5分</div>
+                    <div class="opt-btn">10分</div>
+                  </div>
+                </div>
+                <div class="opt-group">
+                  <div class="opt-label">游戏难度:</div>
+                  <div class="opt-btns">
+                    <div class="opt-btn">简单</div>
+                    <div class="opt-btn">中等</div>
+                    <div class="opt-btn active">困难</div>
+                  </div>
+                </div>
+                <div class="opt-group">
+                  <div class="opt-label">飘分设置:</div>
+                  <div class="opt-btns">
+                    <div class="opt-btn active">关闭</div>
+                    <div class="opt-btn">打开</div>
+                  </div>
+                </div>
+              </div>
+              <div class="start-btn">开始游戏</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="start-after">
+            <div class="logo-area">
+              <div class="logo">上</div>
+              <div class="game-title">上大人字牌</div>
+              <div class="subtitle">经典三人民间纸牌游戏</div>
+            </div>
+            <div class="card-deco">
+              <div class="mini-card red">上</div>
+              <div class="mini-card red">大</div>
+              <div class="mini-card red">人</div>
+              <div class="mini-card green">化</div>
+              <div class="mini-card green">三</div>
+              <div class="mini-card green">千</div>
+              <div class="mini-card gold">福</div>
+              <div class="mini-card gold">禄</div>
+              <div class="mini-card gold">寿</div>
+            </div>
+            <div class="options">
+              <div class="opt-group">
+                <div class="opt-label">底分</div>
+                <div class="opt-btns">
+                  <div class="opt-btn">5分</div>
+                  <div class="opt-btn active">10分</div>
+                  <div class="opt-btn">20分</div>
+                </div>
+              </div>
+              <div class="opt-group">
+                <div class="opt-label">倍数基数</div>
+                <div class="opt-btns">
+                  <div class="opt-btn active">2分</div>
+                  <div class="opt-btn">5分</div>
+                  <div class="opt-btn">10分</div>
+                </div>
+              </div>
+              <div class="opt-group">
+                <div class="opt-label">游戏难度</div>
+                <div class="opt-btns">
+                  <div class="opt-btn">简单</div>
+                  <div class="opt-btn">中等</div>
+                  <div class="opt-btn active">困难</div>
+                </div>
+              </div>
+              <div class="opt-group">
+                <div class="opt-label">飘分设置</div>
+                <div class="opt-btns">
+                  <div class="opt-btn active">关闭</div>
+                  <div class="opt-btn">打开</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align:center;">
+              <div class="start-btn">开始游戏</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'start', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'start', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页面2: 胡牌面板 -->
+<div class="section">
+  <div class="section-header">
+    <h2>2. 胡牌面板</h2>
+    <span class="tag tag-high">高优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>当前胡牌面板信息密集但层次不够分明。优化后：<br>
+      ① 胡牌类型用醒目徽章展示，信息分行排列更清晰<br>
+      ② 分数数字放大+发光效果，更突出<br>
+      ③ 手牌区域加背景区分，胡牌卡牌金色边框高亮<br>
+      ④ 输家分数用卡片式展示，更直观
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="hu-before">
+            <div class="hu-title">🎉 玩家1 胡牌!</div>
+            <div class="hu-tags">
+              <span class="hu-tag" style="background:rgba(255,255,255,0.15);color:#fff;">点炮</span>
+              <span class="hu-tag" style="background:rgba(78,205,196,0.2);color:#4ecdc4;">清枯胡</span>
+              <span class="hu-tag" style="background:rgba(255,215,0,0.2);color:#ffd700;">胡数: 14</span>
+              <span class="hu-tag" style="background:rgba(255,107,107,0.2);color:#ff6b6b;">3倍</span>
+            </div>
+            <div class="hu-score">+25 分</div>
+            <div class="hu-cards">
+              <div class="hu-card">上</div><div class="hu-card">大</div><div class="hu-card">人</div>
+              <div class="hu-card">化</div><div class="hu-card">三</div><div class="hu-card">千</div>
+              <div class="hu-card">七</div><div class="hu-card">十</div><div class="hu-card">土</div>
+            </div>
+            <div class="hu-losers">
+              <div class="hu-loser">我 输: 10分</div>
+              <div class="hu-loser">玩家2 输: 15分</div>
+            </div>
+            <div style="text-align:center;"><span class="hu-btn">确定</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="hu-after">
+            <div class="hu-title">🎉 玩家1 胡牌!</div>
+            <div style="text-align:center;margin-bottom:8px;"><span class="hu-type-badge">清枯胡</span></div>
+            <div class="hu-info-row">
+              <div class="hu-info-item">方式 <span class="val">点炮</span></div>
+              <div class="hu-info-item">胡数 <span class="val">14</span></div>
+              <div class="hu-info-item">倍数 <span class="val">3倍</span></div>
+            </div>
+            <div class="hu-score"><span class="num">+25</span> <span class="unit">分</span></div>
+            <div class="hu-cards">
+              <div class="hu-card red">上</div><div class="hu-card red">大</div><div class="hu-card red hu-highlight">人</div>
+              <div class="hu-card green">化</div><div class="hu-card green">三</div><div class="hu-card green">千</div>
+              <div class="hu-card green">七</div><div class="hu-card green">十</div><div class="hu-card green">土</div>
+            </div>
+            <div class="hu-losers">
+              <div class="hu-loser"><span class="name">我</span> <span class="score">-10分</span></div>
+              <div class="hu-loser"><span class="name">玩家2</span> <span class="score">-15分</span></div>
+            </div>
+            <div style="text-align:center;"><span class="hu-btn">确定</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'hu', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'hu', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页面3: 流局面板 -->
+<div class="section">
+  <div class="section-header">
+    <h2>3. 流局面板</h2>
+    <span class="tag tag-low">低优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>当前流局面板文字偏大、手牌颜色单一。优化后：<br>
+      ① 顶部增加金色渐变装饰线<br>
+      ② "庄家不变"规则用醒目的提示条展示<br>
+      ③ 手牌区分红/绿/金色，与游戏牌面一致<br>
+      ④ 玩家手牌区域增加左边框标识
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="liuju-before">
+            <div class="liuju-title">流局</div>
+            <div class="liuju-sub">牌堆已空，本局结束</div>
+            <div class="liuju-players">
+              <div class="liuju-player">
+                <div class="liuju-player-name">玩家1</div>
+                <div class="liuju-player-cards">
+                  <div class="liuju-card">上</div><div class="liuju-card">大</div><div class="liuju-card">人</div>
+                  <div class="liuju-card">化</div><div class="liuju-card">三</div>
+                </div>
+              </div>
+              <div class="liuju-player">
+                <div class="liuju-player-name">我</div>
+                <div class="liuju-player-cards">
+                  <div class="liuju-card">七</div><div class="liuju-card">十</div><div class="liuju-card">土</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align:center;"><div class="liuju-btn">确定</div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="liuju-after">
+            <div class="liuju-title">流局</div>
+            <div class="liuju-sub">牌堆已空，本局结束</div>
+            <div style="text-align:center;"><span class="liuju-rule">⚠ 庄家不变，继续坐庄</span></div>
+            <div class="liuju-players">
+              <div class="liuju-player">
+                <div class="liuju-player-name">玩家1</div>
+                <div class="liuju-player-cards">
+                  <div class="liuju-card red">上</div><div class="liuju-card red">大</div><div class="liuju-card red">人</div>
+                  <div class="liuju-card green">化</div><div class="liuju-card green">三</div>
+                </div>
+              </div>
+              <div class="liuju-player">
+                <div class="liuju-player-name">我</div>
+                <div class="liuju-player-cards">
+                  <div class="liuju-card green">七</div><div class="liuju-card green">十</div><div class="liuju-card green">土</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align:center;"><div class="liuju-btn">确定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'liuju', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'liuju', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页面4: 结算页面 -->
+<div class="section">
+  <div class="section-header">
+    <h2>4. 结算页面</h2>
+    <span class="tag tag-medium">中优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>总结算已移到前面（✅已完成），但总结算区域可以更丰富。优化后：<br>
+      ① 赢家头像区域加👑标识和发光效果<br>
+      ② 增加排名显示（1st/2nd/3rd）<br>
+      ③ 每局结果中赢家名字高亮<br>
+      ④ 总结算区域增加"赢家公告"行
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="settle-before">
+            <div class="settle-title">游戏结算</div>
+            <div class="settle-total">
+              <div class="total-header">总结算</div>
+              <div class="total-scores">
+                <div class="player-total"><span class="player-name">玩家1</span><span class="player-score">+15分</span></div>
+                <div class="player-total winner"><span class="player-name">我</span><span class="player-score">+30分</span></div>
+                <div class="player-total"><span class="player-name">玩家2</span><span class="player-score">-45分</span></div>
+              </div>
+            </div>
+            <div class="settle-round">
+              <div class="round-header">第1局</div>
+              <div class="round-detail">赢家: 我 | 清枯胡 点炮 | 3倍 | 得分: 25分</div>
+            </div>
+            <div class="settle-round">
+              <div class="round-header">第2局</div>
+              <div class="round-detail">赢家: 玩家1 | 枯胡 自摸 | 2倍 | 得分: 15分</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="settle-after">
+            <div class="settle-title">游戏结算</div>
+            <div class="settle-total">
+              <div class="total-header">总结算</div>
+              <div class="total-scores">
+                <div class="player-total"><span class="player-rank">🥉 第3名</span><span class="player-name">玩家1</span><span class="player-score">+15分</span></div>
+                <div class="player-total winner"><span class="player-rank">🥇 第1名</span><span class="player-name">我</span><span class="player-score">+30分</span></div>
+                <div class="player-total"><span class="player-rank">🥈 第2名</span><span class="player-name">玩家2</span><span class="player-score">-45分</span></div>
+              </div>
+              <div class="winner-announce">🏆 赢家: 我</div>
+            </div>
+            <div class="settle-round">
+              <div class="round-header">第1局</div>
+              <div class="round-detail"><span class="round-winner">赢家: 我</span> | 清枯胡 点炮 | 3倍 | 得分: 25分</div>
+            </div>
+            <div class="settle-round">
+              <div class="round-header">第2局</div>
+              <div class="round-detail"><span class="round-winner">赢家: 玩家1</span> | 枯胡 自摸 | 2倍 | 得分: 15分</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'settlement', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'settlement', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页面5: 设置页面 -->
+<div class="section">
+  <div class="section-header">
+    <h2>5. 设置页面</h2>
+    <span class="tag tag-low">低优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>当前设置页面功能完整但视觉较朴素。优化后：<br>
+      ① 每个设置项用卡片包裹，增加层次感<br>
+      ② 标签增加图标，更直观<br>
+      ③ 难度选择改为按钮式（类似开始页面），比Radio更美观<br>
+      ④ 滑块渐变色+发光效果
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="settings-before">
+            <div class="settings-title">系统设置</div>
+            <div class="settings-section">
+              <div class="settings-label">音效大小</div>
+              <div style="display:flex;align-items:center;">
+                <div class="settings-slider"><div class="settings-slider-fill"></div><div class="settings-slider-thumb"></div></div>
+                <span class="settings-volume">70%</span>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label">游戏难度</div>
+              <div class="settings-radios">
+                <div class="settings-radio"><div class="settings-radio-dot"></div>简单</div>
+                <div class="settings-radio"><div class="settings-radio-dot"></div>中等</div>
+                <div class="settings-radio"><div class="settings-radio-dot active"></div>困难</div>
+              </div>
+            </div>
+            <div class="exit-btn">退出游戏</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="settings-after">
+            <div class="settings-title">系统设置</div>
+            <div class="settings-section">
+              <div class="settings-label"><span class="icon">🔊</span> 音效大小</div>
+              <div class="settings-slider-row">
+                <div class="settings-slider"><div class="settings-slider-fill"></div><div class="settings-slider-thumb"></div></div>
+                <span class="settings-volume">70%</span>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label"><span class="icon">🎯</span> 游戏难度</div>
+              <div class="settings-radios">
+                <div class="settings-radio">简单</div>
+                <div class="settings-radio">中等</div>
+                <div class="settings-radio active">困难</div>
+              </div>
+            </div>
+            <div class="exit-btn">退出游戏</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'settings', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'settings', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 页面6: 飘分选择 -->
+<div class="section">
+  <div class="section-header">
+    <h2>6. 飘分选择弹窗</h2>
+    <span class="tag tag-medium">中优先级</span>
+  </div>
+  <div class="section-body">
+    <div class="desc">
+      <b>优化点：</b>当前飘分选择较简陋，按钮样式普通。优化后：<br>
+      ① 增加标题说明和副标题提示<br>
+      ② 飘分按钮改为大号卡片式，数值突出显示<br>
+      ③ 选中态用红色渐变+发光，更醒目<br>
+      ④ 底部增加飘分规则提示
+    </div>
+    <div class="compare">
+      <div>
+        <div class="compare-label label-before">当前效果</div>
+        <div class="compare-content">
+          <div class="piao-before">
+            <div class="piao-title">选择飘分</div>
+            <div class="piao-btns">
+              <div class="piao-btn">不飘</div>
+              <div class="piao-btn">飘1</div>
+              <div class="piao-btn">飘2</div>
+              <div class="piao-btn active">飘3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="compare-label label-after">优化效果</div>
+        <div class="compare-content">
+          <div class="piao-after">
+            <div class="piao-title">选择飘分</div>
+            <div class="piao-subtitle">飘分将计入本局最终得分</div>
+            <div class="piao-btns">
+              <div class="piao-btn"><span class="piao-val">0</span><span class="piao-label">不飘</span></div>
+              <div class="piao-btn"><span class="piao-val">1</span><span class="piao-label">飘1分</span></div>
+              <div class="piao-btn"><span class="piao-val">2</span><span class="piao-label">飘2分</span></div>
+              <div class="piao-btn active"><span class="piao-val">3</span><span class="piao-label">飘3分</span></div>
+            </div>
+            <div class="piao-hint">💡 飘分越高，胡牌收益越大，风险也越高</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="vote">
+      <button class="vote-btn" onclick="vote(this, 'piao', 'yes')">✅ 需要优化</button>
+      <button class="vote-btn" onclick="vote(this, 'piao', 'no')">❌ 保持现状</button>
+    </div>
+  </div>
+</div>
+
+<!-- 汇总 -->
+<div class="summary">
+  <h3>📋 优化建议汇总</h3>
+  <table>
+    <tr><th>页面</th><th>优化内容</th><th>优先级</th></tr>
+    <tr><td>开始页面</td><td>Logo居中+标题装饰+卡片式选项+金色按钮</td><td class="priority-medium">中</td></tr>
+    <tr><td>胡牌面板</td><td>信息分层+分数放大+手牌高亮+输家卡片</td><td class="priority-high">高</td></tr>
+    <tr><td>流局面板</td><td>装饰线+规则提示条+手牌分色+边框标识</td><td class="priority-low">低</td></tr>
+    <tr><td>结算页面</td><td>排名标识+👑赢家+赢家公告+名字高亮</td><td class="priority-medium">中</td></tr>
+    <tr><td>设置页面</td><td>卡片分组+图标标签+按钮式难度+渐变滑块</td><td class="priority-low">低</td></tr>
+    <tr><td>飘分选择</td><td>大号卡片按钮+副标题+选中发光+规则提示</td><td class="priority-medium">中</td></tr>
+  </table>
+</div>
+
+<div id="voteResult" style="margin-top:20px;padding:16px;background:#1a1a1a;border-radius:12px;display:none;">
+  <h3 style="color:#ffd700;margin-bottom:10px;">📊 你的选择</h3>
+  <div id="voteList"></div>
+</div>
+
+<script>
+const votes = {};
+function vote(btn, page, choice) {
+  votes[page] = choice;
+  const section = btn.closest('.section');
+  const btns = section.querySelectorAll('.vote-btn');
+  btns.forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  updateVoteResult();
+}
+function updateVoteResult() {
+  const container = document.getElementById('voteResult');
+  const list = document.getElementById('voteList');
+  if (Object.keys(votes).length === 0) { container.style.display = 'none'; return; }
+  container.style.display = 'block';
+  const names = { start: '开始页面', hu: '胡牌面板', liuju: '流局面板', settlement: '结算页面', settings: '设置页面', piao: '飘分选择' };
+  let html = '';
+  for (const [k, v] of Object.entries(votes)) {
+    html += `<div style="margin:4px 0;color:${v === 'yes' ? '#4ecdc4' : '#ff6b6b'};">${names[k]}: ${v === 'yes' ? '✅ 需要优化' : '❌ 保持现状'}</div>`;
+  }
+  list.innerHTML = html;
+}
+</script>
+</body>
+</html>
