@@ -519,11 +519,11 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 1200;
+          double tingScore = 10000 + tingProb * 1300;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 120;
-          tingScore += huScore * 6;
-          if (isLate) tingScore += 2500;
+          tingScore += effectiveTingCount * 130;
+          tingScore += huScore * 7;
+          if (isLate) tingScore += 2700;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -691,12 +691,12 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
-    score += (10 - distToTing) * 100;
+    score += (10 - distToTing) * 110;
 
     if (isLate) {
-      score += (10 - distToTing) * 120;
+      score += (10 - distToTing) * 130;
       if (distToTing <= 2) {
-        score += 600;
+        score += 650;
       }
     }
 
@@ -741,7 +741,7 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 40;
+      score += (10 - expSteps) * 45;
     }
 
     return score;
