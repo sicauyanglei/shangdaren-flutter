@@ -318,10 +318,10 @@ class AIStrategyHard extends AIStrategy {
 
     if (distAfterDiscard >= distBefore + 1) return -1;
 
-    double benefit = (distBefore - distAfterDiscard) * 300.0;
+    double benefit = (distBefore - distAfterDiscard) * 250.0;
 
-    if (distAfterDiscard <= 2) benefit += 800;
-    if (distAfterDiscard <= 4) benefit += 300;
+    if (distAfterDiscard <= 2) benefit += 600;
+    if (distAfterDiscard <= 4) benefit += 250;
 
     final bestPlayer = Player(
       id: player.id,
@@ -519,11 +519,11 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 1500;
+          double tingScore = 10000 + tingProb * 1200;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 150;
-          tingScore += huScore * 8;
-          if (isLate) tingScore += 3000;
+          tingScore += effectiveTingCount * 120;
+          tingScore += huScore * 6;
+          if (isLate) tingScore += 2500;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -607,7 +607,7 @@ class AIStrategyHard extends AIStrategy {
         final dist = _distanceToTing(simHand, melds);
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 90;
+          totalScore += prob * improvement * 75;
         }
         continue;
       }
@@ -624,11 +624,11 @@ class AIStrategyHard extends AIStrategy {
       final dist = _distanceToTing(simHand, melds);
 
       if (dist <= 0) {
-        totalScore += prob * 1500;
+        totalScore += prob * 1200;
       } else {
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 150;
+          totalScore += prob * improvement * 120;
         }
       }
     }
@@ -691,12 +691,12 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
-    score += (10 - distToTing) * 120;
+    score += (10 - distToTing) * 100;
 
     if (isLate) {
-      score += (10 - distToTing) * 150;
+      score += (10 - distToTing) * 120;
       if (distToTing <= 2) {
-        score += 800;
+        score += 600;
       }
     }
 
@@ -741,7 +741,7 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 50;
+      score += (10 - expSteps) * 40;
     }
 
     return score;
@@ -957,32 +957,32 @@ class AIStrategyHard extends AIStrategy {
         final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
         for (final mc in sameGroupChars) {
           if (otherMeldChars.contains(mc)) {
-            danger += isLate ? 30 : 20;
+            danger += isLate ? 45 : 30;
             break;
           }
         }
 
         if (cardToDiscard.isJing) {
-          danger += isLate ? 50 : 30;
+          danger += isLate ? 75 : 45;
         }
 
         if (_isYin(cardToDiscard)) {
-          danger += isLate ? 20 : 10;
+          danger += isLate ? 30 : 15;
         }
 
-        danger += isLate ? 20 : 10;
+        danger += isLate ? 30 : 15;
 
         for (final meld in other.melds) {
           final meldSentence = meld.cards.first.sentence;
           if (meldSentence == cardToDiscard.sentence) {
-            danger += isLate ? 25 : 15;
+            danger += isLate ? 38 : 22;
           }
         }
       }
 
       // 对方未听牌但面子多时，也有一定危险
       if (!other.isTing && other.melds.length >= 3) {
-        danger += isLate ? 8 : 4;
+        danger += isLate ? 11 : 6;
       }
 
       if (isMidGame && !other.isTing) {
@@ -996,7 +996,7 @@ class AIStrategyHard extends AIStrategy {
         }
         if (meldGroups.contains(cardToDiscard.sentence) &&
             !discardGroups.contains(cardToDiscard.sentence)) {
-          danger += 5;
+          danger += 7;
         }
       }
 
@@ -1010,7 +1010,7 @@ class AIStrategyHard extends AIStrategy {
         if (otherDiscardChars.contains(gc)) discardedByOther++;
       }
       if (discardedByOther == 0 && other.melds.isNotEmpty) {
-        danger += isLate ? 8 : 4;
+        danger += isLate ? 11 : 6;
       }
 
       final otherMeldChars = <String>{};
@@ -1021,7 +1021,7 @@ class AIStrategyHard extends AIStrategy {
       }
       for (final gc in sameGroupChars) {
         if (otherMeldChars.contains(gc) && !otherDiscardChars.contains(gc)) {
-          danger += isLate ? 10 : 6;
+          danger += isLate ? 15 : 9;
           break;
         }
       }
@@ -1029,15 +1029,15 @@ class AIStrategyHard extends AIStrategy {
 
     // 如果自己已经听牌，进攻优先，减少防守惩罚
     if (player.isTing) {
-      danger *= 0.1;
+      danger *= 0.15;
     }
 
     final actualMyDist =
         myDist ?? _distanceToTing(List<Card>.from(player.hand), player.melds);
     if (actualMyDist <= 2) {
-      danger *= 0.15;
+      danger *= 0.25;
     } else if (actualMyDist <= 4) {
-      danger *= 0.4;
+      danger *= 0.5;
     }
 
     return danger;
@@ -1414,9 +1414,9 @@ class AIStrategyHard extends AIStrategy {
 
       final dist = _distanceToTing(simHand, melds);
       if (dist <= 0) {
-        totalScore += prob * 800;
+        totalScore += prob * 650;
       } else {
-        totalScore += prob * (10 - dist) * 35;
+        totalScore += prob * (10 - dist) * 28;
       }
     }
 
@@ -1460,11 +1460,11 @@ class AIStrategyHard extends AIStrategy {
     }
 
     final benefit = _evaluateChiBenefit(player, card, state);
-    if (benefit < -50) return false;
+    if (benefit < -30) return false;
 
-    if (player.isTing) return benefit >= 5000;
+    if (player.isTing) return benefit >= 7000;
 
-    return benefit > -20;
+    return benefit > -10;
   }
 
   /// 检查手牌中是否已有包含出牌的完整一句，且每个字都只有1张
@@ -1538,9 +1538,9 @@ class AIStrategyHard extends AIStrategy {
         newMelds,
       );
 
-      if (distAfterDiscard > distBefore + 1) return false;
+      if (distAfterDiscard > distBefore) return false;
 
-      if (distAfterDiscard <= distBefore) return true;
+      if (distAfterDiscard < distBefore) return true;
 
       final huScoreAfter = _evaluateHuScore(testPlayer);
       if (huScoreAfter > 0) return true;
@@ -1563,7 +1563,7 @@ class AIStrategyHard extends AIStrategy {
         }
       }
 
-      return testHand.length <= 8;
+      return testHand.length <= 7;
     }
 
     // sameCharCount == 1: 只有一张同字牌，碰需要用2张
