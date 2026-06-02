@@ -1653,6 +1653,7 @@ class GameController {
   }
 
   bool _canZhaoAfterDraw(Player player) {
+    if (_getTotalCardCount(player) < 20) return false;
     return _getZhaoCandidates(player).isNotEmpty;
   }
 
@@ -1675,6 +1676,7 @@ class GameController {
   }
 
   bool _canPengWith(Player player, Card card) {
+    if (_getTotalCardCount(player) >= 20) return false;
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -1682,6 +1684,7 @@ class GameController {
   }
 
   bool _canZhaoWith(Player player, Card card) {
+    if (_getTotalCardCount(player) != 19) return false;
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -1694,6 +1697,7 @@ class GameController {
     Card card,
     int discardPlayerId,
   ) {
+    if (_getTotalCardCount(player) >= 20) return false;
     final isNextPlayer = playerIndex == (discardPlayerId + 1) % 3;
     if (!isNextPlayer) return false;
     return _findChiCards(player, card) != null;
