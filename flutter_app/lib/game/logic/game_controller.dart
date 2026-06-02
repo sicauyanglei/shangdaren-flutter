@@ -849,6 +849,7 @@ class GameController {
         state.zhaoCandidates = candidates;
         state.showZhaoSelection = true;
         onStateChanged?.call();
+        startCountdown();
       }
     }
   }
@@ -858,6 +859,7 @@ class GameController {
       (p) => p.type == PlayerType.human,
     );
     if (humanIndex < 0) return;
+    stopCountdown();
     state.showZhaoSelection = false;
     state.zhaoCandidates.clear();
     _handleZhaoFromHand(state.players[humanIndex], character: character);
@@ -1035,9 +1037,27 @@ class GameController {
   }
 
   void _handleTimeout() {
+    if (state.showZhaoSelection && state.zhaoCandidates.isNotEmpty) {
+      selectZhaoCharacter(state.zhaoCandidates.first);
+      return;
+    }
+
     if (state.waitingForResponse) {
+      if (state.canHu) {
+        respondHu();
+        return;
+      }
       respondPass();
     } else if (state.isMyTurn) {
+      if (state.canHu) {
+        respondHu();
+        return;
+      }
+      if (state.canChi || state.canPeng || state.canZhao) {
+        respondPass();
+        return;
+      }
+
       final player = state.players[1];
 
       if (_lastDrawnCard != null) {
