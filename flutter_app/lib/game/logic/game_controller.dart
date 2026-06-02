@@ -1097,7 +1097,10 @@ class GameController {
       winner.hand.add(state.lastDiscardedCard!);
     }
 
-    final huTypeResult = HuCalculator.detectHuType(winner);
+    final huTypeResult = HuCalculator.detectHuType(
+      winner,
+      paoCard: isZimo ? null : state.lastDiscardedCard,
+    );
 
     if (isZimo) {
       _audio.playZimo();
@@ -1128,7 +1131,10 @@ class GameController {
       scoreChanges.add(entry.value);
     }
 
-    final totalHu = HuCalculator.calculateTotalHu(winner);
+    final totalHu = HuCalculator.calculateTotalHu(
+      winner,
+      paoCard: isZimo ? null : state.lastDiscardedCard,
+    );
     final huTypeMultiplier = isZimo ? huTypeResult.zimo : huTypeResult.dianpao;
     final displayMultiplier = huTypeMultiplier;
     final method = isZimo ? '自摸' : '点炮';

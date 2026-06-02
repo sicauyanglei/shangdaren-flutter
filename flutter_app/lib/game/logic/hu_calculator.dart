@@ -56,9 +56,13 @@ class HuCalculator {
     return false;
   }
 
-  static int calculateTotalHu(Player player, {bool isPao = false}) {
+  static int calculateTotalHu(
+    Player player, {
+    bool isPao = false,
+    Card? paoCard,
+  }) {
     final meldHu = calculateMeldHu(player.melds, isPao: isPao);
-    final handHu = calculateHandHu(player.hand, player.melds);
+    final handHu = calculateHandHu(player.hand, player.melds, paoCard: paoCard);
     return meldHu + handHu;
   }
 
@@ -70,7 +74,11 @@ class HuCalculator {
     return total;
   }
 
-  static int calculateHandHu(List<Card> hand, List<Meld> melds) {
+  static int calculateHandHu(
+    List<Card> hand,
+    List<Meld> melds, {
+    Card? paoCard,
+  }) {
     if (hand.isEmpty) return 0;
 
     final remaining = List<Card>.from(hand);
@@ -94,7 +102,13 @@ class HuCalculator {
       hu += m.getHuCount(isHand: true);
     }
     for (final m in cSet) {
-      hu += m.getHuCount(isHand: true);
+      if (paoCard != null &&
+          !m.isJing &&
+          m.cards.any((c) => c.id == paoCard.id)) {
+        hu += 2;
+      } else {
+        hu += m.getHuCount(isHand: true);
+      }
     }
     for (final m in dSet) {
       hu += m.getHuCount(isHand: true);
@@ -319,10 +333,10 @@ class HuCalculator {
     return 0;
   }
 
-  static HuTypeResult detectHuType(Player player) {
+  static HuTypeResult detectHuType(Player player, {Card? paoCard}) {
     final hand = player.hand;
     final melds = player.melds;
-    final huCount = calculateTotalHu(player);
+    final huCount = calculateTotalHu(player, paoCard: paoCard);
 
     final hasChi = melds.any((m) => m.type == MeldType.ju);
     final hasPeng = melds.any((m) => m.type == MeldType.kan);
