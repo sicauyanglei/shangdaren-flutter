@@ -82,9 +82,7 @@ class GameOverlay extends StatelessWidget {
             player: player0,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: gameState.currentPlayerIndex == 0
-                ? gameState.countdown
-                : 0,
+            countdown: 0,
             animatingScore: displayScores[0],
           ),
         ),
@@ -95,9 +93,7 @@ class GameOverlay extends StatelessWidget {
             player: player2,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: gameState.currentPlayerIndex == 2
-                ? gameState.countdown
-                : 0,
+            countdown: 0,
             animatingScore: displayScores[2],
           ),
         ),
@@ -348,7 +344,7 @@ class _AIPlayerInfo extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isCurrentTurn)
+              if (isCurrentTurn && countdown <= 0)
                 Positioned(
                   top: -8,
                   left: -8,
