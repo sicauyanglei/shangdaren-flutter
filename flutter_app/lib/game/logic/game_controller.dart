@@ -837,7 +837,12 @@ class GameController {
       state.canZhao = false;
       final player = state.players[humanIndex];
       final candidates = _getZhaoCandidates(player);
-      if (candidates.isEmpty) return;
+      if (candidates.isEmpty) {
+        state.isMyTurn = true;
+        onStateChanged?.call();
+        startCountdown();
+        return;
+      }
       if (candidates.length == 1) {
         _handleZhaoFromHand(player, character: candidates.first);
       } else {
@@ -1244,6 +1249,8 @@ class GameController {
 
     if (state.isDrawing) {
       if (_pendingDrawCard != null && _pendingDrawPlayerId != null) {
+        _drawVersion++;
+        _drawAfterZhaoVersion++;
         final player = state.players[_pendingDrawPlayerId!];
         if (_pendingDrawPlayerId == 1) {
           if (_skipDraw) {
@@ -1268,12 +1275,14 @@ class GameController {
     }
 
     if (_pendingDiscardCard != null && _pendingDiscardPlayerId != null) {
+      _discardVersion++;
       final player = state.players[_pendingDiscardPlayerId!];
       _completeDiscard(player, _pendingDiscardCard!);
       return;
     }
 
     if (_pendingMeldAction != null) {
+      _meldActionVersion++;
       _pendingMeldAction!.call();
       _pendingMeldAction = null;
       return;
@@ -1282,6 +1291,7 @@ class GameController {
     if (_pendingCheckResponse &&
         _pendingCheckResponseCard != null &&
         _pendingCheckResponsePlayerId != null) {
+      _checkResponseVersion++;
       _checkResponses(
         _pendingCheckResponseCard!,
         _pendingCheckResponsePlayerId!,
@@ -1319,6 +1329,7 @@ class GameController {
       state.canPeng = false;
       state.canZhao = false;
       state.canHu = false;
+      state.isDrawing = false;
       onStateChanged?.call();
       if (player.type == PlayerType.human) {
         state.isMyTurn = true;
