@@ -412,7 +412,7 @@ class GameController {
     final player = state.players[1];
     state.canHu = !skipZimoCheck && _canZimo(player);
     state.isZimoOpportunity = state.canHu;
-    state.canZhao = _canZhaoAfterDraw(player) && !state.canHu;
+    state.canZhao = _canZhaoAfterDraw(player);
   }
 
   void _processAITurn(Player player) {
@@ -773,10 +773,6 @@ class GameController {
       if (action == 'hu') {
         state.canHu = true;
         state.isZimoOpportunity = false;
-        state.canZhao = false;
-        state.canPeng = false;
-        state.canChi = false;
-        break;
       }
       if (action == 'zhao') state.canZhao = true;
       if (action == 'peng') state.canPeng = true;
@@ -1366,6 +1362,7 @@ class GameController {
         isJing: zhaoCards.first.isJing,
       );
       player.melds.add(meld);
+      HuCalculator.updateMeldHuCache(player);
       for (final c in zhaoCards) {
         player.hand.remove(c);
       }
@@ -1476,6 +1473,7 @@ class GameController {
         player.melds.add(
           Meld(cards: newCards, type: MeldType.zhao, isJing: card.isJing),
         );
+        HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(newCards, playerIndex);
       } else {
@@ -1489,6 +1487,7 @@ class GameController {
             isJing: card.isJing,
           ),
         );
+        HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(zhaoCards, playerIndex);
       }
@@ -1541,6 +1540,7 @@ class GameController {
       player.melds.add(
         Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
       );
+      HuCalculator.updateMeldHuCache(player);
       _addToPublicCount(matching[0].character, 1);
       _addToPublicCount(matching[1].character, 1);
       player.hand.remove(matching[0]);
@@ -1615,6 +1615,7 @@ class GameController {
           isJing: meldCards.any((c) => c.isJing),
         ),
       );
+      HuCalculator.updateMeldHuCache(player);
       _addToPublicCount(chiCards[0].character, 1);
       _addToPublicCount(chiCards[1].character, 1);
       player.hand.remove(chiCards[0]);

@@ -55,9 +55,9 @@ class AIStrategyHard extends AIStrategy {
       for (int j = 0; j < _groupChars[i].length; j++) _groupChars[i][j]: j,
   };
 
-  Map<String, int> _distanceCache = {};
-  Map<int, TingResult> _tingCache = {};
-  Map<int, double> _huScoreCache = {};
+  final Map<String, int> _distanceCache = {};
+  final Map<int, TingResult> _tingCache = {};
+  final Map<int, double> _huScoreCache = {};
   Map<String, int>? _cachedVisibleCount;
   int? _cachedTotalUnknown;
   Map<String, int>? _cachedCharCount;
@@ -272,7 +272,7 @@ class AIStrategyHard extends AIStrategy {
           .where((c) => c.sentence == _charSentenceMap[ch] && c.character != ch)
           .toList();
       // 如果该字有同组伙伴（靠/半搭子），吃掉会损失进张
-      if (sameGroupInHand.length >= 1) {
+      if (sameGroupInHand.isNotEmpty) {
         consumptionCost += 30;
       }
       // 如果该字在手牌中有2张以上，吃掉1张损失较小
@@ -316,12 +316,17 @@ class AIStrategyHard extends AIStrategy {
       newMelds,
     );
 
-    if (distAfterDiscard >= distBefore) return -1;
+    if (distAfterDiscard > distBefore) return -1;
 
-    double benefit = (distBefore - distAfterDiscard) * 200.0;
+    double benefit = (distBefore - distAfterDiscard) * 300.0;
 
-    if (distAfterDiscard <= 2) benefit += 500;
-    if (distAfterDiscard <= 4) benefit += 200;
+    // 距离不变时也有基础收益（吃牌增加面子，向胡牌推进）
+    if (distAfterDiscard == distBefore) {
+      benefit += 100;
+    }
+
+    if (distAfterDiscard <= 2) benefit += 800;
+    if (distAfterDiscard <= 4) benefit += 300;
 
     final bestPlayer = Player(
       id: player.id,
@@ -330,7 +335,7 @@ class AIStrategyHard extends AIStrategy {
       hand: bestHand,
       melds: newMelds,
     );
-    benefit += _evaluateHuScore(bestPlayer) * 2;
+    benefit += _evaluateHuScore(bestPlayer) * 4;
 
     final totalUnknown = _totalUnknownCards(player, state);
     double chiAfterProb = 0;
@@ -338,7 +343,7 @@ class AIStrategyHard extends AIStrategy {
       final rem = _remainingCount(c.character, visibleCount);
       if (rem > 0) chiAfterProb += rem / totalUnknown;
     }
-    benefit += chiAfterProb * 50;
+    benefit += chiAfterProb * 80;
 
     double chiBeforeProb = 0;
     for (final c in hand) {
@@ -346,7 +351,7 @@ class AIStrategyHard extends AIStrategy {
       if (rem > 0) chiBeforeProb += rem / totalUnknown;
     }
     final probLoss = chiBeforeProb - chiAfterProb;
-    benefit -= probLoss * 80;
+    benefit -= probLoss * 50;
 
     benefit -= consumptionCost;
 
@@ -519,11 +524,11 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 1000;
+          double tingScore = 10000 + tingProb * 2000;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 100;
-          tingScore += huScore * 5;
-          if (isLate) tingScore += 2000;
+          tingScore += effectiveTingCount * 200;
+          tingScore += huScore * 10;
+          if (isLate) tingScore += 3000;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -691,12 +696,12 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
-    score += (10 - distToTing) * 80;
+    score += (10 - distToTing) * 120;
 
     if (isLate) {
-      score += (10 - distToTing) * 100;
+      score += (10 - distToTing) * 150;
       if (distToTing <= 2) {
-        score += 500;
+        score += 800;
       }
     }
 
@@ -741,7 +746,7 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 30;
+      score += (10 - expSteps) * 50;
     }
 
     return score;
@@ -973,7 +978,7 @@ class AIStrategyHard extends AIStrategy {
         }
 
         // 基础危险分
-        danger += isLate ? 40 : 20;
+        danger += isLate ? 25 : 12;
 
         // 通过对方面子推断可能听的牌
         // 对方碰/招了某字，可能听同组其他字
@@ -1033,16 +1038,18 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 如果自己已经听牌，进攻优先，减少防守惩罚
+    // 如果自己已经听牌，进攻优先，大幅减少防守惩罚
     if (player.isTing) {
-      danger *= 0.2;
+      danger *= 0.1;
     }
 
     // 如果自己距离听牌很近（距离<=2），进攻优先
     final actualMyDist =
         myDist ?? _distanceToTing(List<Card>.from(player.hand), player.melds);
     if (actualMyDist <= 2) {
-      danger *= 0.3;
+      danger *= 0.15;
+    } else if (actualMyDist <= 4) {
+      danger *= 0.4;
     }
 
     return danger;
@@ -1127,19 +1134,19 @@ class AIStrategyHard extends AIStrategy {
         final ch = meld.cards.first.character;
         final inJu = aSet.any((m) => m.cards.any((c) => c.character == ch));
         if (inJu) {
-          score += 30;
+          score += 40;
         } else {
           final rem = _remainingCount(ch, visibleCount);
           if (rem >= 1) {
             // 对的进张：需要第3张变成刻，进张数=rem
             // 进张概率高的对更有价值
-            score += 25 + rem * 8;
+            score += 30 + rem * 12;
           } else {
             // 没有进张的对价值很低
-            score += 5;
+            score += 3;
           }
         }
-        if (meld.isJing) score += 15;
+        if (meld.isJing) score += 20;
       } else if (meld.type == MeldType.kao) {
         final chars = meld.cards.map((c) => c.character).toList();
         final missingChar = _findMissingCharForSentence(chars);
@@ -1148,15 +1155,15 @@ class AIStrategyHard extends AIStrategy {
           if (rem >= 1) {
             // 靠的进张：需要缺的那1张，进张数=rem
             // 进张概率高的靠更有价值
-            score += 40 + rem * 15;
+            score += 50 + rem * 20;
           } else {
-            // 没有进张的靠价值极低
-            score += 2;
+            // 没有进张的靠价值极低，更积极打出
+            score -= 10;
           }
         } else {
-          score += 50;
+          score += 60;
         }
-        if (meld.isJing) score += 10;
+        if (meld.isJing) score += 15;
       }
     }
 
@@ -1180,11 +1187,11 @@ class AIStrategyHard extends AIStrategy {
           }
         }
         // 半搭子进张概率高，大幅加分
-        score += missingProb * 50 + totalRem * 3;
+        score += missingProb * 80 + totalRem * 5;
 
         // 如果同组有3种字，说明差1张就能成句，价值极高
         if (groupCharSet.length >= 3) {
-          score += 30;
+          score += 50;
         }
       } else {
         // 孤张：同组只有1种字
@@ -1200,13 +1207,13 @@ class AIStrategyHard extends AIStrategy {
             partnerRem += rem;
           }
         }
-        // 孤张进张概率低，但有进张时仍有一定价值
-        score -= 10; // 减少惩罚
-        score += partnerProb * 10 + partnerRem * 1;
+        // 孤张进张概率低，更积极打出
+        score -= 20;
+        score += partnerProb * 8 + partnerRem * 1;
 
-        // 同组其他牌已被出完的孤张价值极低
+        // 同组其他牌已被出完的孤张价值极低，更积极打出
         if (partnerRem == 0) {
-          score -= 30;
+          score -= 50;
         }
       }
 
@@ -1561,17 +1568,24 @@ class AIStrategyHard extends AIStrategy {
         final otherChars = _groupChars[card.sentence - 1]
             .where((ch) => ch != card.character)
             .toList();
+        bool hasPartner = false;
         for (final ch in otherChars) {
           if (hand.any((c) => c.character == ch)) {
-            // 该字有同组伙伴，碰掉可能破坏靠/句组合
-            // 距离不变时不碰，保留灵活性
-            return false;
+            hasPartner = true;
+            break;
           }
+        }
+        // 有同组伙伴时，如果碰牌后胡数更高，仍然碰
+        if (hasPartner) {
+          final huScoreBefore = _evaluateHuScore(player);
+          if (huScoreAfter > huScoreBefore) return true;
+          // 否则保留灵活性，不碰
+          return false;
         }
       }
 
-      // 手牌较少时更倾向碰
-      return testHand.length <= 6;
+      // 碰牌增加面子，更倾向碰
+      return testHand.length <= 10;
     }
 
     // sameCharCount == 1: 只有一张同字牌，碰需要用2张

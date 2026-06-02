@@ -143,25 +143,42 @@ class GameOverlay extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ActionButtons(
-                  canChi: gameState.canChi,
-                  canPeng: gameState.canPeng,
-                  canZhao: gameState.canZhao,
-                  canHu: gameState.canHu && !gameState.isZimoOpportunity,
-                  onChi: onChi,
-                  onPeng: onPeng,
-                  onZhao: onZhao,
-                  onHu: onHu,
-                  onPass: onPass,
-                ),
-                if (gameState.canHu && gameState.isZimoOpportunity) ...[
-                  const SizedBox(width: 14),
+                if (gameState.canHu && gameState.isZimoOpportunity)
                   GameArtButton(
                     label: '自摸',
                     type: GameButtonType.zimo,
                     onTap: onHu,
                   ),
+                if (gameState.canHu &&
+                    gameState.isZimoOpportunity &&
+                    (gameState.canChi ||
+                        gameState.canPeng ||
+                        gameState.canZhao)) ...[
+                  const SizedBox(width: 14),
+                  ActionButtons(
+                    canChi: gameState.canChi,
+                    canPeng: gameState.canPeng,
+                    canZhao: gameState.canZhao,
+                    canHu: false,
+                    onChi: onChi,
+                    onPeng: onPeng,
+                    onZhao: onZhao,
+                    onHu: onHu,
+                    onPass: onPass,
+                  ),
                 ],
+                if (!gameState.isZimoOpportunity)
+                  ActionButtons(
+                    canChi: gameState.canChi,
+                    canPeng: gameState.canPeng,
+                    canZhao: gameState.canZhao,
+                    canHu: gameState.canHu && !gameState.isZimoOpportunity,
+                    onChi: onChi,
+                    onPeng: onPeng,
+                    onZhao: onZhao,
+                    onHu: onHu,
+                    onPass: onPass,
+                  ),
               ],
             ),
           ),

@@ -61,7 +61,9 @@ class HuCalculator {
     bool isPao = false,
     Card? paoCard,
   }) {
-    final meldHu = calculateMeldHu(player.melds, isPao: isPao);
+    final meldHu = isPao
+        ? calculateMeldHu(player.melds, isPao: true)
+        : player.meldHuCount;
     final handHu = calculateHandHu(player.hand, player.melds, paoCard: paoCard);
     return meldHu + handHu;
   }
@@ -72,6 +74,12 @@ class HuCalculator {
       total += meld.getHuCount(isHand: false, isPao: isPao);
     }
     return total;
+  }
+
+  /// 计算并缓存组合牌胡数，在组合牌变化时调用
+  static int updateMeldHuCache(Player player) {
+    player.meldHuCount = calculateMeldHu(player.melds);
+    return player.meldHuCount;
   }
 
   static int calculateHandHu(
