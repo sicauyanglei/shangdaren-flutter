@@ -1490,7 +1490,18 @@ class GameController {
       onStateChanged?.call();
       _pendingMeldAction = null;
 
-      _drawAfterZhao(player);
+      if (_getTotalCardCount(player) < 20) {
+        _drawAfterZhao(player);
+      } else {
+        if (player.type == PlayerType.human) {
+          state.isMyTurn = true;
+          state.isDrawing = false;
+          onStateChanged?.call();
+          startCountdown();
+        } else {
+          _aiContinueAfterDraw(player, skipZimoCheck: true);
+        }
+      }
     };
 
     Future.delayed(const Duration(milliseconds: 1500), () {
