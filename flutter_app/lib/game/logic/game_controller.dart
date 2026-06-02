@@ -1135,6 +1135,7 @@ class GameController {
       winner,
       paoCard: isZimo ? null : state.lastDiscardedCard,
     );
+    winner.huCount = totalHu;
     final huTypeMultiplier = isZimo ? huTypeResult.zimo : huTypeResult.dianpao;
     final displayMultiplier = huTypeMultiplier;
     final method = isZimo ? '自摸' : '点炮';
@@ -1193,6 +1194,10 @@ class GameController {
     _audio.playLiuju();
 
     state.showLiujuResult = true;
+
+    for (final p in state.players) {
+      p.huCount = HuCalculator.calculateTotalHu(p);
+    }
 
     state.roundHistory.add({
       'roundNumber': state.roundNumber,

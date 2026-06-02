@@ -82,7 +82,12 @@ class GameOverlay extends StatelessWidget {
             player: player0,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: 0,
+            countdown:
+                (gameState.currentPlayerIndex == 0 &&
+                    !gameState.isMyTurn &&
+                    !gameState.waitingForResponse)
+                ? gameState.countdown
+                : 0,
             animatingScore: displayScores[0],
           ),
         ),
@@ -93,7 +98,12 @@ class GameOverlay extends StatelessWidget {
             player: player2,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: 0,
+            countdown:
+                (gameState.currentPlayerIndex == 2 &&
+                    !gameState.isMyTurn &&
+                    !gameState.waitingForResponse)
+                ? gameState.countdown
+                : 0,
             animatingScore: displayScores[2],
           ),
         ),
@@ -344,33 +354,6 @@ class _AIPlayerInfo extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isCurrentTurn && countdown <= 0)
-                Positioned(
-                  top: -8,
-                  left: -8,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2c3e50), Color(0xFF34495e)],
-                        begin: Alignment(-0.7, -0.7),
-                        end: Alignment(0.7, 0.7),
-                      ),
-                      border: Border.all(
-                        color: const Color(0xFFffd700).withOpacity(0.6),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               if (isCurrentTurn && countdown > 0)
                 Positioned(
                   top: -10,

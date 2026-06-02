@@ -1627,11 +1627,14 @@ class GameBoard extends Component {
     String? highlightLabel;
     if (showHuDisplay && huWinnerIndex == playerIndex) {
       if (huMethod == '点炮' && huDianpaoCard != null) {
-        cards.add(huDianpaoCard!);
-        cards.sort((a, b) {
-          if (a.sentence != b.sentence) return a.sentence.compareTo(b.sentence);
-          return a.position.compareTo(b.position);
-        });
+        if (!cards.any((c) => c.id == huDianpaoCard!.id)) {
+          cards.add(huDianpaoCard!);
+          cards.sort((a, b) {
+            if (a.sentence != b.sentence)
+              return a.sentence.compareTo(b.sentence);
+            return a.position.compareTo(b.position);
+          });
+        }
         highlightCard = huDianpaoCard;
         highlightLabel = '炮';
       } else if (huMethod == '自摸' && huZimoCard != null) {
@@ -1655,6 +1658,9 @@ class GameBoard extends Component {
 
     final sentenceGroups = _groupHandBySentenceForAI(cards);
 
+    final labelPositions = <Offset>[];
+    String? pendingLabel;
+
     if (leftToRight) {
       double curX = edgeX;
       for (final sg in sentenceGroups) {
@@ -1673,7 +1679,8 @@ class GameBoard extends Component {
           }
           _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
           if (highlightCard != null && drawCard.id == highlightCard.id) {
-            _drawHuCardLabel(canvas, cardX, curY, cw, ch, highlightLabel!);
+            labelPositions.add(Offset(cardX, curY));
+            pendingLabel = highlightLabel;
           }
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
@@ -1702,7 +1709,8 @@ class GameBoard extends Component {
           }
           _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
           if (highlightCard != null && drawCard.id == highlightCard.id) {
-            _drawHuCardLabel(canvas, cardX, curY, cw, ch, highlightLabel!);
+            labelPositions.add(Offset(cardX, curY));
+            pendingLabel = highlightLabel;
           }
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
@@ -1712,6 +1720,12 @@ class GameBoard extends Component {
           }
         }
         curX -= cw + gap;
+      }
+    }
+
+    if (pendingLabel != null) {
+      for (final pos in labelPositions) {
+        _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel!);
       }
     }
   }
