@@ -6,76 +6,6 @@ import '../../models/meld.dart';
 import '../ting_checker.dart';
 import '../hu_calculator.dart';
 
-class HandStats {
-  final Map<String, int> charCount;
-  final Map<int, Map<int, int>> sentencePosCount;
-  final Map<int, int> sentenceTotal;
-  final int totalCards;
-
-  HandStats({
-    required this.charCount,
-    required this.sentencePosCount,
-    required this.sentenceTotal,
-    required this.totalCards,
-  });
-
-  static HandStats build(List<Card> hand) {
-    final cc = <String, int>{};
-    final spc = <int, Map<int, int>>{};
-    final st = <int, int>{};
-    for (final card in hand) {
-      cc[card.character] = (cc[card.character] ?? 0) + 1;
-      spc.putIfAbsent(card.sentence, () => {});
-      spc[card.sentence]![card.position] =
-          (spc[card.sentence]![card.position] ?? 0) + 1;
-      st[card.sentence] = (st[card.sentence] ?? 0) + 1;
-    }
-    return HandStats(
-      charCount: cc,
-      sentencePosCount: spc,
-      sentenceTotal: st,
-      totalCards: hand.length,
-    );
-  }
-
-  int charTotal(String ch) => charCount[ch] ?? 0;
-
-  bool isKan(String ch) => charTotal(ch) >= 3;
-
-  bool isZhao(String ch) => charTotal(ch) >= 4;
-
-  bool hasSentence(int s) => sentenceTotal.containsKey(s);
-
-  int sentenceCardCount(int s) => sentenceTotal[s] ?? 0;
-
-  int posCount(int sentence, int position) =>
-      sentencePosCount[sentence]?[position] ?? 0;
-
-  Set<int> positionsInSentence(int sentence) =>
-      sentencePosCount[sentence]?.keys.toSet() ?? {};
-
-  int distinctCharsInSentence(int sentence) =>
-      sentencePosCount[sentence]?.length ?? 0;
-}
-
-class _OpponentInfo {
-  final bool isTing;
-  final int meldCount;
-  final Set<String> meldChars;
-  final Set<int> meldSentences;
-  final Set<String> discardChars;
-  final Set<int> discardSentences;
-
-  _OpponentInfo({
-    required this.isTing,
-    required this.meldCount,
-    required this.meldChars,
-    required this.meldSentences,
-    required this.discardChars,
-    required this.discardSentences,
-  });
-}
-
 class AIStrategyHard extends AIStrategy {
   static const List<List<String>> _groupChars = [
     ['上', '大', '人'],
@@ -125,54 +55,17 @@ class AIStrategyHard extends AIStrategy {
       for (int j = 0; j < _groupChars[i].length; j++) _groupChars[i][j]: j,
   };
 
-  Map<int, int> _distanceCache = {};
+  Map<String, int> _distanceCache = {};
   Map<int, TingResult> _tingCache = {};
   Map<int, double> _huScoreCache = {};
   Map<String, int>? _cachedVisibleCount;
   int? _cachedTotalUnknown;
-  HandStats? _cachedHandStats;
+  Map<String, int>? _cachedCharCount;
   int? _cacheOwnerId;
 
-  List<_OpponentInfo>? _opponentInfos;
-
-  void _buildOpponentInfos(Player player, GameState state) {
-    _opponentInfos = [];
-    for (int i = 0; i < state.players.length; i++) {
-      if (i == player.id) continue;
-      final other = state.players[i];
-      final meldChars = <String>{};
-      final meldSentences = <int>{};
-      for (final meld in other.melds) {
-        for (final c in meld.cards) {
-          meldChars.add(c.character);
-        }
-        meldSentences.add(meld.cards.first.sentence);
-      }
-      final discardChars = <String>{};
-      final discardSentences = <int>{};
-      for (final dc in other.discards) {
-        discardChars.add(dc.character);
-        discardSentences.add(dc.sentence);
-      }
-      _opponentInfos!.add(_OpponentInfo(
-        isTing: other.isTing,
-        meldCount: other.melds.length,
-        meldChars: meldChars,
-        meldSentences: meldSentences,
-        discardChars: discardChars,
-        discardSentences: discardSentences,
-      ));
-    }
-  }
-
   TingResult _checkTingCached(Player testPlayer) {
-    int hash = testPlayer.melds.length;
-    for (final card in testPlayer.hand) {
-      hash = hash * 31 + card.id;
-    }
-    for (final m in testPlayer.melds) {
-      hash = hash * 17 + m.cards.first.id;
-    }
+    final key = testPlayer.hand.length * 100 + testPlayer.melds.length;
+    final hash = key ^ testPlayer.hand.fold(0, (a, c) => a ^ c.id);
     final cached = _tingCache[hash];
     if (cached != null) return cached;
     final result = TingChecker.checkTing(testPlayer);
@@ -190,20 +83,25 @@ class AIStrategyHard extends AIStrategy {
     _huScoreCache.clear();
     _cachedVisibleCount = _buildVisibleCharCount(player, state);
     _cachedTotalUnknown = _totalUnknownCards(player, state);
-    _cachedHandStats = HandStats.build(player.hand);
-    _buildOpponentInfos(player, state);
+    _cachedCharCount = _buildCharCount(player.hand);
     _cacheOwnerId = player.id;
   }
 
-  int _handCacheKey(List<Card> hand, List<Meld> melds) {
-    int hash = melds.length * 1000;
+  String _handCacheKey(List<Card> hand, List<Meld> melds) {
+    final byChar = <String, int>{};
     for (final card in hand) {
-      hash = hash * 31 + card.id;
+      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
     }
+    final keys = byChar.keys.toList()..sort();
+    final buf = StringBuffer();
+    for (final k in keys) {
+      buf.write('$k${byChar[k]}');
+    }
+    buf.write('m${melds.length}');
     for (final m in melds) {
-      hash = hash * 17 + m.type.index * 100 + m.cards.first.id;
+      buf.write('${m.type.index}${m.cards.first.character}');
     }
-    return hash;
+    return buf.toString();
   }
 
   int _remainingCount(String character, Map<String, int> visibleCount) {
@@ -258,8 +156,8 @@ class AIStrategyHard extends AIStrategy {
   }
 
   bool _isPartOfKan(Card card, List<Card> hand) {
-    final stats = _cachedHandStats;
-    if (stats != null) return stats.isKan(card.character);
+    final cc = _cachedCharCount;
+    if (cc != null) return (cc[card.character] ?? 0) >= 3;
     int count = 0;
     for (final c in hand) {
       if (c.character == card.character) count++;
@@ -268,8 +166,8 @@ class AIStrategyHard extends AIStrategy {
   }
 
   bool _isPartOfZhao(Card card, List<Card> hand) {
-    final stats = _cachedHandStats;
-    if (stats != null) return stats.isZhao(card.character);
+    final cc = _cachedCharCount;
+    if (cc != null) return (cc[card.character] ?? 0) >= 4;
     int count = 0;
     for (final c in hand) {
       if (c.character == card.character) count++;
@@ -418,12 +316,12 @@ class AIStrategyHard extends AIStrategy {
       newMelds,
     );
 
-    if (distAfterDiscard >= distBefore + 1) return -1;
+    if (distAfterDiscard >= distBefore) return -1;
 
-    double benefit = (distBefore - distAfterDiscard) * 250.0;
+    double benefit = (distBefore - distAfterDiscard) * 200.0;
 
-    if (distAfterDiscard <= 2) benefit += 600;
-    if (distAfterDiscard <= 4) benefit += 250;
+    if (distAfterDiscard <= 2) benefit += 500;
+    if (distAfterDiscard <= 4) benefit += 200;
 
     final bestPlayer = Player(
       id: player.id,
@@ -621,11 +519,11 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 1400;
+          double tingScore = 10000 + tingProb * 1000;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 140;
-          tingScore += huScore * 8;
-          if (isLate) tingScore += 2800;
+          tingScore += effectiveTingCount * 100;
+          tingScore += huScore * 5;
+          if (isLate) tingScore += 2000;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -678,7 +576,7 @@ class AIStrategyHard extends AIStrategy {
     final melds = player.melds;
 
     final distBefore = _distanceToTing(testHand, melds);
-    if (distBefore > 6) return 0;
+    if (distBefore > 5) return 0;
 
     final handGroups = <int>{};
     for (final card in testHand) {
@@ -709,7 +607,7 @@ class AIStrategyHard extends AIStrategy {
         final dist = _distanceToTing(simHand, melds);
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 75;
+          totalScore += prob * improvement * 60;
         }
         continue;
       }
@@ -726,11 +624,11 @@ class AIStrategyHard extends AIStrategy {
       final dist = _distanceToTing(simHand, melds);
 
       if (dist <= 0) {
-        totalScore += prob * 1200;
+        totalScore += prob * 1000;
       } else {
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 120;
+          totalScore += prob * improvement * 100;
         }
       }
     }
@@ -793,12 +691,12 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
-    score += (10 - distToTing) * 125;
+    score += (10 - distToTing) * 80;
 
     if (isLate) {
-      score += (10 - distToTing) * 145;
+      score += (10 - distToTing) * 100;
       if (distToTing <= 2) {
-        score += 700;
+        score += 500;
       }
     }
 
@@ -843,7 +741,7 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 50;
+      score += (10 - expSteps) * 30;
     }
 
     return score;
@@ -891,6 +789,143 @@ class AIStrategyHard extends AIStrategy {
     return currentDist / totalImproveProb;
   }
 
+  double _evaluateDiscardComprehensive(
+    Player player,
+    Card cardToDiscard,
+    GameState state,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+    bool isLate,
+    double shiDuiPotential,
+    List<String> availableChars,
+  ) {
+    final testHand = List<Card>.from(player.hand);
+    testHand.remove(cardToDiscard);
+
+    final testPlayer = Player(
+      id: player.id,
+      name: player.name,
+      type: player.type,
+      hand: testHand,
+      melds: player.melds,
+    );
+
+    final quickDist = _distanceToTing(testHand, player.melds);
+
+    if (quickDist <= 2) {
+      final tingResult = _checkTingCached(testPlayer);
+
+      if (tingResult.isTing) {
+        double tingProb = 0;
+        int effectiveTingCount = 0;
+        final seenChars = <String>{};
+        for (final tc in tingResult.tingCards) {
+          if (seenChars.contains(tc.character)) continue;
+          seenChars.add(tc.character);
+          final rem = _remainingCount(tc.character, visibleCount);
+          if (rem > 0) {
+            tingProb += rem / totalUnknown;
+            effectiveTingCount++;
+          }
+        }
+        double score = 10000 + tingProb * 1000 + effectiveTingCount * 100;
+
+        score += _evaluateHuScore(testPlayer) * 5;
+
+        if (isLate) score += 2000;
+
+        return score;
+      }
+    }
+
+    final (potential, distToTing) = _evaluateHandPotentialAndDistance(
+      testHand,
+      player.melds,
+      visibleCount,
+      totalUnknown,
+    );
+
+    double score = potential;
+
+    if (distToTing <= 4) {
+      score += _lookaheadScore(
+        testHand,
+        player.melds,
+        visibleCount,
+        totalUnknown,
+        availableChars,
+      );
+    }
+
+    if (shiDuiPotential > 0) {
+      final testPairCount = _countHandPairsWithMelds(testPlayer);
+      if (testPairCount >= 7) {
+        score += testPairCount * 20.0;
+      }
+    }
+
+    if (cardToDiscard.isJing) {
+      score -= 80;
+    } else if (_isYin(cardToDiscard)) {
+      score -= 20;
+    }
+
+    if (_isPartOfKan(cardToDiscard, player.hand)) {
+      score -= 500;
+    }
+    if (_isPartOfZhao(cardToDiscard, player.hand)) {
+      score -= 1000;
+    }
+
+    score += (10 - distToTing) * 80;
+
+    if (isLate) {
+      score += (10 - distToTing) * 100;
+      if (distToTing <= 2) {
+        score += 500;
+      }
+    }
+
+    // 步骤10：早期策略 - 更注重收集同组牌，保留有潜力的组合
+    if (_isEarlyGame(state)) {
+      // 早期保留同组半搭子（2张不同字）
+      final sameGroup = player.hand
+          .where((c) => c.sentence == cardToDiscard.sentence)
+          .toList();
+      final groupCharSet = sameGroup.map((c) => c.character).toSet();
+      if (groupCharSet.length >= 2) {
+        // 惩罚打出半搭子中的牌
+        score -= 30;
+        // 同组3种字差1张成句，更不应打出
+        if (groupCharSet.length >= 3) {
+          score -= 20;
+        }
+      }
+      // 早期保留有进张的孤张
+      final otherChars = _groupChars[cardToDiscard.sentence - 1]
+          .where((ch) => ch != cardToDiscard.character)
+          .toList();
+      int partnerRem = 0;
+      for (final ch in otherChars) {
+        partnerRem += _remainingCount(ch, visibleCount);
+      }
+      if (partnerRem > 0) {
+        // 惩罚打出有进张的孤张
+        score -= partnerRem * 3;
+      }
+      // 早期精牌孤张更应保留
+      if (cardToDiscard.isJing) {
+        score -= 20;
+      }
+    }
+
+    // 步骤9：防守意识 - 评估出牌的危险性
+    score -= _evaluateDanger(player, cardToDiscard, state, isLate);
+
+    return score;
+  }
+
+  /// 评估出牌的危险性（被具他人胡牌的概率）
   double _evaluateDanger(
     Player player,
     Card cardToDiscard,
@@ -899,74 +934,115 @@ class AIStrategyHard extends AIStrategy {
     int? myDist,
   }) {
     double danger = 0;
+    final ch = cardToDiscard.character;
     final isMidGame = state.deck.length >= 20 && state.deck.length <= 50;
-    final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
-    final cardSentence = cardToDiscard.sentence;
 
-    final opponents = _opponentInfos;
-    if (opponents == null) return 0;
+    // 检查其他玩家的弃牌和面子，推测他们可能听什么
+    for (int i = 0; i < state.players.length; i++) {
+      if (i == player.id) continue;
+      final other = state.players[i];
 
-    for (final opp in opponents) {
-      if (opp.isTing) {
+      // 如果对方已经听牌，出牌更危险
+      if (other.isTing) {
+        // 对方听牌时，出任何牌都可能点炮
+        // 但某些牌更危险：对方已碰/招的字相关牌
+        final otherMeldChars = <String>{};
+        for (final meld in other.melds) {
+          for (final c in meld.cards) {
+            otherMeldChars.add(c.character);
+          }
+        }
+
+        // 如果出的牌和对方面子同组，更危险
+        final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
         for (final mc in sameGroupChars) {
-          if (opp.meldChars.contains(mc)) {
-            danger += isLate ? 45 : 30;
+          if (otherMeldChars.contains(mc)) {
+            danger += isLate ? 60 : 40;
             break;
           }
         }
 
+        // 对方听牌时，出精牌最危险
         if (cardToDiscard.isJing) {
-          danger += isLate ? 75 : 45;
+          danger += isLate ? 100 : 60;
         }
 
+        // 出阴牌也较危险（阴牌容易被胡）
         if (_isYin(cardToDiscard)) {
-          danger += isLate ? 30 : 15;
+          danger += isLate ? 40 : 20;
         }
 
-        danger += isLate ? 30 : 15;
+        // 基础危险分
+        danger += isLate ? 40 : 20;
 
-        if (opp.meldSentences.contains(cardSentence)) {
-          danger += isLate ? 38 : 22;
-        }
-      }
-
-      if (!opp.isTing && opp.meldCount >= 3) {
-        danger += isLate ? 11 : 6;
-      }
-
-      if (isMidGame && !opp.isTing) {
-        if (opp.meldSentences.contains(cardSentence) &&
-            !opp.discardSentences.contains(cardSentence)) {
-          danger += 7;
+        // 通过对方面子推断可能听的牌
+        // 对方碰/招了某字，可能听同组其他字
+        for (final meld in other.melds) {
+          final meldSentence = meld.cards.first.sentence;
+          if (meldSentence == cardToDiscard.sentence) {
+            // 出的牌和对方面子同组，极危险
+            danger += isLate ? 50 : 30;
+          }
         }
       }
 
+      // 对方未听牌但面子多时，也有一定危险
+      if (!other.isTing && other.melds.length >= 3) {
+        danger += isLate ? 15 : 8;
+      }
+
+      if (isMidGame && !other.isTing) {
+        final discardGroups = <int>{};
+        for (final dc in other.discards) {
+          discardGroups.add(dc.sentence);
+        }
+        final meldGroups = <int>{};
+        for (final meld in other.melds) {
+          meldGroups.add(meld.cards.first.sentence);
+        }
+        if (meldGroups.contains(cardToDiscard.sentence) &&
+            !discardGroups.contains(cardToDiscard.sentence)) {
+          danger += 10;
+        }
+      }
+
+      final otherDiscardChars = <String>{};
+      for (final dc in other.discards) {
+        otherDiscardChars.add(dc.character);
+      }
+      final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
       int discardedByOther = 0;
       for (final gc in sameGroupChars) {
-        if (opp.discardChars.contains(gc)) discardedByOther++;
+        if (otherDiscardChars.contains(gc)) discardedByOther++;
       }
-      if (discardedByOther == 0 && opp.meldCount > 0) {
-        danger += isLate ? 11 : 6;
+      if (discardedByOther == 0 && other.melds.isNotEmpty) {
+        danger += isLate ? 15 : 8;
       }
 
+      final otherMeldChars = <String>{};
+      for (final meld in other.melds) {
+        for (final c in meld.cards) {
+          otherMeldChars.add(c.character);
+        }
+      }
       for (final gc in sameGroupChars) {
-        if (opp.meldChars.contains(gc) && !opp.discardChars.contains(gc)) {
-          danger += isLate ? 15 : 9;
+        if (otherMeldChars.contains(gc) && !otherDiscardChars.contains(gc)) {
+          danger += isLate ? 20 : 12;
           break;
         }
       }
     }
 
+    // 如果自己已经听牌，进攻优先，减少防守惩罚
     if (player.isTing) {
-      danger *= 0.12;
+      danger *= 0.2;
     }
 
+    // 如果自己距离听牌很近（距离<=2），进攻优先
     final actualMyDist =
         myDist ?? _distanceToTing(List<Card>.from(player.hand), player.melds);
     if (actualMyDist <= 2) {
-      danger *= 0.2;
-    } else if (actualMyDist <= 4) {
-      danger *= 0.45;
+      danger *= 0.3;
     }
 
     return danger;
@@ -1343,9 +1419,9 @@ class AIStrategyHard extends AIStrategy {
 
       final dist = _distanceToTing(simHand, melds);
       if (dist <= 0) {
-        totalScore += prob * 650;
+        totalScore += prob * 500;
       } else {
-        totalScore += prob * (10 - dist) * 28;
+        totalScore += prob * (10 - dist) * 20;
       }
     }
 
@@ -1389,11 +1465,11 @@ class AIStrategyHard extends AIStrategy {
     }
 
     final benefit = _evaluateChiBenefit(player, card, state);
-    if (benefit < -30) return false;
+    if (benefit < 0) return false;
 
-    if (player.isTing) return benefit >= 7000;
+    if (player.isTing) return benefit >= 10000;
 
-    return benefit > -10;
+    return benefit > 0;
   }
 
   /// 检查手牌中是否已有包含出牌的完整一句，且每个字都只有1张
@@ -1471,28 +1547,31 @@ class AIStrategyHard extends AIStrategy {
 
       if (distAfterDiscard < distBefore) return true;
 
+      // 距离不变时，评估碰牌后手牌质量和进张损失
       final huScoreAfter = _evaluateHuScore(testPlayer);
       if (huScoreAfter > 0) return true;
 
+      // 评估碰牌前的进张（该字参与的其他组合价值）
       final charInHand = hand
           .where((c) => c.character == card.character)
           .length;
       if (charInHand >= 2) {
+        // 手牌有2张同字，碰掉后少了1张可用的牌
+        // 检查该字同组的其他字在手牌中是否有
         final otherChars = _groupChars[card.sentence - 1]
             .where((ch) => ch != card.character)
             .toList();
-        int partnerInHand = 0;
         for (final ch in otherChars) {
           if (hand.any((c) => c.character == ch)) {
-            partnerInHand++;
+            // 该字有同组伙伴，碰掉可能破坏靠/句组合
+            // 距离不变时不碰，保留灵活性
+            return false;
           }
-        }
-        if (partnerInHand >= 2) {
-          return false;
         }
       }
 
-      return testHand.length <= 7;
+      // 手牌较少时更倾向碰
+      return testHand.length <= 6;
     }
 
     // sameCharCount == 1: 只有一张同字牌，碰需要用2张
@@ -1654,4 +1733,20 @@ class AIStrategyHard extends AIStrategy {
     return true;
   }
 
+  Map<String, int> _buildCharCount(List<Card> hand) {
+    final result = <String, int>{};
+    for (final card in hand) {
+      result[card.character] = (result[card.character] ?? 0) + 1;
+    }
+    return result;
+  }
+
+  Map<int, Set<String>> _buildGroupCharSet(List<Card> hand) {
+    final result = <int, Set<String>>{};
+    for (final card in hand) {
+      result.putIfAbsent(card.sentence, () => <String>{});
+      result[card.sentence]!.add(card.character);
+    }
+    return result;
+  }
 }

@@ -286,7 +286,7 @@ class GameController {
         }
         onStateChanged?.call();
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (!state.gameStarted) return;
+          if (_isPaused || !state.gameStarted) return;
           _isStartingRound = false;
           _startTurn();
         });
@@ -1083,6 +1083,7 @@ class GameController {
     if (!isZimo && !winner.isTing) {
       state.isHandlingHu = false;
       state.waitingForResponse = false;
+      state.isDrawing = false;
       _clearPendingAIResponses();
       onStateChanged?.call();
       _nextTurn();
