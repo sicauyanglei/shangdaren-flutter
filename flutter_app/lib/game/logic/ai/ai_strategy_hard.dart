@@ -6,6 +6,76 @@ import '../../models/meld.dart';
 import '../ting_checker.dart';
 import '../hu_calculator.dart';
 
+class HandStats {
+  final Map<String, int> charCount;
+  final Map<int, Map<int, int>> sentencePosCount;
+  final Map<int, int> sentenceTotal;
+  final int totalCards;
+
+  HandStats({
+    required this.charCount,
+    required this.sentencePosCount,
+    required this.sentenceTotal,
+    required this.totalCards,
+  });
+
+  static HandStats build(List<Card> hand) {
+    final cc = <String, int>{};
+    final spc = <int, Map<int, int>>{};
+    final st = <int, int>{};
+    for (final card in hand) {
+      cc[card.character] = (cc[card.character] ?? 0) + 1;
+      spc.putIfAbsent(card.sentence, () => {});
+      spc[card.sentence]![card.position] =
+          (spc[card.sentence]![card.position] ?? 0) + 1;
+      st[card.sentence] = (st[card.sentence] ?? 0) + 1;
+    }
+    return HandStats(
+      charCount: cc,
+      sentencePosCount: spc,
+      sentenceTotal: st,
+      totalCards: hand.length,
+    );
+  }
+
+  int charTotal(String ch) => charCount[ch] ?? 0;
+
+  bool isKan(String ch) => charTotal(ch) >= 3;
+
+  bool isZhao(String ch) => charTotal(ch) >= 4;
+
+  bool hasSentence(int s) => sentenceTotal.containsKey(s);
+
+  int sentenceCardCount(int s) => sentenceTotal[s] ?? 0;
+
+  int posCount(int sentence, int position) =>
+      sentencePosCount[sentence]?[position] ?? 0;
+
+  Set<int> positionsInSentence(int sentence) =>
+      sentencePosCount[sentence]?.keys.toSet() ?? {};
+
+  int distinctCharsInSentence(int sentence) =>
+      sentencePosCount[sentence]?.length ?? 0;
+}
+
+class _OpponentInfo {
+  final bool isTing;
+  final int meldCount;
+  final Set<String> meldChars;
+  final Set<int> meldSentences;
+  final Set<String> discardChars;
+  final Set<int> discardSentences;
+
+  _OpponentInfo({
+    required this.isTing,
+    required this.meldCount,
+    required this.meldChars,
+    required this.meldSentences,
+    required this.discardChars,
+    required this.discardSentences,
+  });
+}
+
 class AIStrategyHard extends AIStrategy {
   static const List<List<String>> _groupChars = [
     ['上', '大', '人'],
@@ -55,17 +125,54 @@ class AIStrategyHard extends AIStrategy {
       for (int j = 0; j < _groupChars[i].length; j++) _groupChars[i][j]: j,
   };
 
-  Map<String, int> _distanceCache = {};
+  Map<int, int> _distanceCache = {};
   Map<int, TingResult> _tingCache = {};
   Map<int, double> _huScoreCache = {};
   Map<String, int>? _cachedVisibleCount;
   int? _cachedTotalUnknown;
-  Map<String, int>? _cachedCharCount;
+  HandStats? _cachedHandStats;
   int? _cacheOwnerId;
 
+  List<_OpponentInfo>? _opponentInfos;
+
+  void _buildOpponentInfos(Player player, GameState state) {
+    _opponentInfos = [];
+    for (int i = 0; i < state.players.length; i++) {
+      if (i == player.id) continue;
+      final other = state.players[i];
+      final meldChars = <String>{};
+      final meldSentences = <int>{};
+      for (final meld in other.melds) {
+        for (final c in meld.cards) {
+          meldChars.add(c.character);
+        }
+        meldSentences.add(meld.cards.first.sentence);
+      }
+      final discardChars = <String>{};
+      final discardSentences = <int>{};
+      for (final dc in other.discards) {
+        discardChars.add(dc.character);
+        discardSentences.add(dc.sentence);
+      }
+      _opponentInfos!.add(_OpponentInfo(
+        isTing: other.isTing,
+        meldCount: other.melds.length,
+        meldChars: meldChars,
+        meldSentences: meldSentences,
+        discardChars: discardChars,
+        discardSentences: discardSentences,
+      ));
+    }
+  }
+
   TingResult _checkTingCached(Player testPlayer) {
-    final key = testPlayer.hand.length * 100 + testPlayer.melds.length;
-    final hash = key ^ testPlayer.hand.fold(0, (a, c) => a ^ c.id);
+    int hash = testPlayer.melds.length;
+    for (final card in testPlayer.hand) {
+      hash = hash * 31 + card.id;
+    }
+    for (final m in testPlayer.melds) {
+      hash = hash * 17 + m.cards.first.id;
+    }
     final cached = _tingCache[hash];
     if (cached != null) return cached;
     final result = TingChecker.checkTing(testPlayer);
@@ -83,25 +190,20 @@ class AIStrategyHard extends AIStrategy {
     _huScoreCache.clear();
     _cachedVisibleCount = _buildVisibleCharCount(player, state);
     _cachedTotalUnknown = _totalUnknownCards(player, state);
-    _cachedCharCount = _buildCharCount(player.hand);
+    _cachedHandStats = HandStats.build(player.hand);
+    _buildOpponentInfos(player, state);
     _cacheOwnerId = player.id;
   }
 
-  String _handCacheKey(List<Card> hand, List<Meld> melds) {
-    final byChar = <String, int>{};
+  int _handCacheKey(List<Card> hand, List<Meld> melds) {
+    int hash = melds.length * 1000;
     for (final card in hand) {
-      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
+      hash = hash * 31 + card.id;
     }
-    final keys = byChar.keys.toList()..sort();
-    final buf = StringBuffer();
-    for (final k in keys) {
-      buf.write('$k${byChar[k]}');
-    }
-    buf.write('m${melds.length}');
     for (final m in melds) {
-      buf.write('${m.type.index}${m.cards.first.character}');
+      hash = hash * 17 + m.type.index * 100 + m.cards.first.id;
     }
-    return buf.toString();
+    return hash;
   }
 
   int _remainingCount(String character, Map<String, int> visibleCount) {
@@ -156,8 +258,8 @@ class AIStrategyHard extends AIStrategy {
   }
 
   bool _isPartOfKan(Card card, List<Card> hand) {
-    final cc = _cachedCharCount;
-    if (cc != null) return (cc[card.character] ?? 0) >= 3;
+    final stats = _cachedHandStats;
+    if (stats != null) return stats.isKan(card.character);
     int count = 0;
     for (final c in hand) {
       if (c.character == card.character) count++;
@@ -166,8 +268,8 @@ class AIStrategyHard extends AIStrategy {
   }
 
   bool _isPartOfZhao(Card card, List<Card> hand) {
-    final cc = _cachedCharCount;
-    if (cc != null) return (cc[card.character] ?? 0) >= 4;
+    final stats = _cachedHandStats;
+    if (stats != null) return stats.isZhao(card.character);
     int count = 0;
     for (final c in hand) {
       if (c.character == card.character) count++;
@@ -925,7 +1027,6 @@ class AIStrategyHard extends AIStrategy {
     return score;
   }
 
-  /// 评估出牌的危险性（被具他人胡牌的概率）
   double _evaluateDanger(
     Player player,
     Card cardToDiscard,
@@ -934,29 +1035,17 @@ class AIStrategyHard extends AIStrategy {
     int? myDist,
   }) {
     double danger = 0;
-    final ch = cardToDiscard.character;
     final isMidGame = state.deck.length >= 20 && state.deck.length <= 50;
+    final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
+    final cardSentence = cardToDiscard.sentence;
 
-    // 检查其他玩家的弃牌和面子，推测他们可能听什么
-    for (int i = 0; i < state.players.length; i++) {
-      if (i == player.id) continue;
-      final other = state.players[i];
+    final opponents = _opponentInfos;
+    if (opponents == null) return 0;
 
-      // 如果对方已经听牌，出牌更危险
-      if (other.isTing) {
-        // 对方听牌时，出任何牌都可能点炮
-        // 但某些牌更危险：对方已碰/招的字相关牌
-        final otherMeldChars = <String>{};
-        for (final meld in other.melds) {
-          for (final c in meld.cards) {
-            otherMeldChars.add(c.character);
-          }
-        }
-
-        // 如果出的牌和对方面子同组，更危险
-        final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
+    for (final opp in opponents) {
+      if (opp.isTing) {
         for (final mc in sameGroupChars) {
-          if (otherMeldChars.contains(mc)) {
+          if (opp.meldChars.contains(mc)) {
             danger += isLate ? 45 : 30;
             break;
           }
@@ -972,62 +1061,38 @@ class AIStrategyHard extends AIStrategy {
 
         danger += isLate ? 30 : 15;
 
-        for (final meld in other.melds) {
-          final meldSentence = meld.cards.first.sentence;
-          if (meldSentence == cardToDiscard.sentence) {
-            danger += isLate ? 38 : 22;
-          }
+        if (opp.meldSentences.contains(cardSentence)) {
+          danger += isLate ? 38 : 22;
         }
       }
 
-      // 对方未听牌但面子多时，也有一定危险
-      if (!other.isTing && other.melds.length >= 3) {
+      if (!opp.isTing && opp.meldCount >= 3) {
         danger += isLate ? 11 : 6;
       }
 
-      if (isMidGame && !other.isTing) {
-        final discardGroups = <int>{};
-        for (final dc in other.discards) {
-          discardGroups.add(dc.sentence);
-        }
-        final meldGroups = <int>{};
-        for (final meld in other.melds) {
-          meldGroups.add(meld.cards.first.sentence);
-        }
-        if (meldGroups.contains(cardToDiscard.sentence) &&
-            !discardGroups.contains(cardToDiscard.sentence)) {
+      if (isMidGame && !opp.isTing) {
+        if (opp.meldSentences.contains(cardSentence) &&
+            !opp.discardSentences.contains(cardSentence)) {
           danger += 7;
         }
       }
 
-      final otherDiscardChars = <String>{};
-      for (final dc in other.discards) {
-        otherDiscardChars.add(dc.character);
-      }
-      final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
       int discardedByOther = 0;
       for (final gc in sameGroupChars) {
-        if (otherDiscardChars.contains(gc)) discardedByOther++;
+        if (opp.discardChars.contains(gc)) discardedByOther++;
       }
-      if (discardedByOther == 0 && other.melds.isNotEmpty) {
+      if (discardedByOther == 0 && opp.meldCount > 0) {
         danger += isLate ? 11 : 6;
       }
 
-      final otherMeldChars = <String>{};
-      for (final meld in other.melds) {
-        for (final c in meld.cards) {
-          otherMeldChars.add(c.character);
-        }
-      }
       for (final gc in sameGroupChars) {
-        if (otherMeldChars.contains(gc) && !otherDiscardChars.contains(gc)) {
+        if (opp.meldChars.contains(gc) && !opp.discardChars.contains(gc)) {
           danger += isLate ? 15 : 9;
           break;
         }
       }
     }
 
-    // 如果自己已经听牌，进攻优先，减少防守惩罚
     if (player.isTing) {
       danger *= 0.12;
     }
@@ -1725,20 +1790,4 @@ class AIStrategyHard extends AIStrategy {
     return true;
   }
 
-  Map<String, int> _buildCharCount(List<Card> hand) {
-    final result = <String, int>{};
-    for (final card in hand) {
-      result[card.character] = (result[card.character] ?? 0) + 1;
-    }
-    return result;
-  }
-
-  Map<int, Set<String>> _buildGroupCharSet(List<Card> hand) {
-    final result = <int, Set<String>>{};
-    for (final card in hand) {
-      result.putIfAbsent(card.sentence, () => <String>{});
-      result[card.sentence]!.add(card.character);
-    }
-    return result;
-  }
 }
