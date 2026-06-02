@@ -155,6 +155,20 @@ class GameOverlay extends StatelessWidget {
                     type: GameButtonType.zimo,
                     onTap: onHu,
                   ),
+                  if (gameState.canZhao) ...[
+                    const SizedBox(width: 14),
+                    GameArtButton(
+                      label: '招',
+                      type: GameButtonType.zhao,
+                      onTap: onZhao,
+                    ),
+                  ],
+                  const SizedBox(width: 14),
+                  GameArtButton(
+                    label: '过',
+                    type: GameButtonType.pass,
+                    onTap: onPass,
+                  ),
                 ],
               ],
             ),

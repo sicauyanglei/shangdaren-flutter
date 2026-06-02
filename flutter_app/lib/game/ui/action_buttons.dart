@@ -280,13 +280,13 @@ class ActionButtons extends StatelessWidget {
       children: [
         if (canHu)
           GameArtButton(label: '胡', type: GameButtonType.hu, onTap: onHu),
-        if (canChi && !canHu)
+        if (canChi)
           GameArtButton(label: '吃', type: GameButtonType.chi, onTap: onChi),
-        if (canPeng && !canHu)
+        if (canPeng)
           GameArtButton(label: '碰', type: GameButtonType.peng, onTap: onPeng),
-        if (canZhao && !canHu)
+        if (canZhao)
           GameArtButton(label: '招', type: GameButtonType.zhao, onTap: onZhao),
-        if (_hasAnyAction && !canHu)
+        if (_hasAnyAction)
           GameArtButton(label: '过', type: GameButtonType.pass, onTap: onPass),
       ],
     );
