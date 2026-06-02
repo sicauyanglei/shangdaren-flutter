@@ -21,6 +21,17 @@ typedef MeldAnimCallback =
     void Function(List<Card> cards, int playerId, String meldType);
 
 class GameController {
+  static const List<List<String>> _groupChars = [
+    ['上', '大', '人'],
+    ['丘', '乙', '己'],
+    ['化', '三', '千'],
+    ['七', '十', '土'],
+    ['尔', '小', '生'],
+    ['八', '九', '子'],
+    ['佳', '作', '亡'],
+    ['福', '禄', '寿'],
+  ];
+
   final GameState state;
   AIController aiController;
   final Random _rng = Random();
@@ -628,7 +639,6 @@ class GameController {
           }
         }
       } else {
-        // 人类玩家：只要能碰/招/吃就加入选项
         if (_canZhaoWith(p, card)) {
           actions.add('zhao');
         }
@@ -636,7 +646,9 @@ class GameController {
           actions.add('peng');
         }
         if (_canChiWith(p, i, card, discardPlayerId)) {
-          actions.add('chi');
+          if (!_hasCompleteSentenceWithSingleCards(p, card)) {
+            actions.add('chi');
+          }
         }
       }
 
@@ -1714,6 +1726,27 @@ class GameController {
     }
 
     return null;
+  }
+
+  bool _hasCompleteSentenceWithSingleCards(Player player, Card card) {
+    final hand = player.hand;
+    final sentence = card.sentence;
+    final groupChars = _groupChars[sentence - 1];
+
+    final charCount = <String, int>{};
+    for (final ch in groupChars) {
+      charCount[ch] = 0;
+    }
+    for (final c in hand) {
+      if (c.sentence == sentence && charCount.containsKey(c.character)) {
+        charCount[c.character] = charCount[c.character]! + 1;
+      }
+    }
+
+    final allPresent = charCount.values.every((count) => count >= 1);
+    final allSingle = charCount.values.every((count) => count == 1);
+
+    return allPresent && allSingle && groupChars.contains(card.character);
   }
 
   void _addToPublicCount(String character, int count) {
