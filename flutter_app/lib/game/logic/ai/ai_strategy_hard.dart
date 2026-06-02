@@ -519,11 +519,11 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 1300;
+          double tingScore = 10000 + tingProb * 1400;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 130;
-          tingScore += huScore * 7;
-          if (isLate) tingScore += 2700;
+          tingScore += effectiveTingCount * 140;
+          tingScore += huScore * 8;
+          if (isLate) tingScore += 2800;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -691,12 +691,12 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
-    score += (10 - distToTing) * 110;
+    score += (10 - distToTing) * 125;
 
     if (isLate) {
-      score += (10 - distToTing) * 130;
+      score += (10 - distToTing) * 145;
       if (distToTing <= 2) {
-        score += 650;
+        score += 700;
       }
     }
 
@@ -741,7 +741,7 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 45;
+      score += (10 - expSteps) * 50;
     }
 
     return score;
@@ -1029,15 +1029,15 @@ class AIStrategyHard extends AIStrategy {
 
     // 如果自己已经听牌，进攻优先，减少防守惩罚
     if (player.isTing) {
-      danger *= 0.15;
+      danger *= 0.12;
     }
 
     final actualMyDist =
         myDist ?? _distanceToTing(List<Card>.from(player.hand), player.melds);
     if (actualMyDist <= 2) {
-      danger *= 0.25;
+      danger *= 0.2;
     } else if (actualMyDist <= 4) {
-      danger *= 0.5;
+      danger *= 0.45;
     }
 
     return danger;
