@@ -188,6 +188,7 @@ class GameOverlay extends StatelessWidget {
           right: 9.6,
           child: _RoundInfo(
             roundNumber: gameState.roundNumber,
+            dealerName: gameState.players[gameState.dealerIndex].name,
             showHuDisplay: gameState.showHuResult || gameState.showLiujuResult,
             isLastRound: gameState.roundNumber >= 8,
             onNextRound: onNextRound,
@@ -750,6 +751,7 @@ class _MyPlayerInfo extends StatelessWidget {
 
 class _RoundInfo extends StatefulWidget {
   final int roundNumber;
+  final String dealerName;
   final bool showHuDisplay;
   final bool isLastRound;
   final VoidCallback? onNextRound;
@@ -757,6 +759,7 @@ class _RoundInfo extends StatefulWidget {
 
   const _RoundInfo({
     required this.roundNumber,
+    this.dealerName = '',
     this.showHuDisplay = false,
     this.isLastRound = false,
     this.onNextRound,
@@ -853,19 +856,78 @@ class _RoundInfoState extends State<_RoundInfo> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14.4),
+        color: Colors.black.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFffd700).withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFffd700).withOpacity(0.08),
+            blurRadius: 12,
+          ),
+        ],
       ),
-      child: Text(
-        '${widget.roundNumber}/8',
-        style: const TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFFffd700),
-          shadows: [Shadow(color: Color(0x80000000), blurRadius: 5)],
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFffd700), Color(0xFFff8c00)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              widget.dealerName.isEmpty ? '庄' : widget.dealerName,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF1a0a00),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '第${widget.roundNumber}局',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFffd700),
+                  shadows: [Shadow(color: Color(0x80ffd700), blurRadius: 6)],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 110,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: const Color(0x1AFFFFFF),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: widget.roundNumber / 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4ecdc4), Color(0xFFffd700)],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
