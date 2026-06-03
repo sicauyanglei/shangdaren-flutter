@@ -12,7 +12,7 @@ export default defineAppConfig({
     navigationBarTitleText: '上大人字牌',
     navigationBarTextStyle: 'white',
     navigationStyle: 'custom',
-    pageOrientation: 'portrait',
+    pageOrientation: 'landscape',
   },
   tabBar: {
     color: '#86909c',
