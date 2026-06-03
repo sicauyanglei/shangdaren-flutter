@@ -1,0 +1,147 @@
+@use '@/styles/variables.scss' as *;
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.53);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.panel {
+  position: relative;
+  width: 640rpx;
+  background: linear-gradient(135deg, #2d2d2d, #1a1a1a);
+  border-radius: $radius-lg;
+  border: 2rpx solid $color-border;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.5);
+  padding: 40rpx 32rpx 32rpx;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: $color-error;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.closeText {
+  font-size: 36rpx;
+  color: #ffffff;
+  font-weight: $font-weight-bold;
+}
+
+.title {
+  display: block;
+  text-align: center;
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 20rpx rgba(255, 215, 0, 0.4);
+  margin-bottom: 32rpx;
+}
+
+.playersRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.playerCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16rpx 24rpx;
+  border-radius: $radius-md;
+  position: relative;
+  min-width: 120rpx;
+}
+
+.winner {
+  background: rgba(255, 215, 0, 0.15);
+  border: 2rpx solid rgba(255, 215, 0, 0.4);
+}
+
+.loser {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.playerName {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 8rpx;
+}
+
+.playerScore {
+  font-size: 36rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+}
+
+.winner .playerScore {
+  color: $color-gold;
+}
+
+.loser .playerScore {
+  color: $color-score-negative;
+}
+
+.playerLabel {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4rpx;
+}
+
+.arrow {
+  font-size: 28rpx;
+  color: rgba(255, 215, 0, 0.5);
+}
+
+.tagsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 6rpx 16rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: $radius-round;
+}
+
+.tagText {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.tagTextGold {
+  font-size: 24rpx;
+  color: $color-gold;
+  font-weight: $font-weight-bold;
+  white-space: nowrap;
+}
+
+.tagTextRed {
+  font-size: 24rpx;
+  color: $color-error;
+  font-weight: $font-weight-bold;
+  white-space: nowrap;
+}

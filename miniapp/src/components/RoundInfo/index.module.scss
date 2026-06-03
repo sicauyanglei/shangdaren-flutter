@@ -1,0 +1,53 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 12rpx 20rpx;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: $radius-lg;
+  border: 2rpx solid $color-border;
+  box-shadow: 0 0 16rpx rgba(255, 215, 0, 0.08);
+}
+
+.dealerBadge {
+  padding: 6rpx 16rpx;
+  background: linear-gradient(135deg, $color-gold, $color-orange);
+  border-radius: $radius-sm;
+}
+
+.dealerText {
+  font-size: 24rpx;
+  font-weight: $font-weight-bold;
+  color: #1a0a00;
+  white-space: nowrap;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.roundText {
+  font-size: 28rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 8rpx rgba(255, 215, 0, 0.3);
+}
+
+.progressTrack {
+  width: 160rpx;
+  height: 8rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, $color-teal, $color-gold);
+  border-radius: 4rpx;
+  transition: width 0.3s ease;
+}

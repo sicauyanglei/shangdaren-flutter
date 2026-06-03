@@ -1,0 +1,139 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: 0 $page-padding;
+  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
+}
+
+.header {
+  padding: 80rpx 0 32rpx;
+}
+
+.headerTitle {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
+}
+
+.statsCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  border: 2rpx solid $color-border;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.statValue {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+}
+
+.statValueGold {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+}
+
+.statLabel {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.statDivider {
+  width: 2rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  padding-bottom: 120rpx;
+}
+
+.recordCard {
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  padding: $spacing-lg;
+}
+
+.win {
+  border-color: rgba(78, 205, 196, 0.3);
+}
+
+.lose {
+  border-color: rgba(245, 63, 63, 0.2);
+}
+
+.recordHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-sm;
+}
+
+.recordDate {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.recordResult {
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+  padding: 4rpx 16rpx;
+  border-radius: $radius-round;
+}
+
+.resultWin {
+  color: $color-teal;
+  background: rgba(78, 205, 196, 0.15);
+}
+
+.resultLose {
+  color: $color-error;
+  background: rgba(245, 63, 63, 0.15);
+}
+
+.recordScores {
+  display: flex;
+  gap: $spacing-lg;
+}
+
+.scoreItem {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.scoreName {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.scoreValue {
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+}
+
+.positive {
+  color: $color-score-positive;
+}
+
+.negative {
+  color: $color-score-negative;
+}

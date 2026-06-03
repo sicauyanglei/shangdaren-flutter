@@ -1,0 +1,223 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 24rpx;
+  gap: 16rpx;
+}
+
+.backBtn {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.backText {
+  font-size: 32rpx;
+  color: $color-text-white;
+}
+
+.table {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.playerArea1, .playerArea2 {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 8rpx 24rpx;
+}
+
+.playerArea1 {
+  flex-direction: row;
+}
+
+.playerArea2 {
+  flex-direction: row-reverse;
+}
+
+.avatarArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  min-width: 120rpx;
+}
+
+.avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $color-gold, $color-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(255, 215, 0, 0.5);
+}
+
+.avatarText {
+  font-size: 28rpx;
+  font-weight: $font-weight-bold;
+  color: #1a0a00;
+}
+
+.playerName {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+.playerScore {
+  font-size: 24rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  white-space: nowrap;
+}
+
+.aiMelds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.aiDiscards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4rpx;
+}
+
+.meldGroup {
+  display: flex;
+  gap: 2rpx;
+}
+
+.deckArea {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deckCount {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.myArea {
+  display: flex;
+  flex-direction: column;
+  padding: 8rpx 24rpx 16rpx;
+  gap: 8rpx;
+}
+
+.myMelds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.myHand {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  overflow-x: auto;
+  padding: 8rpx 0;
+  min-height: 200rpx;
+}
+
+.myDiscards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4rpx;
+}
+
+.discardBtn {
+  @include button-reset;
+  position: fixed;
+  right: 32rpx;
+  bottom: 120rpx;
+  width: 160rpx;
+  height: $button-height-lg;
+  background: linear-gradient(135deg, $color-gold, $color-orange);
+  border-radius: $radius-button;
+  box-shadow: 0 0 24rpx rgba(255, 215, 0, 0.4);
+  z-index: 100;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.discardBtnText {
+  font-size: 32rpx;
+  font-weight: $font-weight-bold;
+  color: #1a0a00;
+  white-space: nowrap;
+}
+
+// 飘分面板
+.piaoPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 32rpx;
+}
+
+.piaoTitle {
+  font-size: 48rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 20rpx rgba(255, 215, 0, 0.4);
+}
+
+.piaoPlayer {
+  font-size: 32rpx;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.piaoOptions {
+  display: flex;
+  gap: 24rpx;
+}
+
+.piaoBtn {
+  @include button-reset;
+  min-width: 128rpx;
+  height: $button-height-md;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2rpx solid rgba(255, 255, 255, 0.2);
+  border-radius: $radius-button;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.piaoBtnText {
+  font-size: 28rpx;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  white-space: nowrap;
+}

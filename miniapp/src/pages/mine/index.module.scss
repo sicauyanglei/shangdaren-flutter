@@ -1,0 +1,186 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: 0 $page-padding;
+  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
+  padding-bottom: 120rpx;
+}
+
+.header {
+  padding: 80rpx 0 32rpx;
+}
+
+.headerTitle {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
+}
+
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  border: 2rpx solid $color-border;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.avatar {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $color-gold, $color-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 24rpx rgba(255, 215, 0, 0.2);
+}
+
+.avatarText {
+  font-size: 40rpx;
+  font-weight: $font-weight-bold;
+  color: #1a0a00;
+}
+
+.profileInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.profileName {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+}
+
+.profileLevel {
+  font-size: $font-size-sm;
+  color: $color-gold;
+  font-weight: $font-weight-semibold;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-sm;
+  margin-bottom: $spacing-lg;
+}
+
+.statCard {
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.statValue {
+  font-size: 44rpx;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+}
+
+.statLabel {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.section {
+  margin-bottom: $spacing-lg;
+}
+
+.sectionTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  margin-bottom: $spacing-md;
+  display: block;
+}
+
+.achievementList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.achievementCard {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-md $spacing-lg;
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.unlocked {
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.locked {
+  opacity: 0.5;
+}
+
+.achIcon {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.achIconText {
+  font-size: 40rpx;
+}
+
+.unlocked .achIconText {
+  color: $color-gold;
+}
+
+.locked .achIconText {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.achInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.achName {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+}
+
+.achDesc {
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.aboutCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: $spacing-lg;
+}
+
+.aboutText {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.aboutDesc {
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.3);
+}

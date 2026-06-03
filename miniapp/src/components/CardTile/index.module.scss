@@ -1,0 +1,78 @@
+@use '@/styles/variables.scss' as *;
+
+.cardTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 2rpx solid rgba(255, 215, 0, 0.3);
+  border-radius: 8rpx;
+  position: relative;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.char {
+  font-weight: 900;
+  line-height: 1;
+}
+
+.cardImage {
+  width: 100%;
+  height: 100%;
+}
+
+.red .char {
+  color: $color-card-red;
+  text-shadow: 0 0 8rpx rgba(231, 76, 60, 0.5);
+}
+
+.green .char {
+  color: $color-card-green;
+  text-shadow: 0 0 8rpx rgba(39, 174, 96, 0.5);
+}
+
+.black .char {
+  color: $color-card-black;
+}
+
+.sm {
+  width: 56rpx;
+  height: 96rpx;
+  .char { font-size: 28rpx; }
+}
+
+.md {
+  width: 68rpx;
+  height: 112rpx;
+  .char { font-size: 32rpx; }
+}
+
+.lg {
+  width: 120rpx;
+  height: 448rpx;
+  .char { font-size: 56rpx; }
+}
+
+.selected {
+  border-color: $color-gold;
+  box-shadow: 0 0 16rpx rgba(255, 215, 0, 0.5);
+  transform: translateY(-16rpx);
+}
+
+.label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24rpx;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 0 10rpx #ff0000, 0 0 20rpx #ff0000;
+  white-space: nowrap;
+}

@@ -1,0 +1,102 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: 0 $page-padding;
+  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
+}
+
+.header {
+  padding: 80rpx 0 32rpx;
+}
+
+.headerTitle {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
+}
+
+.card {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  border: 2rpx solid $color-border;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+.section {
+  margin-bottom: $spacing-lg;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.sectionTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  margin-bottom: $spacing-md;
+  display: block;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.sliderValue {
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+  color: $color-gold;
+  min-width: 80rpx;
+  white-space: nowrap;
+}
+
+.diffGroup {
+  display: flex;
+  gap: 16rpx;
+}
+
+.diffCard {
+  flex: 1;
+  padding: 24rpx 16rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: $radius-md;
+  text-align: center;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.diffActive {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: rgba(255, 215, 0, 0.4);
+}
+
+.diffLabel {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  margin-bottom: 8rpx;
+}
+
+.diffDesc {
+  display: block;
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.ruleText {
+  font-size: $font-size-md;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: $line-height-loose;
+}

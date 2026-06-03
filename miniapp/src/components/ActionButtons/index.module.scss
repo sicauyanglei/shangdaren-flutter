@@ -1,0 +1,68 @@
+@use '@/styles/variables.scss' as *;
+
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 16rpx 32rpx;
+}
+
+.btn {
+  @include button-reset;
+  min-width: 96rpx;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  padding: 0 32rpx;
+  transition: all $transition-fast;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.btnText {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+}
+
+.btnTextZimo, .btnTextHu {
+  font-size: 44rpx;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+  text-shadow: 0 0 12rpx rgba(255, 215, 0, 0.6);
+}
+
+.btnZimo {
+  background: linear-gradient(135deg, #ff6b6b, #e74c3c);
+  border: 2rpx solid rgba(255, 107, 107, 0.5);
+  box-shadow: 0 0 20rpx rgba(231, 76, 60, 0.4);
+}
+
+.btnHu {
+  background: linear-gradient(135deg, #ffd700, #ff8c00);
+  border: 2rpx solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 20rpx rgba(255, 215, 0, 0.4);
+}
+
+.btnZhao {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  border: 2rpx solid rgba(155, 89, 182, 0.5);
+}
+
+.btnPeng {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border: 2rpx solid rgba(52, 152, 219, 0.5);
+}
+
+.btnChi {
+  background: linear-gradient(135deg, $color-teal, #2ecc71);
+  border: 2rpx solid rgba(78, 205, 196, 0.5);
+}
+
+.btnPass {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2rpx solid rgba(255, 255, 255, 0.2);
+}
