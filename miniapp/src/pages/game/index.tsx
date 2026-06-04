@@ -370,8 +370,9 @@ const HumanHandCards: React.FC<{
   onCardClick: (cardId: number) => void;
   onCardDoubleClick: (cardId: number) => void;
   isTing: boolean;
+  hideTingBadge: boolean;
   newCardId: number | null;
-}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, newCardId }) => {
+}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, hideTingBadge, newCardId }) => {
   const sentenceGroups = useMemo(() => groupHandBySentence(hand), [hand]);
   const lastClickRef = useRef<{ cardId: number; time: number } | null>(null);
 
@@ -439,7 +440,7 @@ const HumanHandCards: React.FC<{
                       <Text>{stack.cards.length}</Text>
                     </View>
                   )}
-                  {isTing && !showCount && (
+                  {isTing && !hideTingBadge && !showCount && (
                     <View className={styles.handCardTingBadge} style={{ top: px2vh(topOffset + 2) }} />
                   )}
                   {/* 新牌标记 */}
@@ -564,7 +565,7 @@ const Game: React.FC = () => {
   const aiPlayer1 = store.players[1]; // 玩家1 - 左上
   const aiPlayer2 = store.players[2]; // 玩家2 - 右上
 
-  const isMyTurn = store.currentPlayerIndex === 0 && store.phase === 'playing';
+  const isMyTurn = store.isMyTurn && store.phase === 'playing';
 
   // 人类玩家有待处理操作时显示倒计时
   const humanHasPendingActions = store.canChi || store.canPeng || store.canZhao || store.canHu || store.canZimo;
@@ -596,9 +597,10 @@ const Game: React.FC = () => {
   };
 
   // ============================================
-  // 飘分阶段
+  // 飘分阶段 - 只有人类玩家轮次才显示选择弹窗
   // ============================================
-  if (store.isPiaoPhase) {
+  const isHumanPiaoTurn = store.isPiaoPhase && store.players[store.piaoCurrentPlayerIndex]?.type === 'human';
+  if (isHumanPiaoTurn) {
     return (
       <View className={styles.page}>
         <View className={styles.piaoPopup}>
@@ -778,7 +780,7 @@ const Game: React.FC = () => {
                   )}
                 </View>
                 {/* 听牌徽章 - 在playerInfo旁边，不是里面 */}
-                {humanPlayer?.isTing && (
+                {humanPlayer?.isTing && !store.hideTingBadge && (
                   <View className={styles.tingBadge}>
                     <Text>听</Text>
                   </View>
@@ -796,6 +798,7 @@ const Game: React.FC = () => {
             onCardClick={handleCardClick}
             onCardDoubleClick={handleCardDoubleClick}
             isTing={humanPlayer?.isTing ?? false}
+            hideTingBadge={store.hideTingBadge}
             newCardId={store.newCardId}
           />
         </View>
@@ -811,7 +814,7 @@ const Game: React.FC = () => {
         const btnBottom = DH - handTopY + 2;
         return (
           <View className={styles.actionButtonsArea} style={{ bottom: px2vh(btnBottom) }}>
-            {isMyTurn && selectedCardId !== null && (
+            {isMyTurn && selectedCardId !== null && !store.isDrawing && !store.canChi && !store.canPeng && !store.canZhao && !store.canHu && !store.canZimo && (
               <View
                 className={styles.discardBtn}
                 onClick={handleDiscard}
@@ -887,7 +890,7 @@ const Game: React.FC = () => {
       {store.phase === 'settlement' && (
         <SettlementScreen
           players={store.players}
-          roundResults={[]}
+          roundResults={store.roundResults}
           onClose={() => {
             Taro.navigateBack();
           }}

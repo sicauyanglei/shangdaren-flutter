@@ -88,6 +88,8 @@ const initialState: GameState = {
   isDrawing: false,
   hideTingBadge: false,
   waitingForResponse: false,
+  isMyTurn: false,
+  isHandlingHu: false,
   roundResults: [],
 };
 
@@ -283,6 +285,8 @@ function updatePlayerTingAndHu(player: Player): void {
 let _pendingAIResponses: Map<number, string[]> | null = null;
 let _pendingResponseCard: Card | null = null;
 let _pendingResponseDiscardPlayerId: number | null = null;
+let _skipDraw = false;
+let _hasDealerPlayedFirstTurn = false;
 
 function clearPendingAIResponses(): void {
   _pendingAIResponses = null;
@@ -360,6 +364,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // 重置状态
+    _skipDraw = false;
+    _hasDealerPlayedFirstTurn = false;
     const players = clonePlayers(state.players);
     for (const player of players) {
       player.hand = [];
@@ -501,8 +507,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (state.phase !== 'playing') return;
 
-    // 检查流局
-    if (state.deck.length === 0) {
+    // 匹配 Flame: 流局检查（_skipDraw时不检查牌堆空）
+    if (state.deck.length === 0 && !_skipDraw) {
       get()._handleLiuju();
       return;
     }
@@ -514,12 +520,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get()._processAITurn(player, currentIdx);
     } else {
       // 人类玩家
-      const totalCards = getTotalCardCount(player);
-      if (totalCards >= 20) {
-        // 20张牌，不能摸牌，必须出牌
+      // 匹配 Flame: _skipDraw时跳过摸牌，直接出牌
+      if (_skipDraw) {
+        _skipDraw = false;
+        get()._checkHumanActionsAfterDraw(true);
+      } else if (!_hasDealerPlayedFirstTurn && currentIdx === state.dealerIndex) {
+        // 匹配 Flame: 庄家第一回合不摸牌，直接出牌
+        _hasDealerPlayedFirstTurn = true;
         get()._checkHumanActionsAfterDraw(true);
       } else {
-        get()._drawCardForHuman();
+        const totalCards = getTotalCardCount(player);
+        if (totalCards >= 20) {
+          // 20张牌，不能摸牌，必须出牌
+          get()._checkHumanActionsAfterDraw(true);
+        } else {
+          get()._drawCardForHuman();
+        }
       }
     }
   },
@@ -596,6 +612,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       canChi: false,
       isDrawing: false,
       hideTingBadge: canZimoFlag,
+      isMyTurn: true, // 匹配 Flame: _completeDrawForHuman 中设置 isMyTurn = true
     });
   },
 
@@ -604,8 +621,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ============================================================
   _processAITurn: (player: Player, playerIdx: number) => {
     const state = get();
-    if (state.deck.length === 0) {
+    if (state.deck.length === 0 && !_skipDraw) {
       get()._handleLiuju();
+      return;
+    }
+
+    // 匹配 Flame: _skipDraw时跳过摸牌
+    if (_skipDraw) {
+      _skipDraw = false;
+      get()._aiContinueAfterDraw(player, playerIdx, undefined, true);
+      return;
+    }
+
+    // 匹配 Flame: 庄家第一回合不摸牌，直接出牌
+    if (!_hasDealerPlayedFirstTurn && playerIdx === state.dealerIndex) {
+      _hasDealerPlayedFirstTurn = true;
+      get()._aiContinueAfterDraw(player, playerIdx, undefined, true);
       return;
     }
 
@@ -675,6 +706,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   _doDiscard: (playerIdx: number, card: Card) => {
     const state = get();
+    _skipDraw = false;
     const players = clonePlayers(state.players);
     const player = players[playerIdx];
 
@@ -698,6 +730,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           canZimo: false,
           isZimoOpportunity: false,
           isDrawing: false,
+          isMyTurn: false, // 匹配 Flame: 出牌后 isMyTurn = false
         });
 
         get()._checkResponses(lastCard, playerIdx);
@@ -726,6 +759,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isZimoOpportunity: false,
       isDrawing: false,
       newCardId: null,
+      isMyTurn: false, // 匹配 Flame: 出牌后 isMyTurn = false
     });
 
     get()._checkResponses(card, playerIdx);
@@ -888,9 +922,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
-    // 显示人类操作按钮
+    // 显示人类操作按钮（匹配 Flame: 设置 isMyTurn = true）
     const updates: Partial<GameState> = {
       waitingForResponse: true,
+      isMyTurn: true,
     };
 
     for (const action of humanResponses) {
@@ -929,6 +964,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       waitingForResponse: false,
     });
 
+    // 匹配 Flame: respondHu 中清除待处理AI响应
+    clearPendingAIResponses();
+
     get()._handleHu(
       humanIdx,
       isZimo,
@@ -952,6 +990,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (state.waitingForResponse) {
       set({ waitingForResponse: false, hideTingBadge: true });
+      // 匹配 Flame: respondZhao 中清除待处理AI响应
+      clearPendingAIResponses();
       if (state.lastDiscard && state.lastDiscardPlayerId !== null) {
         get()._handleZhaoRespond(humanIdx, state.lastDiscard, state.lastDiscardPlayerId);
       }
@@ -960,7 +1000,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const player = state.players[humanIdx];
       const candidates = getZhaoCandidates(player);
       if (candidates.length === 0) {
-        set({ canZhao: false });
+        // 匹配 Flame: 没有可招的牌，设置isMyTurn并启动countdown
+        set({ canZhao: false, isMyTurn: true });
         return;
       }
       if (candidates.length === 1) {
@@ -986,6 +1027,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hideTingBadge: true,
     });
 
+    // 匹配 Flame: respondPeng 中清除待处理AI响应
+    clearPendingAIResponses();
+
     if (state.lastDiscard && state.lastDiscardPlayerId !== null) {
       get()._handlePeng(humanIdx, state.lastDiscard, state.lastDiscardPlayerId);
     }
@@ -1005,6 +1049,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       waitingForResponse: false,
       hideTingBadge: true,
     });
+
+    // 匹配 Flame: respondChi 中清除待处理AI响应
+    clearPendingAIResponses();
 
     if (state.lastDiscard && state.lastDiscardPlayerId !== null) {
       get()._handleChi(humanIdx, state.lastDiscard, state.lastDiscardPlayerId);
@@ -1035,8 +1082,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get()._nextTurn();
       }
     } else {
-      // 过招按钮后，需要出牌
-      // 什么都不做，等待人类出牌
+      // 匹配 Flame: 过招按钮后，需要出牌，设置isMyTurn并启动countdown
+      set({ isMyTurn: true });
     }
   },
 
@@ -1129,6 +1176,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     updatePlayerTingAndHu(player);
 
+    // 匹配 Flame: 吃后设置 _skipDraw = true
+    _skipDraw = true;
+
     set({
       players,
       currentPlayerIndex: playerIdx,
@@ -1141,10 +1191,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       waitingForResponse: false,
     });
 
-    // 碰/吃后跳过摸牌（skipDraw），直接出牌
+    // 匹配 Flame: 人类玩家吃后设置isMyTurn并启动countdown
     const humanIdx = state.players.findIndex(p => p.type === 'human');
     if (playerIdx === humanIdx) {
-      // 人类玩家直接出牌
+      set({ isMyTurn: true, isDrawing: false });
       get()._checkHumanActionsAfterDraw(true);
     } else {
       // AI出牌
@@ -1188,6 +1238,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     updatePlayerTingAndHu(player);
 
+    // 匹配 Flame: 碰后设置 _skipDraw = true
+    _skipDraw = true;
+
     set({
       players,
       currentPlayerIndex: playerIdx,
@@ -1200,9 +1253,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       waitingForResponse: false,
     });
 
-    // 碰后跳过摸牌，直接出牌
+    // 匹配 Flame: 人类玩家碰后设置isMyTurn并启动countdown
     const humanIdx = state.players.findIndex(p => p.type === 'human');
     if (playerIdx === humanIdx) {
+      set({ isMyTurn: true, isDrawing: false });
       get()._checkHumanActionsAfterDraw(true);
     } else {
       get()._aiContinueAfterDraw(player, playerIdx, undefined, true);
@@ -1222,9 +1276,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
 
     if (existingKan.length > 0) {
-      // 坎升级为招
+      // 坎升级为招（匹配 Flame L1468-1478）
       const oldMeld = existingKan[0];
       player.melds = player.melds.filter(m => m !== oldMeld);
+
+      // 从弃牌区移除
+      const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
+      if (discardIdx >= 0) {
+        discarder.discards.splice(discardIdx, 1);
+      }
+
       const newCards = [...oldMeld.cards, card];
       player.melds.push({
         type: 'zhao',
@@ -1301,13 +1362,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     if (!targetChar) {
+      // 匹配 Flame: 没有可招的牌，清除状态
       set({
         canZhao: false,
         showZhaoSelection: false,
         zhaoCandidates: [],
+        canChi: false,
+        canPeng: false,
+        canHu: false,
+        isDrawing: false,
       });
       const humanIdx = state.players.findIndex(p => p.type === 'human');
       if (playerIdx === humanIdx) {
+        // 匹配 Flame: 设置isMyTurn并启动countdown
+        set({ isMyTurn: true });
         get()._checkHumanActionsAfterDraw(true);
       } else {
         const toDiscard = aiSelectDiscard(player, state.difficulty);
@@ -1383,11 +1451,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (state.showHuResult) return;
 
+    // 匹配 Flame: 设置 isHandlingHu
+    set({ isHandlingHu: true, canChi: false, canPeng: false, canZhao: false, canHu: false, isMyTurn: false });
+
     const players = clonePlayers(state.players);
     const winner = players[winnerIdx];
 
     // 点炮时检查听牌（自摸不要求isTing）
     if (!isZimo && !winner.isTing) {
+      // 匹配 Flame: 清除状态后调用 _nextTurn
+      set({
+        isHandlingHu: false,
+        waitingForResponse: false,
+        isDrawing: false,
+      });
+      clearPendingAIResponses();
       get()._nextTurn();
       return;
     }
@@ -1475,6 +1553,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isZimoOpportunity: false,
       waitingForResponse: false,
       isDrawing: false,
+      isHandlingHu: false,
     });
   },
 

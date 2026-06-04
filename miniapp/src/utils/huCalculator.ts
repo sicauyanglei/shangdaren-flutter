@@ -834,8 +834,8 @@ export function calculateTotalHu(hand: Card[], melds: Meld[], paoCard?: Card): n
 // ============ 胡牌判断 ============
 
 /** 判断是否可以胡牌（点炮场景，需要isTing） */
-export function canHu(hand: Card[], melds: Meld[], isTing: boolean): boolean {
-  if (!isTing) return false;
+export function canHu(hand: Card[], melds: Meld[], _isTing?: boolean): boolean {
+  // 匹配 Flame: HuCalculator.canHu 不检查 isTing，isTing 在调用方检查
   if (!_checkStructural(hand)) return false;
 
   const totalHu = calculateTotalHu(hand, melds);

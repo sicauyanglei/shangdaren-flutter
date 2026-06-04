@@ -133,6 +133,10 @@ export interface GameState {
   hideTingBadge: boolean;
   // 是否等待人类玩家响应
   waitingForResponse: boolean;
+  // 是否轮到人类玩家出牌
+  isMyTurn: boolean;
+  // 是否正在处理胡牌
+  isHandlingHu: boolean;
   // 局结果历史（用于总结算）
   roundResults: RoundResult[];
 }
