@@ -1,0 +1,369 @@
+// HuPanel - 胡牌结果面板（匹配 Flame 版本 _renderHuResult）
+// 使用 px 单位，横屏模式
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.53);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.panel {
+  position: relative;
+  width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(135deg, rgba(26, 71, 42, 0.94), rgba(13, 40, 24, 0.97));
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 20px 8px rgba(255, 215, 0, 0.2);
+  padding: 28px 32px 20px;
+}
+
+// 关闭按钮
+.closeBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background: rgba(204, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  box-shadow: 0 0 6px 3px rgba(0, 0, 0, 0.25);
+}
+
+.closeText {
+  font-size: 32px;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// 标题
+.title {
+  display: block;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  margin-bottom: 16px;
+}
+
+// 玩家条目行
+.panoRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+// 玩家卡片
+.panoCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 20px;
+  border-radius: 12px;
+  min-width: 100px;
+}
+
+.winnerCard {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.1));
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 10px 4px rgba(255, 215, 0, 0.1);
+}
+
+.loserCard {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+// 玩家名称
+.panoName {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.panoNameWinner {
+  color: #ffd700;
+}
+
+.panoNameLoser {
+  color: #999999;
+}
+
+// 分数
+.panoScore {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.panoScoreWinner {
+  color: #ffd700;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+.panoScoreLoser {
+  color: #ff6b6b;
+  text-shadow: 0 0 6px rgba(255, 107, 107, 0.4);
+}
+
+// 标签（赢家/输家/点炮）
+.panoLabel {
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+.panoLabelWinner {
+  color: #ffd700;
+}
+
+.panoLabelLoser {
+  color: #666666;
+}
+
+// 箭头
+.panoArrow {
+  font-size: 20px;
+  color: rgba(255, 215, 0, 0.3);
+  font-weight: 700;
+  line-height: 1;
+}
+
+// 分隔线
+.divider {
+  height: 1px;
+  background: rgba(255, 215, 0, 0.12);
+  margin: 0 20px 12px;
+}
+
+// 底部标签行
+.tagsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.tagText {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+// ============================================================
+// 赢家手牌展示（匹配Flutter的_buildHandDisplay）
+// ============================================================
+
+.sectionContainer {
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.sectionTitle {
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 215, 0, 0.7);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.handContainer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+.handGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.handCardWrapper {
+  position: relative;
+}
+
+.handCard {
+  width: 40px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f5f0e0, #e8e0c8);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.handCardChar {
+  font-size: 28px;
+  font-weight: 900;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 4px;
+}
+
+// 胡牌标签（匹配Flutter: "炮"/"自摸"标签样式）
+.huCardLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.huCardLabelText {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+}
+
+// 卡牌数量角标
+.cardCountBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #ff6b6b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardCountText {
+  font-size: 11px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+// ============================================================
+// 赢家组合牌展示（匹配Flutter的_buildMeldsDisplay）
+// ============================================================
+
+.meldsContainer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+.meldGroup {
+  display: flex;
+  flex-direction: row;
+  padding: 2px;
+  margin: 1px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 4px;
+}
+
+.meldCard {
+  width: 20px;
+  height: 84px;
+  margin: 0 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f5f0e0, #e8e0c8);
+  border-radius: 2px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.meldCardChar {
+  font-size: 14px;
+  font-weight: 900;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+// ============================================================
+// 输家手牌展示（匹配Flutter的_buildLosersDisplay）
+// ============================================================
+
+.losersRow {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.loserCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.loserName {
+  font-size: 11px;
+  color: #aaaaaa;
+  margin-bottom: 3px;
+}
+
+.loserHandRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px;
+  margin: 3px 0;
+}
+
+.loserHandCard {
+  width: 16px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f5f0e0, #e8e0c8);
+  border-radius: 1px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.loserHandChar {
+  font-size: 10px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+.loserScore {
+  font-size: 14px;
+  color: #ff6b6b;
+  font-weight: 700;
+}

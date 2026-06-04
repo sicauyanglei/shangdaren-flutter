@@ -1,0 +1,118 @@
+// ============================================
+// CardTile 组件样式（px 单位，适配横屏模式）
+// 对齐 Flame 版本卡牌渲染规范
+// ============================================
+
+// --- 卡牌基础 ---
+.cardTile {
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+
+  &:active {
+    opacity: 0.9;
+  }
+}
+
+.cardImage {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+// --- 尺寸变体 ---
+
+// 手牌（人类玩家）: 65px x 224px，圆角6px，带阴影
+.hand {
+  width: 65px;
+  height: 224px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+// 小牌（弃牌区）: 28px x 48px，圆角3px
+.small {
+  width: 28px;
+  height: 48px;
+  border-radius: 3px;
+}
+
+// 组合牌: 34px x 56px，圆角3px
+.meld {
+  width: 34px;
+  height: 56px;
+  border-radius: 3px;
+}
+
+// 横向牌（中央出牌区）: 160px x 40px，圆角3px
+.horizontal {
+  width: 160px;
+  height: 40px;
+  border-radius: 3px;
+}
+
+// 背面牌（AI手牌）: 34px x 56px，圆角3px
+.back {
+  width: 34px;
+  height: 56px;
+  border-radius: 3px;
+}
+
+// --- 选中状态（手牌上移28px） ---
+.selected {
+  transform: translateY(-28px);
+  z-index: 10;
+}
+
+// --- 最后弃牌（橙色边框 + 抖动动画） ---
+.lastDiscard {
+  border: 2px solid #ff8c00;
+  animation: shake 0.4s ease-in-out infinite;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+// --- 叠放计数徽章（红色圆圈白色数字） ---
+.countBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e74c3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.countText {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+// --- 炮/自摸 标签 ---
+// 字体大小16px，加粗，白色，红色发光效果，居中无背景
+.label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  white-space: nowrap;
+  z-index: 6;
+  pointer-events: none;
+}
