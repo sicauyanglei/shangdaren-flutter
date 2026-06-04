@@ -18,6 +18,7 @@ interface GameStore extends GameState {
   closeLiujuResult: () => void;
   setVolume: (v: number) => void;
   setDifficulty: (d: string) => void;
+  selectZhaoCharacter: (char: string) => void;
 }
 
 const initialState: GameState = {
@@ -40,6 +41,16 @@ const initialState: GameState = {
   difficulty: 'hard',
   piaoEnabled: false,
   volume: 80,
+  canChi: false,
+  canPeng: false,
+  canZhao: false,
+  canHu: false,
+  canZimo: false,
+  isZimoOpportunity: false,
+  showZhaoSelection: false,
+  zhaoCandidates: [],
+  countdown: 14,
+  newCardId: null,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -197,4 +208,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   closeLiujuResult: () => set({ showLiujuResult: false }),
   setVolume: (v) => set({ volume: v }),
   setDifficulty: (d) => set({ difficulty: d }),
+  selectZhaoCharacter: (char) => {
+    console.log('[Game] Select zhao character:', char);
+    set({ showZhaoSelection: false, zhaoCandidates: [] });
+  },
 }));

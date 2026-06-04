@@ -202,6 +202,83 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
+// 倒计时组件 (匹配 Flame _CountdownTimer)
+// ============================================
+.countdownTimerWrap {
+  position: absolute;
+  top: px2vh(-4);
+  left: px2vw(-4);
+  z-index: 10;
+}
+
+.countdownTimer {
+  width: px2vw(28);
+  height: px2vw(28);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid $color-gold;
+}
+
+.countdownNormal {
+  background: linear-gradient(135deg, #2c3e50, #1a252f);
+  border-color: $color-gold;
+  box-shadow: 0 0 px2vw(6) rgba(255, 215, 0, 0.4);
+}
+
+.countdownWarning {
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+  border-color: #ff4444;
+  box-shadow: 0 0 px2vw(8) rgba(255, 68, 68, 0.6);
+  animation: countdownPulse 0.8s ease-in-out infinite;
+}
+
+.countdownNumber {
+  font-size: px2vw(14);
+  font-weight: bold;
+  color: #fff;
+  line-height: 1;
+}
+
+@keyframes countdownPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 px2vw(6) rgba(255, 68, 68, 0.4);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 px2vw(12) rgba(255, 68, 68, 0.8);
+  }
+}
+
+// ============================================
+// 胡数徽章 (匹配 Flame _MyPlayerInfo huCount badge)
+// ============================================
+.huCountBadgeWrap {
+  position: absolute;
+  top: px2vh(-4);
+  right: px2vw(-4);
+  z-index: 10;
+}
+
+.huCountBadge {
+  padding: px2vh(8) px2vw(4);
+  background: linear-gradient(135deg, #ffd700, #daa520);
+  border-radius: px2vw(8);
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  min-width: px2vw(48);
+  text-align: center;
+}
+
+.huCountBadgeText {
+  font-size: px2vw(18);
+  font-weight: bold;
+  color: #1a0a00;
+  white-space: nowrap;
+}
+
+// ============================================
 // Player 0 区域 (AI 玩家1 - 左上)
 // ============================================
 .player0Area {
@@ -401,6 +478,13 @@ $color-non-dealer-gradient-end: #2d5a3d;
   margin-top: $avatar-to-meld-gap;
 }
 
+.player1InfoRow {
+  display: flex;
+  align-items: flex-start;
+  gap: px2vw(4);
+  transform: translate(px2vw(4), px2vh(-4));
+}
+
 .player1HandWrap {
   width: 100%;
   display: flex;
@@ -502,6 +586,27 @@ $color-non-dealer-gradient-end: #2d5a3d;
   border-radius: 50%;
   background: #ff4444;
   z-index: 5;
+}
+
+// ============================================
+// 新牌标记 (匹配 Flame _renderHandOverlays)
+// ============================================
+.newCardMarker {
+  position: absolute;
+  left: px2vw(2);
+  top: px2vh(2);
+  z-index: 6;
+  padding: px2vh(2) px2vw(4);
+  background: linear-gradient(135deg, #ff6b6b, #e74c3c);
+  border-radius: px2vw(4);
+  box-shadow: 0 0 px2vw(4) rgba(255, 107, 107, 0.5);
+}
+
+.newCardMarkerText {
+  font-size: px2vw(14);
+  font-weight: bold;
+  color: #fff;
+  line-height: 1;
 }
 
 // ============================================
@@ -625,6 +730,27 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
+// 出牌按钮
+// ============================================
+.discardBtn {
+  padding: 0 px2vw(16);
+  height: px2vh(48);
+  background: linear-gradient(135deg, #ffd700, #ff8c00);
+  border-radius: px2vw(24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 px2vw(12) rgba(255, 215, 0, 0.4);
+  margin-bottom: px2vh(8);
+}
+
+.discardBtnText {
+  font-size: px2vw(24);
+  font-weight: bold;
+  color: #1a0a00;
+}
+
+// ============================================
 // 回合信息 (右下角)
 // ============================================
 .roundInfoArea {
@@ -737,7 +863,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
-// 听牌徽章
+// 听牌徽章 (在playerInfo旁边，不是里面)
 // ============================================
 .tingBadge {
   display: inline-flex;
@@ -752,6 +878,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
   font-weight: bold;
   color: #333;
   margin-left: px2vw(4);
+  flex-shrink: 0;
 }
 
 // ============================================
@@ -776,4 +903,227 @@ $color-non-dealer-gradient-end: #2d5a3d;
 .backBtnText {
   font-size: px2vw(28);
   color: #fff;
+}
+
+// ============================================
+// 招牌选择弹窗 (匹配 Flame _ZhaoSelectionPopup)
+// ============================================
+.zhaoPopup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+}
+
+.zhaoPanel {
+  padding: px2vh(16) px2vw(24);
+  background: rgba(26, 92, 46, 0.95);
+  border-radius: px2vw(15);
+  border: 2px solid $color-gold;
+  box-shadow: 0 0 px2vw(15) rgba(255, 215, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: px2vh(8);
+  min-width: px2vw(320);
+}
+
+.zhaoTitle {
+  font-size: px2vw(26);
+  font-weight: bold;
+  color: $color-gold;
+  text-shadow: 0 0 px2vw(8) $color-gold;
+}
+
+.zhaoSubtitle {
+  font-size: px2vw(20);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.zhaoOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: px2vw(12);
+  margin-top: px2vh(8);
+  justify-content: center;
+}
+
+.zhaoCharBtn {
+  width: px2vw(80);
+  height: px2vh(64);
+  border-radius: px2vw(8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+  border: 2px solid transparent;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.95);
+  }
+}
+
+.zhaoCharBtnNormal {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border-color: rgba(52, 152, 219, 0.5);
+}
+
+.zhaoCharBtnJing {
+  background: linear-gradient(135deg, #ffd700, #daa520);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 px2vw(8) rgba(255, 215, 0, 0.3);
+}
+
+.zhaoCharBtnText {
+  font-size: px2vw(32);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 px2vw(2) rgba(0, 0, 0, 0.3);
+}
+
+.zhaoCharBtnTextJing {
+  color: #1a0a00;
+  text-shadow: 0 px2vw(2) rgba(255, 255, 255, 0.3);
+}
+
+// ============================================
+// 流局面板 (匹配 Flame LiujuOverlay)
+// ============================================
+.liujuOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.liujuPanel {
+  padding: px2vh(24) px2vw(32);
+  background: rgba(26, 92, 46, 0.95);
+  border-radius: px2vw(15);
+  border: 2px solid $color-gold;
+  box-shadow: 0 0 px2vw(15) rgba(255, 215, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: px2vh(8);
+  min-width: px2vw(480);
+  max-width: px2vw(800);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.liujuTitle {
+  font-size: px2vw(72);
+  font-weight: 900;
+  color: $color-gold;
+  text-shadow: 0 0 px2vw(16) $color-gold;
+  line-height: 1.2;
+}
+
+.liujuSubtitle {
+  font-size: px2vw(30);
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: px2vh(4);
+}
+
+.liujuNote {
+  font-size: px2vw(22);
+  color: rgba(255, 255, 255, 0.54);
+  margin-top: px2vh(2);
+}
+
+.liujuPlayers {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: px2vh(8);
+  margin-top: px2vh(12);
+}
+
+.liujuPlayerRow {
+  display: flex;
+  align-items: center;
+  gap: px2vw(12);
+  padding: px2vh(6) px2vw(8);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: px2vw(8);
+}
+
+.liujuPlayerName {
+  font-size: px2vw(22);
+  font-weight: bold;
+  color: #fff;
+  min-width: px2vw(60);
+  flex-shrink: 0;
+}
+
+.liujuPlayerHand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: px2vw(4);
+}
+
+.liujuCard {
+  width: px2vw(28);
+  height: px2vh(40);
+  border-radius: px2vw(2);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.liujuCardChar {
+  font-size: px2vw(16);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.liujuCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(2) rgba(231, 76, 60, 0.5);
+}
+
+.liujuCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(2) rgba(39, 174, 96, 0.5);
+}
+
+.liujuCardCharBlack {
+  color: #2c3e50;
+}
+
+.liujuCloseBtn {
+  margin-top: px2vh(12);
+  padding: px2vh(10) px2vw(40);
+  background: linear-gradient(135deg, $color-gold, $color-gold-dark);
+  border-radius: px2vw(8);
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
+
+.liujuCloseBtnText {
+  font-size: px2vw(24);
+  font-weight: bold;
+  color: #1a0a00;
 }

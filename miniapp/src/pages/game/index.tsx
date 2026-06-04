@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { useGameStore } from '../../store/gameStore';
 import ActionButtons from '../../components/ActionButtons';
 import RoundInfo from '../../components/RoundInfo';
 import HuPanel from '../../components/HuPanel';
+import SettlementScreen from '../../components/SettlementScreen';
 import { Card, CardChar, getCardGroup, CARD_GROUPS, RED_CHARS, GREEN_CHARS } from '../../types/card';
 import { Player } from '../../types/player';
 import styles from './index.module.scss';
@@ -89,21 +90,63 @@ function getCharColorClass(char: CardChar): string {
 }
 
 // ============================================
+// 倒计时组件 (匹配 Flame _CountdownTimer)
+// ============================================
+const CountdownTimer: React.FC<{
+  countdown: number;
+  isWarning: boolean;
+}> = ({ countdown, isWarning }) => {
+  return (
+    <View className={`${styles.countdownTimer} ${isWarning ? styles.countdownWarning : styles.countdownNormal}`}>
+      <Text className={styles.countdownNumber}>{countdown}</Text>
+    </View>
+  );
+};
+
+// ============================================
+// 胡数徽章 (匹配 Flame _MyPlayerInfo huCount badge)
+// ============================================
+const HuCountBadge: React.FC<{
+  huCount: number;
+}> = ({ huCount }) => {
+  if (huCount <= 0) return null;
+  return (
+    <View className={styles.huCountBadge}>
+      <Text className={styles.huCountBadgeText}>{huCount}胡</Text>
+    </View>
+  );
+};
+
+// ============================================
 // 玩家信息组件
 // ============================================
 const PlayerInfo: React.FC<{
   player?: Player;
   isDealer: boolean;
   isCurrentTurn: boolean;
-}> = ({ player, isDealer, isCurrentTurn }) => {
+  countdown?: number;
+  showCountdown?: boolean;
+  onAvatarClick?: () => void;
+}> = ({ player, isDealer, isCurrentTurn, countdown = 14, showCountdown = false, onAvatarClick }) => {
   if (!player) return null;
+
+  const isWarning = countdown <= 5;
 
   return (
     <View className={styles.playerInfo}>
       <View className={styles.avatarWrap}>
-        <View className={`${styles.avatar} ${isDealer ? styles.avatarDealer : styles.avatarNonDealer}`}>
+        <View
+          className={`${styles.avatar} ${isDealer ? styles.avatarDealer : styles.avatarNonDealer}`}
+          onClick={onAvatarClick}
+        >
           <Text>{isDealer ? '👑' : '👨‍🌾'}</Text>
         </View>
+        {/* 倒计时 */}
+        {showCountdown && (
+          <View className={styles.countdownTimerWrap}>
+            <CountdownTimer countdown={countdown} isWarning={isWarning} />
+          </View>
+        )}
         <View className={styles.roleBadge}>
           <View className={`${styles.roleBadgeInner} ${isDealer ? styles.roleDealer : styles.roleNonDealer}`}>
             <Text>{isDealer ? '庄家' : '闲家'}</Text>
@@ -270,9 +313,25 @@ const HumanHandCards: React.FC<{
   hand: Card[];
   selectedCardId: number | null;
   onCardClick: (cardId: number) => void;
+  onCardDoubleClick: (cardId: number) => void;
   isTing: boolean;
-}> = ({ hand, selectedCardId, onCardClick, isTing }) => {
+  newCardId: number | null;
+}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, newCardId }) => {
   const sentenceGroups = useMemo(() => groupHandBySentence(hand), [hand]);
+  const lastClickRef = useRef<{ cardId: number; time: number } | null>(null);
+
+  const handleClick = useCallback((cardId: number) => {
+    const now = Date.now();
+    if (lastClickRef.current && lastClickRef.current.cardId === cardId && now - lastClickRef.current.time < 300) {
+      // 双击 -> 直接出牌
+      onCardDoubleClick(cardId);
+      lastClickRef.current = null;
+    } else {
+      // 单击 -> 选中
+      onCardClick(cardId);
+      lastClickRef.current = { cardId, time: now };
+    }
+  }, [onCardClick, onCardDoubleClick]);
 
   if (sentenceGroups.length === 0) return null;
 
@@ -297,13 +356,14 @@ const HumanHandCards: React.FC<{
               const topOffset = stackIdx * HAND_STACK_VISIBLE;
               const isSelected = stack.cards.some(c => c.id === selectedCardId);
               const showCount = stack.cards.length > 1;
+              const isNewCard = newCardId !== null && stack.cards.some(c => c.id === newCardId);
 
               return (
                 <View
                   key={stack.char}
                   className={styles.handCardStack}
                   style={{ height: px2vh(HAND_CARD_H) }}
-                  onClick={() => onCardClick(stack.cards[stack.cards.length - 1].id)}
+                  onClick={() => handleClick(stack.cards[stack.cards.length - 1].id)}
                 >
                   {stack.cards.map((card, cardIdx) => (
                     <View
@@ -327,12 +387,98 @@ const HumanHandCards: React.FC<{
                   {isTing && !showCount && (
                     <View className={styles.handCardTingBadge} style={{ top: px2vh(topOffset + 2) }} />
                   )}
+                  {/* 新牌标记 */}
+                  {isNewCard && (
+                    <View className={styles.newCardMarker} style={{ top: px2vh(topOffset) }}>
+                      <Text className={styles.newCardMarkerText}>新</Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
           </View>
         );
       })}
+    </View>
+  );
+};
+
+// ============================================
+// 招牌选择弹窗 (匹配 Flame _ZhaoSelectionPopup)
+// ============================================
+const ZhaoSelectionPopup: React.FC<{
+  candidates: string[];
+  onSelect: (char: string) => void;
+}> = ({ candidates, onSelect }) => {
+  if (candidates.length === 0) return null;
+
+  const jingChars = ['上', '福'];
+
+  return (
+    <View className={styles.zhaoPopup}>
+      <View className={styles.zhaoPanel}>
+        <Text className={styles.zhaoTitle}>选择招的字</Text>
+        <Text className={styles.zhaoSubtitle}>请选择要招的字牌</Text>
+        <View className={styles.zhaoOptions}>
+          {candidates.map((char) => {
+            const isJing = jingChars.includes(char);
+            return (
+              <View
+                key={char}
+                className={`${styles.zhaoCharBtn} ${isJing ? styles.zhaoCharBtnJing : styles.zhaoCharBtnNormal}`}
+                onClick={() => onSelect(char)}
+              >
+                <Text className={`${styles.zhaoCharBtnText} ${isJing ? styles.zhaoCharBtnTextJing : ''}`}>
+                  {char}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// ============================================
+// 流局面板 (匹配 Flame LiujuOverlay)
+// ============================================
+const LiujuPanel: React.FC<{
+  players: Player[];
+  onClose: () => void;
+}> = ({ players, onClose }) => {
+  return (
+    <View className={styles.liujuOverlay}>
+      <View className={styles.liujuPanel}>
+        <Text className={styles.liujuTitle}>流局</Text>
+        <Text className={styles.liujuSubtitle}>牌堆已空，本局结束</Text>
+        <Text className={styles.liujuNote}>庄家不变，继续坐庄</Text>
+
+        {/* 玩家手牌展示 */}
+        <View className={styles.liujuPlayers}>
+          {players.map((player) => (
+            <View key={player.id} className={styles.liujuPlayerRow}>
+              <Text className={styles.liujuPlayerName}>{player.name}</Text>
+              <View className={styles.liujuPlayerHand}>
+                {player.hand.map((card) => {
+                  const colorClass = getCharColorClass(card.char);
+                  return (
+                    <View key={card.id} className={styles.liujuCard}>
+                      <Text className={`${styles.liujuCardChar} ${styles[`liujuCardChar${colorClass}`]}`}>
+                        {card.char}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View className={styles.liujuCloseBtn} onClick={onClose}>
+          <Text className={styles.liujuCloseBtnText}>确定</Text>
+        </View>
+      </View>
     </View>
   );
 };
@@ -365,9 +511,18 @@ const Game: React.FC = () => {
 
   const isMyTurn = store.currentPlayerIndex === 0 && store.phase === 'playing';
 
+  // 人类玩家有待处理操作时显示倒计时
+  const humanHasPendingActions = store.canChi || store.canPeng || store.canZhao || store.canHu || store.canZimo;
+
   const handleCardClick = (cardId: number) => {
     if (!isMyTurn) return;
     setSelectedCardId(cardId === selectedCardId ? null : cardId);
+  };
+
+  const handleCardDoubleClick = (cardId: number) => {
+    if (!isMyTurn) return;
+    store.discardCard(cardId);
+    setSelectedCardId(null);
   };
 
   const handleDiscard = () => {
@@ -379,6 +534,10 @@ const Game: React.FC = () => {
 
   const handleBack = () => {
     Taro.navigateBack();
+  };
+
+  const handleAvatarClick = () => {
+    Taro.navigateTo({ url: '/pages/settings/index' });
   };
 
   // ============================================
@@ -431,6 +590,8 @@ const Game: React.FC = () => {
           player={aiPlayer1}
           isDealer={aiPlayer1?.isDealer ?? false}
           isCurrentTurn={store.currentPlayerIndex === 1}
+          countdown={store.countdown}
+          showCountdown={store.currentPlayerIndex === 1 && store.phase === 'playing'}
         />
         <View className={styles.player0Hand}>
           <AIHandCards
@@ -456,6 +617,8 @@ const Game: React.FC = () => {
           player={aiPlayer2}
           isDealer={aiPlayer2?.isDealer ?? false}
           isCurrentTurn={store.currentPlayerIndex === 2}
+          countdown={store.countdown}
+          showCountdown={store.currentPlayerIndex === 2 && store.phase === 'playing'}
         />
         <View className={styles.player2Hand}>
           <AIHandCards
@@ -522,12 +685,24 @@ const Game: React.FC = () => {
               <MeldCards melds={humanPlayer?.melds ?? []} />
             </View>
             <View className={styles.player1InfoWrap}>
-              <View style={{ display: 'flex', alignItems: 'flex-start' }}>
-                <PlayerInfo
-                  player={humanPlayer}
-                  isDealer={humanPlayer?.isDealer ?? false}
-                  isCurrentTurn={store.currentPlayerIndex === 0}
-                />
+              <View className={styles.player1InfoRow}>
+                <View style={{ position: 'relative' }}>
+                  <PlayerInfo
+                    player={humanPlayer}
+                    isDealer={humanPlayer?.isDealer ?? false}
+                    isCurrentTurn={store.currentPlayerIndex === 0}
+                    countdown={store.countdown}
+                    showCountdown={humanHasPendingActions}
+                    onAvatarClick={handleAvatarClick}
+                  />
+                  {/* 胡数徽章 - 头像右上角 */}
+                  {humanPlayer && humanPlayer.huCount > 0 && (
+                    <View className={styles.huCountBadgeWrap}>
+                      <HuCountBadge huCount={humanPlayer.huCount} />
+                    </View>
+                  )}
+                </View>
+                {/* 听牌徽章 - 在playerInfo旁边，不是里面 */}
                 {humanPlayer?.isTing && (
                   <View className={styles.tingBadge}>
                     <Text>听</Text>
@@ -544,7 +719,9 @@ const Game: React.FC = () => {
             hand={humanPlayer?.hand ?? []}
             selectedCardId={selectedCardId}
             onCardClick={handleCardClick}
+            onCardDoubleClick={handleCardDoubleClick}
             isTing={humanPlayer?.isTing ?? false}
+            newCardId={store.newCardId}
           />
         </View>
       </View>
@@ -553,34 +730,24 @@ const Game: React.FC = () => {
       <View className={styles.actionButtonsArea}>
         {isMyTurn && selectedCardId !== null && (
           <View
-            style={{
-              padding: `0 ${px2vw(16)}`,
-              height: px2vh(48),
-              background: 'linear-gradient(135deg, #ffd700, #ff8c00)',
-              borderRadius: px2vw(24),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: `0 0 ${px2vw(12)} rgba(255, 215, 0, 0.4)`,
-              marginBottom: px2vh(8),
-            }}
+            className={styles.discardBtn}
             onClick={handleDiscard}
           >
-            <Text style={{ fontSize: px2vw(24), fontWeight: 'bold', color: '#1a0a00' }}>出牌</Text>
+            <Text className={styles.discardBtnText}>出牌</Text>
           </View>
         )}
         <ActionButtons
-          canChi={false}
-          canPeng={false}
-          canZhao={false}
-          canHu={false}
-          canZimo={false}
-          onChi={() => {}}
-          onPeng={() => {}}
-          onZhao={() => {}}
-          onHu={() => {}}
-          onZimo={() => {}}
-          onPass={() => {}}
+          canChi={store.canChi}
+          canPeng={store.canPeng}
+          canZhao={store.canZhao}
+          canHu={store.canHu && !store.isZimoOpportunity}
+          canZimo={store.canHu && store.isZimoOpportunity}
+          onChi={() => store.doAction({ playerId: 0, action: 'chi' })}
+          onPeng={() => store.doAction({ playerId: 0, action: 'peng' })}
+          onZhao={() => store.doAction({ playerId: 0, action: 'zhao' })}
+          onHu={() => store.doAction({ playerId: 0, action: 'hu' })}
+          onZimo={() => store.doAction({ playerId: 0, action: 'zimo' })}
+          onPass={() => store.passAction()}
         />
       </View>
 
@@ -591,7 +758,7 @@ const Game: React.FC = () => {
           dealerName={store.players[store.dealerIndex]?.name || ''}
           showHuDisplay={store.showHuResult || store.showLiujuResult}
           isLastRound={store.roundNumber >= 8}
-          countdown={0}
+          countdown={store.countdown}
           onNextRound={() => store.nextRound()}
           onShowSettlement={() => store.nextRound()}
         />
@@ -614,6 +781,33 @@ const Game: React.FC = () => {
             onClose={store.closeHuResult}
           />
         </View>
+      )}
+
+      {/* ====== 流局面板 ====== */}
+      {store.showLiujuResult && (
+        <LiujuPanel
+          players={store.players}
+          onClose={store.closeLiujuResult}
+        />
+      )}
+
+      {/* ====== 招牌选择弹窗 ====== */}
+      {store.showZhaoSelection && store.zhaoCandidates.length > 0 && (
+        <ZhaoSelectionPopup
+          candidates={store.zhaoCandidates}
+          onSelect={store.selectZhaoCharacter}
+        />
+      )}
+
+      {/* ====== 总结算界面 ====== */}
+      {store.phase === 'settlement' && (
+        <SettlementScreen
+          players={store.players}
+          roundResults={[]}
+          onClose={() => {
+            Taro.navigateBack();
+          }}
+        />
       )}
     </View>
   );

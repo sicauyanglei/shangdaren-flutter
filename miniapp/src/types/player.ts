@@ -78,4 +78,18 @@ export interface GameState {
   difficulty: string;
   piaoEnabled: boolean;
   volume: number;
+  // 操作按钮状态
+  canChi: boolean;
+  canPeng: boolean;
+  canZhao: boolean;
+  canHu: boolean;
+  canZimo: boolean;
+  isZimoOpportunity: boolean;
+  // 招牌选择
+  showZhaoSelection: boolean;
+  zhaoCandidates: string[];
+  // 倒计时
+  countdown: number;
+  // 新摸的牌ID
+  newCardId: number | null;
 }
