@@ -17,7 +17,7 @@ $dh: 720;
 }
 
 // 牌尺寸常量
-$hand-card-w: px2vw(65);     // 人类手牌宽
+$hand-card-w: px2vw(60);     // 人类手牌宽（匹配Flame handCardW=60）
 $hand-card-h: px2vh(224);    // 人类手牌高
 $small-card-w: px2vw(28);    // 弃牌宽
 $small-card-h: px2vh(48);    // 弃牌高
@@ -29,7 +29,7 @@ $deck-card-w: px2vw(160);    // 牌堆宽
 $deck-card-h: px2vh(40);     // 牌堆高
 
 // 间距常量
-$hand-stack-visible: px2vh(52);     // 同字竖向可见偏移
+$hand-stack-visible: px2vh(68);     // 同字竖向可见偏移（匹配Flame handStackVisible=68）
 $hand-sentence-gap: px2vw(2);       // 句组间距
 $selected-offset-y: px2vh(28);      // 选中卡牌上移
 $ai-hand-stack-visible: px2vw(15);  // AI手牌层叠偏移
@@ -491,6 +491,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 // ============================================
 // Player 1 区域 (人类 我 - 底部)
+// Flame: startY = designHeight - totalH + 60, 手牌底部超出屏幕60px
 // ============================================
 .player1Area {
   position: absolute;
@@ -544,11 +545,16 @@ $color-non-dealer-gradient-end: #2d5a3d;
   transform: translate(px2vw(4), px2vh(-4));
 }
 
+// 手牌区域 - Flame: 手牌底部超出屏幕60px
+// 使用 bottom 定位，手牌容器从底部向上延伸，底部60px超出屏幕
 .player1HandWrap {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding-bottom: px2vh(5);
+  position: relative;
+  // 手牌底部超出屏幕60px (匹配Flame startY = designHeight - totalH + 60)
+  margin-bottom: px2vh(-60);
+  overflow: visible;
 }
 
 .player1Hand {
@@ -693,6 +699,116 @@ $color-non-dealer-gradient-end: #2d5a3d;
   bottom: px2vw(2);
   border-radius: px2vw(2);
   background: #2E7D32;
+}
+
+// ============================================
+// 胡牌时AI手牌明牌显示 (匹配Flame规则14)
+// 宽度32.4px 高度134.4px, 同字叠放竖向可见偏移20px
+// ============================================
+.huAiHandCard {
+  border-radius: px2vw(4);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: px2vw(2) px2vh(2) px2vw(4) rgba(0, 0, 0, 0.4);
+}
+
+.huAiHandCardChar {
+  font-size: px2vw(24);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.huAiHandCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(6) rgba(231, 76, 60, 0.5);
+}
+
+.huAiHandCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(6) rgba(39, 174, 96, 0.5);
+}
+
+.huAiHandCardCharBlack {
+  color: #2c3e50;
+}
+
+.huAiHandCountBadge {
+  position: absolute;
+  top: px2vh(2);
+  right: px2vw(2);
+  min-width: px2vw(28);
+  height: px2vw(28);
+  border-radius: 50%;
+  background: #ff4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.huAiHandCountBadgeText {
+  font-size: px2vw(14);
+  font-weight: bold;
+  color: #fff;
+}
+
+// ============================================
+// 点炮/自摸卡牌标签 (匹配Flame规则10)
+// 字体大小16px，加粗，白色文字
+// text-shadow: 红色发光效果(blurRadius 10px和20px)
+// 位置: 卡牌正中央，无背景
+// ============================================
+.huCardLabel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: px2vw(16);
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow:
+    0 0 px2vw(10) #ff0000,
+    0 0 px2vw(20) #ff0000;
+  z-index: 10;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+// 人类玩家手牌上的点炮/自摸标签 (稍大一些以匹配大卡牌)
+.huCardLabelHuman {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: px2vw(16);
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow:
+    0 0 px2vw(10) #ff0000,
+    0 0 px2vw(20) #ff0000;
+  z-index: 10;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+// ============================================
+// 胡牌赢家徽章 (匹配Flame _renderPlayerHuBadges)
+// ============================================
+.huBadge {
+  padding: px2vh(6) px2vw(10);
+  border-radius: px2vw(8);
+  border: 2px solid $color-gold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.huBadgeTextInner {
+  line-height: 1;
 }
 
 // ============================================

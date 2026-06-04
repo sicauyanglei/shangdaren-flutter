@@ -25,7 +25,7 @@ const MELD_CARD_H = 56;
 const DECK_CARD_W = 160;
 const DECK_CARD_H = 40;
 
-const HAND_STACK_VISIBLE = 52;
+const HAND_STACK_VISIBLE = 68;
 const HAND_SENTENCE_GAP = 2;
 const AI_HAND_STACK_VISIBLE = 15;
 const MELD_STACK_VISIBLE = 17;
@@ -33,6 +33,30 @@ const DISCARD_CARD_GAP = 1;
 const MAX_DISCARD_PER_ROW = 8;
 const LEFT_MAX_W = 340;
 const RIGHT_MAX_W = 280;
+const MELD_ROW_GAP = 0;
+const MELD_TO_DISCARD_GAP = 1;
+const AI_HAND_TO_MELD_GAP = 2;
+const AI_HAND_TO_MELD_GAP_HU = 20;
+const MELD_GROUP_GAP = 2;
+const MAX_MELD_GROUPS_PER_ROW = 3;
+
+// 胡牌时AI手牌显示参数（匹配Flame规则14）
+const HU_AI_HAND_CARD_W = 32.4;
+const HU_AI_HAND_CARD_H = 134.4;
+const HU_AI_HAND_STACK_VISIBLE = 20;
+const HU_AI_HAND_SENTENCE_GAP = 0;
+
+// 胡牌时组合牌显示参数
+const HU_DISPLAY_CARD_W = 42;
+const HU_DISPLAY_CARD_H = 68;
+const HU_DISPLAY_STACK_VISIBLE = 20;
+const HU_DISPLAY_GROUP_GAP = 2;
+
+// Flame: 手牌startY = designHeight - totalH + 60 (手牌底部超出屏幕60px)
+const HAND_BOTTOM_OVERHANG = 60;
+
+// 胡牌面板分数飞动动画时长 (ms)
+const SCORE_FLY_DURATION = 1500;
 
 // 牌堆层数计算 (匹配 Flame _getDeckLayerCount)
 function getDeckLayerCount(count: number): number {
@@ -231,7 +255,7 @@ const PlayerInfo: React.FC<{
 };
 
 // ============================================
-// AI 手牌渲染 (牌背)
+// AI 手牌渲染 (牌背 - 正常游戏)
 // ============================================
 const AIHandCards: React.FC<{
   hand: Card[];
@@ -267,43 +291,169 @@ const AIHandCards: React.FC<{
 };
 
 // ============================================
+// AI 手牌渲染 (胡牌/流局时 - 明牌显示)
+// 匹配Flame规则14: 宽度32.4px 高度134.4px, 同字叠放竖向可见偏移20px, 不同sentence组间距0px
+// ============================================
+const AIHandCardsHu: React.FC<{
+  hand: Card[];
+  leftToRight: boolean;
+  maxWidth: number;
+  highlightCardId?: number | null;
+  highlightLabel?: string;
+}> = ({ hand, leftToRight, highlightCardId, highlightLabel }) => {
+  if (hand.length === 0) return null;
+
+  // 按句分组 (匹配Flame _groupHandBySentenceForAI)
+  const sentenceGroups = groupHandBySentence(hand);
+  const cw = HU_AI_HAND_CARD_W;
+  const ch = HU_AI_HAND_CARD_H;
+  const sv = HU_AI_HAND_STACK_VISIBLE;
+  const gap = HU_AI_HAND_SENTENCE_GAP;
+
+  // 计算最大高度
+  const maxStacks = Math.max(...sentenceGroups.map(sg => sg.stacks.length), 1);
+  const totalH = (maxStacks - 1) * sv + ch;
+  const totalW = sentenceGroups.length * cw + (sentenceGroups.length - 1) * gap;
+
+  return (
+    <View style={{ position: 'relative', width: px2vw(totalW), height: px2vh(totalH) }}>
+      {sentenceGroups.map((sg, sgIdx) => {
+        const sgX = leftToRight ? sgIdx * (cw + gap) : totalW - (sgIdx + 1) * (cw + gap) + gap;
+        return (
+          <View key={sg.sentence} style={{ position: 'absolute', left: px2vw(sgX), top: 0, width: px2vw(cw) }}>
+            {sg.stacks.map((stack, stackIdx) => {
+              const isHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
+              // AI玩家: 高亮卡牌移到组内索引0（最左边）确保层叠时不被遮挡
+              const sortedCards = isHighlight
+                ? [...stack.cards].sort((a, b) => {
+                    if (a.id === highlightCardId) return -1;
+                    if (b.id === highlightCardId) return 1;
+                    return 0;
+                  })
+                : stack.cards;
+
+              return (
+                <View
+                  key={stack.char}
+                  style={{ position: 'relative', height: px2vh(ch), marginTop: stackIdx > 0 ? px2vh(sv - ch) : 0 }}
+                >
+                  {sortedCards.map((card, cardIdx) => {
+                    const colorClass = getCharColorClass(card.char);
+                    const isCardHighlight = card.id === highlightCardId;
+                    return (
+                      <View
+                        key={card.id}
+                        className={styles.huAiHandCard}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: px2vw(cw),
+                          height: px2vh(ch),
+                          zIndex: cardIdx + 1,
+                        }}
+                      >
+                        <Text className={`${styles.huAiHandCardChar} ${styles[`huAiHandCardChar${colorClass}`]}`}>
+                          {card.char}
+                        </Text>
+                        {/* 点炮/自摸标签 */}
+                        {isCardHighlight && highlightLabel && (
+                          <Text className={styles.huCardLabel}>
+                            {highlightLabel}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                  {/* 多张牌时显示数量角标 */}
+                  {stack.cards.length > 1 && (
+                    <View className={styles.huAiHandCountBadge}>
+                      <Text className={styles.huAiHandCountBadgeText}>{stack.cards.length}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+// ============================================
 // 组合牌渲染
 // ============================================
 const MeldCards: React.FC<{
   melds: { type: string; cards: Card[]; isJing: boolean }[];
   rightAlign?: boolean;
-}> = ({ melds, rightAlign = false }) => {
+  isHuDisplay?: boolean;
+}> = ({ melds, rightAlign = false, isHuDisplay = false }) => {
   if (melds.length === 0) return null;
 
-  const containerStyle: Record<string, string> = { display: 'flex', flexWrap: 'wrap', gap: px2vw(2) };
-  if (rightAlign) containerStyle.justifyContent = 'flex-end';
+  const cw = isHuDisplay ? HU_DISPLAY_CARD_W : MELD_CARD_W;
+  const ch = isHuDisplay ? HU_DISPLAY_CARD_H : MELD_CARD_H;
+  const sv = isHuDisplay ? HU_DISPLAY_STACK_VISIBLE : MELD_STACK_VISIBLE;
+  const groupGap = isHuDisplay ? HU_DISPLAY_GROUP_GAP : MELD_GROUP_GAP;
+
+  // 按行分组，每行最多3组（匹配Flame MAX_MELD_GROUPS_PER_ROW=3）
+  const rows: { type: string; cards: Card[]; isJing: boolean }[][] = [];
+  let currentRow: { type: string; cards: Card[]; isJing: boolean }[] = [];
+  for (const meld of melds) {
+    currentRow.push(meld);
+    if (currentRow.length >= MAX_MELD_GROUPS_PER_ROW) {
+      rows.push(currentRow);
+      currentRow = [];
+    }
+  }
+  if (currentRow.length > 0) rows.push(currentRow);
 
   return (
-    <View style={containerStyle}>
-      {melds.map((meld, meldIdx) => {
-        const groupWidth = (meld.cards.length - 1) * MELD_STACK_VISIBLE + MELD_CARD_W;
-        const groupHeight = MELD_CARD_H;
+    <View style={{ display: 'flex', flexDirection: 'column', gap: px2vh(MELD_ROW_GAP) }}>
+      {rows.map((row, rowIdx) => {
+        // Player2: 组合牌从右往左增长，行内组顺序反转
+        const displayRow = rightAlign ? [...row].reverse() : row;
+        const rowStyle: Record<string, string> = { display: 'flex', gap: px2vw(groupGap) };
+        if (rightAlign) rowStyle.justifyContent = 'flex-end';
 
         return (
-          <View
-            key={meldIdx}
-            className={styles.meldGroup}
-            style={{
-              width: px2vw(groupWidth),
-              height: px2vh(groupHeight),
-            }}
-          >
-            {meld.cards.map((card, cardIdx) => {
-              const colorClass = getCharColorClass(card.char);
+          <View key={rowIdx} style={rowStyle}>
+            {displayRow.map((meld, meldIdx) => {
+              const groupWidth = (meld.cards.length - 1) * sv + cw;
+              const groupHeight = ch;
+
+              // 句类型需要按position排序（红字在最左边）
+              const sortedCards = meld.type === 'ju'
+                ? [...meld.cards].sort((a, b) => a.position - b.position)
+                : meld.cards;
+
               return (
                 <View
-                  key={card.id}
-                  className={styles.meldCard}
-                  style={{ left: px2vw(cardIdx * MELD_STACK_VISIBLE) }}
+                  key={meldIdx}
+                  className={styles.meldGroup}
+                  style={{
+                    width: px2vw(groupWidth),
+                    height: px2vh(groupHeight),
+                  }}
                 >
-                  <Text className={`${styles.meldCardChar} ${styles[`meldCardChar${colorClass}`]}`}>
-                    {card.char}
-                  </Text>
+                  {sortedCards.map((card, cardIdx) => {
+                    const colorClass = getCharColorClass(card.char);
+                    return (
+                      <View
+                        key={card.id}
+                        className={styles.meldCard}
+                        style={{
+                          left: px2vw(cardIdx * sv),
+                          width: px2vw(cw),
+                          height: px2vh(ch),
+                        }}
+                      >
+                        <Text className={`${styles.meldCardChar} ${styles[`meldCardChar${colorClass}`]}`} style={{ fontSize: isHuDisplay ? px2vw(26) : undefined }}>
+                          {card.char}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               );
             })}
@@ -339,24 +489,28 @@ const DiscardCards: React.FC<{
 
   return (
     <View style={containerStyle}>
-      {rows.map((row, rowIdx) => (
-        <View key={rowIdx} style={{ display: 'flex', gap: px2vw(DISCARD_CARD_GAP) }}>
-          {row.map((card) => {
-            const colorClass = getCharColorClass(card.char);
-            const isLast = card.id === lastDiscardId;
-            return (
-              <View
-                key={card.id}
-                className={`${styles.discardCard} ${isLast ? styles.discardCardLast : ''}`}
-              >
-                <Text className={`${styles.discardCardChar} ${styles[`discardCardChar${colorClass}`]}`}>
-                  {card.char}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      ))}
+      {rows.map((row, rowIdx) => {
+        // Player2: 弃牌从右往左排列，行内卡牌顺序反转
+        const displayRow = rightAlign ? [...row].reverse() : row;
+        return (
+          <View key={rowIdx} style={{ display: 'flex', gap: px2vw(DISCARD_CARD_GAP), flexDirection: rightAlign ? 'row-reverse' : 'row' }}>
+            {displayRow.map((card) => {
+              const colorClass = getCharColorClass(card.char);
+              const isLast = card.id === lastDiscardId;
+              return (
+                <View
+                  key={card.id}
+                  className={`${styles.discardCard} ${isLast ? styles.discardCardLast : ''}`}
+                >
+                  <Text className={`${styles.discardCardChar} ${styles[`discardCardChar${colorClass}`]}`}>
+                    {card.char}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
     </View>
   );
 };
@@ -372,7 +526,9 @@ const HumanHandCards: React.FC<{
   isTing: boolean;
   hideTingBadge: boolean;
   newCardId: number | null;
-}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, hideTingBadge, newCardId }) => {
+  highlightCardId?: number | null;
+  highlightLabel?: string;
+}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, hideTingBadge, newCardId, highlightCardId, highlightLabel }) => {
   const sentenceGroups = useMemo(() => groupHandBySentence(hand), [hand]);
   const lastClickRef = useRef<{ cardId: number; time: number } | null>(null);
 
@@ -414,6 +570,16 @@ const HumanHandCards: React.FC<{
               const showCount = stack.cards.length > 1;
               const isNewCard = newCardId !== null && stack.cards.some(c => c.id === newCardId);
 
+              // 人类玩家: 胡牌卡牌重新排列到该组的最后一个位置（确保最后渲染，显示在最上面）
+              const hasHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
+              const sortedCards = hasHighlight
+                ? [...stack.cards].sort((a, b) => {
+                    if (a.id === highlightCardId) return 1;
+                    if (b.id === highlightCardId) return -1;
+                    return 0;
+                  })
+                : stack.cards;
+
               return (
                 <View
                   key={stack.char}
@@ -421,20 +587,29 @@ const HumanHandCards: React.FC<{
                   style={{ height: px2vh(HAND_CARD_H) }}
                   onClick={() => handleClick(stack.cards[stack.cards.length - 1].id)}
                 >
-                  {stack.cards.map((card, cardIdx) => (
-                    <View
-                      key={card.id}
-                      className={`${styles.handCard} ${isSelected && card.id === selectedCardId ? styles.handCardSelected : ''}`}
-                      style={{
-                        top: px2vh(topOffset),
-                        zIndex: cardIdx + 1,
-                      }}
-                    >
-                      <Text className={`${styles.handCardChar} ${styles[`handCardChar${getCharColorClass(card.char)}`]}`}>
-                        {card.char}
-                      </Text>
-                    </View>
-                  ))}
+                  {sortedCards.map((card, cardIdx) => {
+                    const isCardHighlight = card.id === highlightCardId;
+                    return (
+                      <View
+                        key={card.id}
+                        className={`${styles.handCard} ${isSelected && card.id === selectedCardId ? styles.handCardSelected : ''}`}
+                        style={{
+                          top: px2vh(topOffset),
+                          zIndex: cardIdx + 1,
+                        }}
+                      >
+                        <Text className={`${styles.handCardChar} ${styles[`handCardChar${getCharColorClass(card.char)}`]}`}>
+                          {card.char}
+                        </Text>
+                        {/* 点炮/自摸标签 */}
+                        {isCardHighlight && highlightLabel && (
+                          <Text className={styles.huCardLabelHuman}>
+                            {highlightLabel}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
                   {showCount && (
                     <View className={styles.handCardCountBadge} style={{ top: px2vh(topOffset + 2) }}>
                       <Text>{stack.cards.length}</Text>
@@ -453,6 +628,177 @@ const HumanHandCards: React.FC<{
               );
             })}
           </View>
+        );
+      })}
+    </View>
+  );
+};
+
+// ============================================
+// 胡牌赢家徽章组件 (匹配Flame _renderPlayerHuBadges)
+// ============================================
+const HuBadges: React.FC<{
+  badges: { text: string; isPrimary: boolean }[];
+  position: 'player0' | 'player1' | 'player2';
+}> = ({ badges, position }) => {
+  if (badges.length === 0) return null;
+
+  const badgeGap = 4;
+  const padH = 10;
+  const padV = 6;
+  const fontSize = 18;
+  const badgeH = fontSize + padV * 2;
+
+  // 计算位置 (匹配Flame _renderPlayerHuBadges)
+  let startX: number;
+  let startY: number;
+  const aiAvatarLeft = 9.6;
+  const aiAvatarTop = 4.8;
+  const aiAvatarH = 108;
+  const myAvatarLeft = 10;
+  const myAvatarBottom = 5;
+  const avatarW = 250;
+  const badgeGapFromAvatar = 10;
+
+  if (position === 'player0') {
+    // Player0 (AI左): 头像区域右边，与头像区域底部对齐
+    startX = aiAvatarLeft + avatarW + badgeGapFromAvatar;
+    startY = aiAvatarTop + aiAvatarH - badgeH;
+  } else if (position === 'player1') {
+    // Player1 (人类): 头像区域右边，与头像区域顶部对齐
+    startX = myAvatarLeft + avatarW + badgeGapFromAvatar;
+    startY = DH - myAvatarBottom - aiAvatarH;
+  } else {
+    // Player2 (AI右): 头像区域左边，与头像区域底部对齐
+    // 需要计算总宽度来定位
+    const totalW = badges.reduce((sum, b) => {
+      // 估算宽度
+      const textW = b.text.length * fontSize * 0.6 + padH * 2;
+      return sum + textW;
+    }, 0) + (badges.length - 1) * badgeGap;
+    startX = DW - aiAvatarLeft - avatarW - totalW - badgeGapFromAvatar;
+    startY = aiAvatarTop + aiAvatarH - badgeH;
+  }
+
+  return (
+    <View style={{ position: 'absolute', left: px2vw(startX), top: px2vh(startY), display: 'flex', gap: px2vw(badgeGap), zIndex: 50 }}>
+      {badges.map((badge, i) => {
+        const isPrimary = badge.isPrimary;
+        let bgGradient: string;
+        let borderColor: string;
+        let glowColor: string;
+
+        if (isPrimary && badge.text === '自摸') {
+          bgGradient = 'linear-gradient(135deg, #6a1b9a, #9c27b0)';
+          borderColor = '#ffd700';
+          glowColor = '#ce93d8';
+        } else if (isPrimary && badge.text === '点炮') {
+          bgGradient = 'linear-gradient(135deg, #e65100, #ff8f00)';
+          borderColor = '#ffd700';
+          glowColor = '#ffb74d';
+        } else {
+          bgGradient = 'linear-gradient(135deg, #c62828, #ef5350)';
+          borderColor = '#ffd700';
+          glowColor = '#ff6b6b';
+        }
+
+        return (
+          <View
+            key={i}
+            className={styles.huBadge}
+            style={{
+              background: bgGradient,
+              borderColor,
+              boxShadow: `0 0 ${px2vw(8)} ${glowColor}80, 0 0 ${px2vw(3)} ${borderColor}66`,
+            }}
+          >
+            <Text className={styles.huBadgeTextInner} style={{ fontSize: px2vw(fontSize), fontWeight: 900, color: '#fff', letterSpacing: px2vw(1) }}>
+              {badge.text}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+// ============================================
+// 分数飞动动画组件
+// ============================================
+const ScoreFlyAnimation: React.FC<{
+  scoreChanges: { playerId: number; change: number; isGain: boolean }[];
+  onComplete: () => void;
+}> = ({ scoreChanges, onComplete }) => {
+  const [elapsed, setElapsed] = useState(0);
+  const animRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      const dt = now - startTimeRef.current;
+      setElapsed(dt);
+      if (dt < SCORE_FLY_DURATION) {
+        animRef.current = requestAnimationFrame(tick);
+      } else {
+        onComplete();
+      }
+    };
+    animRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animRef.current != null) cancelAnimationFrame(animRef.current);
+    };
+  }, []);
+
+  // 计算各玩家头像分数位置 (匹配Flame avatarScoreX/Y)
+  const avatarPositions = [
+    { x: 9.6 + 20 + 80 + 12 + 60 + 8 + 25, y: 4.8 + 14 + 24 + 4 },       // Player0 (AI左)
+    { x: 10 + 20 + 80 + 12 + 60 + 8 + 25, y: DH - 5 - 14 - 24 - 4 - 20 }, // Player1 (人类)
+    { x: DW - 9.6 - 20 - 60 - 8 - 25, y: 4.8 + 14 + 24 + 4 },              // Player2 (AI右)
+  ];
+
+  // 胡牌面板分数位置 (简化: 面板中央)
+  const panelCenterX = DW / 2;
+  const panelCenterY = 300;
+
+  const t = Math.min(elapsed / SCORE_FLY_DURATION, 1);
+  // easeInOutCubic
+  const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  return (
+    <View style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: 300 }}>
+      {scoreChanges.map((sc, idx) => {
+        const fromX = panelCenterX;
+        const fromY = panelCenterY;
+        const toX = avatarPositions[sc.playerId].x;
+        const toY = avatarPositions[sc.playerId].y;
+
+        const curX = fromX + (toX - fromX) * eased;
+        const curY = fromY + (toY - fromY) * eased;
+
+        const text = sc.isGain ? `+${sc.change}` : `${sc.change}`;
+        const color = sc.isGain ? '#ffd700' : '#ff6b6b';
+        const fontSize = t >= 1 ? 20 : 36;
+        const alpha = t >= 1 ? Math.max(0, 1 - (elapsed / SCORE_FLY_DURATION - 1) * 3) : 1;
+
+        return (
+          <Text
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: px2vw(curX),
+              top: px2vh(curY),
+              fontSize: px2vw(fontSize),
+              fontWeight: 'bold',
+              color,
+              opacity: alpha,
+              textShadow: `0 0 ${px2vw(12)} ${color}99, 0 0 ${px2vw(4)} rgba(0,0,0,0.5)`,
+              transform: 'translate(-50%, -50%)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {text}
+          </Text>
         );
       })}
     </View>
@@ -552,6 +898,7 @@ const Game: React.FC = () => {
   const piaoEnabled = router.params.piaoEnabled === '1';
 
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
+  const [scoreFlyPlayed, setScoreFlyPlayed] = useState(false);
 
   useEffect(() => {
     store.startGame(baseScore, multiplierBase, difficulty, piaoEnabled);
@@ -566,6 +913,9 @@ const Game: React.FC = () => {
   const aiPlayer2 = store.players[2]; // 玩家2 - 右上
 
   const isMyTurn = store.isMyTurn && store.phase === 'playing';
+
+  // 是否处于胡牌/流局显示状态
+  const isHuDisplay = store.showHuResult || store.showLiujuResult;
 
   // 人类玩家有待处理操作时显示倒计时
   const humanHasPendingActions = store.canChi || store.canPeng || store.canZhao || store.canHu || store.canZimo;
@@ -595,6 +945,47 @@ const Game: React.FC = () => {
   const handleAvatarClick = () => {
     Taro.navigateTo({ url: '/pages/settings/index' });
   };
+
+  // 胡牌时确定高亮卡牌和标签
+  const huResult = store.huResult;
+  const isDianpao = huResult?.method === 'dianpao';
+  const isZimo = huResult?.method === 'zimo';
+  const huCardId = huResult?.huCard?.id;
+  const huLabel = isDianpao ? '炮' : isZimo ? '自摸' : undefined;
+
+  // 胡牌时赢家徽章数据
+  const winnerBadges = useMemo(() => {
+    if (!store.showHuResult || !huResult) return { player0: [], player1: [], player2: [] };
+    const badges: { player0: { text: string; isPrimary: boolean }[]; player1: { text: string; isPrimary: boolean }[]; player2: { text: string; isPrimary: boolean }[] } = { player0: [], player1: [], player2: [] };
+    const winnerId = huResult.winnerId;
+    // 赢家徽章
+    const winnerBadgesList: { text: string; isPrimary: boolean }[] = [];
+    if (isZimo) winnerBadgesList.push({ text: '自摸', isPrimary: true });
+    winnerBadgesList.push({ text: huResult.huType, isPrimary: false });
+
+    if (winnerId === 1) badges.player0 = winnerBadgesList;
+    else if (winnerId === 0) badges.player1 = winnerBadgesList;
+    else badges.player2 = winnerBadgesList;
+
+    // 点炮者徽章
+    if (isDianpao && huResult.dianpaoPlayerId != null) {
+      const dpBadges = [{ text: '点炮', isPrimary: true }];
+      const dpId = huResult.dianpaoPlayerId;
+      if (dpId === 1) badges.player0 = [...badges.player0, ...dpBadges];
+      else if (dpId === 0) badges.player1 = [...badges.player1, ...dpBadges];
+      else badges.player2 = [...badges.player2, ...dpBadges];
+    }
+
+    return badges;
+  }, [store.showHuResult, huResult]);
+
+  // 分数飞动动画数据
+  const scoreFlyData = useMemo(() => {
+    if (!store.showHuResult || !huResult) return [];
+    return huResult.scoreChanges
+      .map((change, idx) => ({ playerId: idx, change: Math.abs(change), isGain: change > 0 }))
+      .filter(sc => sc.change > 0);
+  }, [store.showHuResult, huResult]);
 
   // ============================================
   // 飘分阶段 - 只有人类玩家轮次才显示选择弹窗
@@ -649,14 +1040,24 @@ const Game: React.FC = () => {
           showCountdown={store.currentPlayerIndex === 1 && store.phase === 'playing'}
         />
         <View className={styles.player0Hand}>
-          <AIHandCards
-            hand={aiPlayer1?.hand ?? []}
-            leftToRight={true}
-            maxWidth={LEFT_MAX_W}
-          />
+          {isHuDisplay ? (
+            <AIHandCardsHu
+              hand={aiPlayer1?.hand ?? []}
+              leftToRight={true}
+              maxWidth={LEFT_MAX_W}
+              highlightCardId={isHuDisplay && huResult?.winnerId === 1 ? huCardId : null}
+              highlightLabel={isHuDisplay && huResult?.winnerId === 1 ? huLabel : undefined}
+            />
+          ) : (
+            <AIHandCards
+              hand={aiPlayer1?.hand ?? []}
+              leftToRight={true}
+              maxWidth={LEFT_MAX_W}
+            />
+          )}
         </View>
-        <View className={styles.player0Melds}>
-          <MeldCards melds={aiPlayer1?.melds ?? []} />
+        <View className={styles.player0Melds} style={{ marginTop: px2vh(isHuDisplay ? AI_HAND_TO_MELD_GAP_HU : AI_HAND_TO_MELD_GAP) }}>
+          <MeldCards melds={aiPlayer1?.melds ?? []} isHuDisplay={isHuDisplay} />
         </View>
         <View className={styles.player0Discards}>
           <DiscardCards
@@ -664,6 +1065,10 @@ const Game: React.FC = () => {
             lastDiscardId={store.lastDiscardPlayerId === 1 ? store.lastDiscard?.id ?? null : null}
           />
         </View>
+        {/* Player0 赢家徽章 */}
+        {winnerBadges.player0.length > 0 && (
+          <HuBadges badges={winnerBadges.player0} position="player0" />
+        )}
       </View>
 
       {/* ====== Player 2 区域 (AI 玩家2 - 右上) ====== */}
@@ -676,14 +1081,24 @@ const Game: React.FC = () => {
           showCountdown={store.currentPlayerIndex === 2 && store.phase === 'playing'}
         />
         <View className={styles.player2Hand}>
-          <AIHandCards
-            hand={aiPlayer2?.hand ?? []}
-            leftToRight={false}
-            maxWidth={RIGHT_MAX_W}
-          />
+          {isHuDisplay ? (
+            <AIHandCardsHu
+              hand={aiPlayer2?.hand ?? []}
+              leftToRight={false}
+              maxWidth={RIGHT_MAX_W}
+              highlightCardId={isHuDisplay && huResult?.winnerId === 2 ? huCardId : null}
+              highlightLabel={isHuDisplay && huResult?.winnerId === 2 ? huLabel : undefined}
+            />
+          ) : (
+            <AIHandCards
+              hand={aiPlayer2?.hand ?? []}
+              leftToRight={false}
+              maxWidth={RIGHT_MAX_W}
+            />
+          )}
         </View>
-        <View className={styles.player2Melds}>
-          <MeldCards melds={aiPlayer2?.melds ?? []} rightAlign />
+        <View className={styles.player2Melds} style={{ marginTop: px2vh(isHuDisplay ? AI_HAND_TO_MELD_GAP_HU : AI_HAND_TO_MELD_GAP) }}>
+          <MeldCards melds={aiPlayer2?.melds ?? []} rightAlign isHuDisplay={isHuDisplay} />
         </View>
         <View className={styles.player2Discards}>
           <DiscardCards
@@ -692,6 +1107,10 @@ const Game: React.FC = () => {
             rightAlign
           />
         </View>
+        {/* Player2 赢家徽章 */}
+        {winnerBadges.player2.length > 0 && (
+          <HuBadges badges={winnerBadges.player2} position="player2" />
+        )}
       </View>
 
       {/* ====== 中央区域 (牌堆 + 出牌) ====== */}
@@ -750,8 +1169,8 @@ const Game: React.FC = () => {
                 lastDiscardId={store.lastDiscardPlayerId === 0 ? store.lastDiscard?.id ?? null : null}
               />
             </View>
-            <View className={styles.player1Melds}>
-              <MeldCards melds={humanPlayer?.melds ?? []} />
+            <View className={styles.player1Melds} style={{ marginTop: px2vh(isHuDisplay ? AI_HAND_TO_MELD_GAP_HU : MELD_TO_DISCARD_GAP) }}>
+              <MeldCards melds={humanPlayer?.melds ?? []} isHuDisplay={isHuDisplay} />
             </View>
             <View className={styles.player1InfoWrap}>
               <View className={styles.player1InfoRow}>
@@ -780,7 +1199,7 @@ const Game: React.FC = () => {
                   )}
                 </View>
                 {/* 听牌徽章 - 在playerInfo旁边，不是里面 */}
-                {humanPlayer?.isTing && !store.hideTingBadge && (
+                {humanPlayer?.isTing && !store.hideTingBadge && !isHuDisplay && (
                   <View className={styles.tingBadge}>
                     <Text>听</Text>
                   </View>
@@ -790,7 +1209,7 @@ const Game: React.FC = () => {
           </View>
         </View>
 
-        {/* 手牌 (居中底部) */}
+        {/* 手牌 (居中底部) - Flame: startY = designHeight - totalH + 60, 手牌底部超出屏幕60px */}
         <View className={styles.player1HandWrap}>
           <HumanHandCards
             hand={humanPlayer?.hand ?? []}
@@ -800,17 +1219,24 @@ const Game: React.FC = () => {
             isTing={humanPlayer?.isTing ?? false}
             hideTingBadge={store.hideTingBadge}
             newCardId={store.newCardId}
+            highlightCardId={isHuDisplay && huResult?.winnerId === 0 ? huCardId : null}
+            highlightLabel={isHuDisplay && huResult?.winnerId === 0 ? huLabel : undefined}
           />
         </View>
+        {/* Player1 (人类) 赢家徽章 */}
+        {winnerBadges.player1.length > 0 && (
+          <HuBadges badges={winnerBadges.player1} position="player1" />
+        )}
       </View>
 
       {/* ====== 操作按钮 (匹配 Flame game_overlay.dart L138-185) ====== */}
       {(() => {
         // 动态计算按钮位置: bottom = designHeight - handTopY + 2
+        // Flame: handTopY = DH - totalH + 60 (手牌底部超出屏幕60px)
         const hand = humanPlayer?.hand ?? [];
         const msc = maxStackCount(hand);
         const totalH = msc === 0 ? HAND_CARD_H : (msc - 1) * HAND_STACK_VISIBLE + HAND_CARD_H;
-        const handTopY = DH - totalH - 10;
+        const handTopY = DH - totalH + HAND_BOTTOM_OVERHANG;
         const btnBottom = DH - handTopY + 2;
         return (
           <View className={styles.actionButtonsArea} style={{ bottom: px2vh(btnBottom) }}>
@@ -868,6 +1294,14 @@ const Game: React.FC = () => {
             onClose={store.closeHuResult}
           />
         </View>
+      )}
+
+      {/* ====== 分数飞动动画 (胡牌面板首次显示时执行一次) ====== */}
+      {store.showHuResult && scoreFlyData.length > 0 && !scoreFlyPlayed && (
+        <ScoreFlyAnimation
+          scoreChanges={scoreFlyData}
+          onComplete={() => setScoreFlyPlayed(true)}
+        />
       )}
 
       {/* ====== 流局面板 ====== */}
