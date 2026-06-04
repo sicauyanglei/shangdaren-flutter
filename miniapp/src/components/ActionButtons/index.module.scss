@@ -3,10 +3,10 @@
 
 @keyframes glow-pulse {
   0%, 100% {
-    opacity: 0.4;
+    opacity: 0.3;
   }
   50% {
-    opacity: 0.85;
+    opacity: 0.6;
   }
 }
 
@@ -14,19 +14,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 18px;
   padding: 12px 24px;
 }
 
-// ---- 基础按钮 ----
+// ---- 基础按钮 (匹配 Flame: minHeight=72, minWidth=130, padding 18×36) ----
 .btn {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 100px;
-  min-height: 56px;
-  padding: 12px 24px;
+  min-width: 130px;
+  min-height: 72px;
+  padding: 18px 36px;
   border-radius: 16px;
   border: 2.5px solid transparent;
   box-sizing: border-box;
@@ -52,10 +52,9 @@
 }
 
 // ---- 醒目按钮（自摸/胡）更大更突出 ----
+// Flame: 自摸/胡按钮与普通按钮相同尺寸(minHeight=72, minWidth=130)，但文字更大
 .btnProminent {
-  min-width: 130px;
-  min-height: 72px;
-  padding: 18px 36px;
+  // 保持与基础按钮相同尺寸（已统一为130×72）
 
   &::after {
     border-radius: 20px;
@@ -175,9 +174,9 @@
   border-color: #78909C;
 }
 
-// ---- 文字样式 ----
+// ---- 文字样式 (匹配 Flame: 普通32, 醒目38) ----
 .btnText {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 900;
   color: #ffffff;
   letter-spacing: 2px;

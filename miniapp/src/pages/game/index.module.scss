@@ -306,6 +306,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 // ============================================
 // "胡"按钮徽章 (匹配 Flame canHu && isDrawing)
+// Flame: 金色渐变(#ffd700→#daa520) + 圆角10 + 字体18px
 // ============================================
 .huBadgeWrap {
   position: absolute;
@@ -316,17 +317,17 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 .huBadge {
   padding: px2vh(4) px2vw(8);
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  border-radius: px2vw(8);
+  background: linear-gradient(135deg, #ffd700, #daa520);
+  border-radius: px2vw(10);
   box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
   min-width: px2vw(48);
   text-align: center;
 }
 
 .huBadgeText {
-  font-size: px2vw(22);
+  font-size: px2vw(18);
   font-weight: bold;
-  color: #fff;
+  color: #1a0a00;
   white-space: nowrap;
 }
 
@@ -627,6 +628,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
   color: #2c3e50;
 }
 
+// 匹配 Flame: badgeR=18(直径36), 数字大小根据位数(1位28px/2位20px)
 .handCardCountBadge {
   position: absolute;
   top: px2vh(2);
@@ -638,7 +640,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: px2vw(20);
+  font-size: px2vw(28);
   font-weight: bold;
   color: #fff;
   z-index: 5;
@@ -657,23 +659,41 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 // ============================================
 // 新牌标记 (匹配 Flame _renderHandOverlays)
+// Flame: 圆形(badgeR=10) + 脉冲缩放动画 + 模糊光晕 + "新"字(11px,深色)
 // ============================================
 .newCardMarker {
   position: absolute;
   left: px2vw(2);
   top: px2vh(2);
   z-index: 6;
-  padding: px2vh(2) px2vw(4);
-  background: linear-gradient(135deg, #ff6b6b, #e74c3c);
-  border-radius: px2vw(4);
-  box-shadow: 0 0 px2vw(4) rgba(255, 107, 107, 0.5);
+  width: px2vw(20);
+  height: px2vw(20);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff6b6b, #e74c3c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: newCardPulse 1.5s ease-in-out infinite;
+  // 模糊光晕 (匹配 Flame blur glow)
+  box-shadow: 0 0 px2vw(6) rgba(255, 107, 107, 0.6), 0 0 px2vw(12) rgba(255, 107, 107, 0.3);
 }
 
 .newCardMarkerText {
-  font-size: px2vw(14);
+  font-size: px2vw(11);
   font-weight: bold;
-  color: #fff;
+  color: #1a0a00;
   line-height: 1;
+}
+
+@keyframes newCardPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 px2vw(6) rgba(255, 107, 107, 0.6), 0 0 px2vw(12) rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 px2vw(10) rgba(255, 107, 107, 0.8), 0 0 px2vw(20) rgba(255, 107, 107, 0.4);
+  }
 }
 
 // ============================================
@@ -703,12 +723,13 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 // ============================================
 // 胡牌时AI手牌明牌显示 (匹配Flame规则14)
-// 宽度32.4px 高度134.4px, 同字叠放竖向可见偏移20px
+// 宽度43.2px 高度179.2px, 同字叠放竖向可见偏移35px
+// Flame: 边框黑色半透明1px(radius=3), 角标badgeR=cw*0.35≈15.1(直径≈30)
 // ============================================
 .huAiHandCard {
-  border-radius: px2vw(4);
+  border-radius: px2vw(3);
   background: linear-gradient(135deg, #2a1a0a, #1a0a00);
-  border: 2px solid rgba(255, 215, 0, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -739,8 +760,8 @@ $color-non-dealer-gradient-end: #2d5a3d;
   position: absolute;
   top: px2vh(2);
   right: px2vw(2);
-  min-width: px2vw(28);
-  height: px2vw(28);
+  min-width: px2vw(30);
+  height: px2vw(30);
   border-radius: 50%;
   background: #ff4444;
   display: flex;
@@ -750,7 +771,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 .huAiHandCountBadgeText {
-  font-size: px2vw(14);
+  font-size: px2vw(13.6);
   font-weight: bold;
   color: #fff;
 }
@@ -796,19 +817,38 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 // ============================================
 // 胡牌赢家徽章 (匹配Flame _renderPlayerHuBadges)
+// Flame: 圆角10 + 内边框(inflate(-3), radius=7, alpha 0.4) + 外发光 + 双层文字效果
 // ============================================
 .huBadge {
   padding: px2vh(6) px2vw(10);
-  border-radius: px2vw(8);
+  border-radius: px2vw(10);
   border: 2px solid $color-gold;
   display: flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
+  position: relative;
+
+  // 内边框 (匹配 Flame inflate(-3), radius=7, innerBorderColor alpha 0.4)
+  &::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    border-radius: px2vw(7);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+  }
 }
 
 .huBadgeTextInner {
   line-height: 1;
+  // 匹配 Flame: 双层文字效果(底层黑色阴影+上层白色+金色阴影blur4)
+  text-shadow:
+    0 px2vw(1) 0 rgba(0, 0, 0, 0.3),
+    0 0 px2vw(4) rgba(255, 215, 0, 0.6);
 }
 
 // ============================================
@@ -889,13 +929,16 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 .discardCardLast {
   border-color: $color-orange;
+  border-width: 2px;
   box-shadow: 0 0 px2vw(8) rgba(255, 152, 0, 0.4);
-  animation: discardPulse 0.5s ease-in-out infinite;
+  animation: discardShake 0.3s ease-in-out infinite;
 }
 
-@keyframes discardPulse {
-  0%, 100% { box-shadow: 0 0 px2vw(4) rgba(255, 152, 0, 0.3); border-color: $color-orange; }
-  50% { box-shadow: 0 0 px2vw(12) rgba(255, 152, 0, 0.6); border-color: $color-gold; }
+// 水平抖动动画 (匹配 Flame shakeX)
+@keyframes discardShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
 }
 
 // ============================================
@@ -1037,22 +1080,49 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
-// 听牌徽章 (在playerInfo旁边，不是里面)
+// 听牌徽章 (匹配 Flame GameArtButton ting类型)
+// Flame: 红色渐变(#c62828→#ef5350) + 金色边框(#ffd700) + 内边框(#FF8A80) + 发光动画
 // ============================================
 .tingBadge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: px2vw(40);
-  height: px2vw(40);
-  border-radius: 50%;
-  background: linear-gradient(135deg, $color-gold, $color-gold-dark);
-  box-shadow: 0 0 px2vw(8) rgba(255, 215, 0, 0.5);
-  font-size: px2vw(22);
-  font-weight: bold;
-  color: #333;
+  min-width: px2vw(48);
+  min-height: px2vw(48);
+  padding: px2vw(10) px2vw(16);
+  border-radius: px2vw(12);
+  background: linear-gradient(135deg, #c62828, #ef5350);
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 px2vw(8) rgba(255, 107, 107, 0.4);
+  font-size: px2vw(26);
+  font-weight: 900;
+  color: #fff;
   margin-left: px2vw(4);
   flex-shrink: 0;
+  position: relative;
+  animation: tingGlow 1.5s ease-in-out infinite;
+
+  // 内边框 (匹配 Flame innerBorderColor)
+  &::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    border-radius: px2vw(8);
+    border: 1px solid rgba(255, 138, 128, 0.4);
+    pointer-events: none;
+  }
+}
+
+@keyframes tingGlow {
+  0%, 100% {
+    box-shadow: 0 0 px2vw(4) rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 px2vw(12) rgba(255, 107, 107, 0.6);
+  }
 }
 
 // ============================================

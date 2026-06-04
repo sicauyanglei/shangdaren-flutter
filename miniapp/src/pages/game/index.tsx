@@ -122,7 +122,9 @@ function groupHandBySentence(hand: Card[]): SentenceGroup[] {
 
     for (const gc of groupChars) {
       if (charMap.has(gc)) {
-        stacks.push({ char: gc, cards: charMap.get(gc)! });
+        // 匹配 Flame: charStack 按 card.position 排序
+        const sortedCards = charMap.get(gc)!.sort((a, b) => a.position - b.position);
+        stacks.push({ char: gc, cards: sortedCards });
       }
     }
 
@@ -617,7 +619,7 @@ const HumanHandCards: React.FC<{
                     );
                   })}
                   {showCount && (
-                    <View className={styles.handCardCountBadge} style={{ top: px2vh(topOffset + 2) }}>
+                    <View className={styles.handCardCountBadge} style={{ top: px2vh(topOffset + 2), fontSize: stack.cards.length >= 10 ? px2vw(20) : px2vw(28) }}>
                       <Text>{stack.cards.length}</Text>
                     </View>
                   )}
@@ -1154,8 +1156,8 @@ const Game: React.FC = () => {
           );
         })()}
 
-        {/* 最后出的牌 (横向) */}
-        {store.lastDiscard && (
+        {/* 最后出的牌 (横向) - 点炮胡牌显示时不显示中央出牌 (匹配Flame) */}
+        {store.lastDiscard && !(isHuDisplay && isDianpao) && (
           <View className={styles.playedCard}>
             <Text className={`${styles.playedCardChar} ${styles[`playedCardChar${getCharColorClass(store.lastDiscard.char)}`]}`}>
               {store.lastDiscard.char}
@@ -1189,8 +1191,8 @@ const Game: React.FC = () => {
                     showCountdown={humanHasPendingActions}
                     onAvatarClick={handleAvatarClick}
                   />
-                  {/* "胡"按钮徽章 - canHu && isDrawing 时显示，优先于huCount徽章 */}
-                  {humanPlayer && store.canHu && store.newCardId !== null && (
+                  {/* "胡"按钮徽章 - canHu && isDrawing 时显示，优先于huCount徽章 (匹配Flame) */}
+                  {humanPlayer && store.canHu && store.isDrawing && (
                     <View className={styles.huBadgeWrap}>
                       <View className={styles.huBadge}>
                         <Text className={styles.huBadgeText}>胡</Text>
@@ -1198,7 +1200,7 @@ const Game: React.FC = () => {
                     </View>
                   )}
                   {/* 胡数徽章 - 头像右上角，"胡"按钮不显示时才显示 */}
-                  {humanPlayer && humanPlayer.huCount > 0 && !(store.canHu && store.newCardId !== null) && (
+                  {humanPlayer && humanPlayer.huCount > 0 && !(store.canHu && store.isDrawing) && (
                     <View className={styles.huCountBadgeWrap}>
                       <HuCountBadge huCount={humanPlayer.huCount} />
                     </View>
