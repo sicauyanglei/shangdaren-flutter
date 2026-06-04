@@ -12,6 +12,7 @@ const Records: React.FC = () => {
 
   return (
     <View className={styles.page}>
+      <View className={styles.content}>
       <View className={styles.header}>
         <Text className={styles.headerTitle}>战绩</Text>
       </View>
@@ -60,6 +61,7 @@ const Records: React.FC = () => {
             </View>
           );
         })}
+      </View>
       </View>
     </View>
   );

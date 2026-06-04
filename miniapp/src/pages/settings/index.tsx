@@ -14,6 +14,7 @@ const Settings: React.FC = () => {
 
   return (
     <View className={styles.page}>
+      <View className={styles.content}>
       <View className={styles.header}>
         <Text className={styles.headerTitle}>系统设置</Text>
       </View>
@@ -63,6 +64,7 @@ const Settings: React.FC = () => {
             操作优先级：胡 &gt; 招 &gt; 碰 &gt; 吃。胡数≥11可胡牌。
           </Text>
         </View>
+      </View>
       </View>
     </View>
   );

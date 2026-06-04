@@ -1,213 +1,700 @@
-@use '@/styles/variables.scss' as *;
+// ============================================
+// 游戏页面 - 匹配 Flame 版本 1280x720 设计画布布局
+// 使用 vw/vh 单位，横屏全屏
+// ============================================
 
+// 设计画布尺寸
+$dw: 1280;
+$dh: 720;
+
+// 位置转换函数
+@function px2vw($px) {
+  @return ($px / $dw * 100) * 1vw;
+}
+
+@function px2vh($px) {
+  @return ($px / $dh * 100) * 1vh;
+}
+
+// 牌尺寸常量
+$hand-card-w: px2vw(65);     // 人类手牌宽
+$hand-card-h: px2vh(224);    // 人类手牌高
+$small-card-w: px2vw(28);    // 弃牌宽
+$small-card-h: px2vh(48);    // 弃牌高
+$meld-card-w: px2vw(34);     // 组合牌宽
+$meld-card-h: px2vh(56);     // 组合牌高
+$h-card-w: px2vw(160);       // 横向出牌宽
+$h-card-h: px2vh(40);        // 横向出牌高
+$deck-card-w: px2vw(160);    // 牌堆宽
+$deck-card-h: px2vh(40);     // 牌堆高
+
+// 间距常量
+$hand-stack-visible: px2vh(68);     // 同字竖向可见偏移
+$hand-sentence-gap: px2vw(2);       // 句组间距
+$selected-offset-y: px2vh(28);      // 选中卡牌上移
+$ai-hand-stack-visible: px2vw(15);  // AI手牌层叠偏移
+$meld-stack-visible: px2vw(17);     // 组合牌层叠偏移
+$discard-card-gap: px2vw(1);        // 弃牌间距
+$meld-row-gap: px2vh(0);            // 组合牌行间距
+$discard-row-gap: px2vh(0);         // 弃牌行间距
+$meld-to-discard-gap: px2vh(1);     // 组合牌到弃牌间距
+$avatar-to-meld-gap: px2vh(6);      // 头像到组合牌间距
+$ai-hand-to-meld-gap: px2vh(2);     // AI手牌到组合牌间距
+$max-discard-per-row: 8;
+
+// 区域最大宽度
+$left-max-w: px2vw(340);
+$right-max-w: px2vw(280);
+
+// 颜色常量
+$color-gold: #ffd700;
+$color-gold-dark: #daa520;
+$color-orange: #ff8c00;
+$color-teal: #4ecdc4;
+$color-red-badge: #ff6b6b;
+$color-dealer-gradient-start: #ffd700;
+$color-dealer-gradient-end: #daa520;
+$color-non-dealer-gradient-start: #4a7c59;
+$color-non-dealer-gradient-end: #2d5a3d;
+
+// ============================================
+// 页面容器
+// ============================================
 .page {
-  min-height: 100vh;
-  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
-  display: flex;
-  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(ellipse at center, #1a5c2e 0%, #0d3d1a 50%, #062810 100%);
   overflow: hidden;
+  user-select: none;
 }
 
-.topBar {
-  display: flex;
-  align-items: center;
-  padding: 16rpx 24rpx;
-  gap: 16rpx;
-}
-
-.backBtn {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.backText {
-  font-size: 32rpx;
-  color: $color-text-white;
-}
-
-.table {
-  flex: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.playerArea1, .playerArea2 {
+// ============================================
+// 玩家信息区域 - 通用样式
+// ============================================
+.playerInfo {
+  min-width: px2vw(250);
+  padding: px2vh(14) px2vw(20);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: px2vw(24);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: flex-start;
-  gap: 16rpx;
-  padding: 8rpx 24rpx;
+  gap: px2vw(12);
 }
 
-.playerArea1 {
-  flex-direction: row;
-}
-
-.playerArea2 {
-  flex-direction: row-reverse;
-}
-
-.avatarArea {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4rpx;
-  min-width: 120rpx;
+.avatarWrap {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .avatar {
-  width: 80rpx;
-  height: 80rpx;
+  width: px2vw(80);
+  height: px2vw(80);
   border-radius: 50%;
-  background: linear-gradient(135deg, $color-gold, $color-orange);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid rgba(255, 215, 0, 0.5);
+  border: 3px solid $color-gold;
+  font-size: px2vw(40);
+  font-weight: bold;
 }
 
-.avatarText {
-  font-size: 28rpx;
-  font-weight: $font-weight-bold;
-  color: #1a0a00;
+.avatarDealer {
+  background: linear-gradient(135deg, $color-dealer-gradient-start, $color-dealer-gradient-end);
+  border-color: $color-gold;
+  box-shadow: 0 0 px2vw(15) rgba(255, 215, 0, 0.7);
+  color: #333;
+}
+
+.avatarNonDealer {
+  background: linear-gradient(135deg, $color-non-dealer-gradient-start, $color-non-dealer-gradient-end);
+  border-color: #6b9b7a;
+  color: #fff;
+}
+
+.roleBadge {
+  position: absolute;
+  bottom: px2vh(-8);
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.roleBadgeInner {
+  display: inline-block;
+  padding: px2vh(3) px2vw(12);
+  border-radius: px2vw(6);
+  font-size: px2vw(16);
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.roleDealer {
+  background: $color-red-badge;
+}
+
+.roleNonDealer {
+  background: $color-teal;
+}
+
+.playerDetail {
+  display: flex;
+  flex-direction: column;
+  gap: px2vh(4);
+  min-width: 0;
+}
+
+.playerNameRow {
+  display: flex;
+  align-items: center;
+  gap: px2vw(6);
 }
 
 .playerName {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: px2vw(24);
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.playerNameActive {
+  color: $color-gold;
+}
+
+.piaoBadge {
+  padding: px2vh(4) px2vw(10);
+  background: $color-red-badge;
+  border-radius: px2vw(10);
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  font-size: px2vw(18);
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.playerStatsRow {
+  display: flex;
+  align-items: center;
+  gap: px2vw(8);
+}
+
+.handCountBadge {
+  padding: px2vh(4) px2vw(10);
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: px2vw(8);
+  font-size: px2vw(20);
+  color: $color-gold;
   white-space: nowrap;
 }
 
 .playerScore {
-  font-size: 24rpx;
-  font-weight: $font-weight-bold;
-  color: $color-gold;
+  font-size: px2vw(20);
+  color: $color-teal;
   white-space: nowrap;
 }
 
-.aiMelds {
+.playerScoreHighlight {
+  color: $color-gold;
+}
+
+// ============================================
+// Player 0 区域 (AI 玩家1 - 左上)
+// ============================================
+.player0Area {
+  position: absolute;
+  left: px2vw(9.6);
+  top: px2vh(4.8);
+  display: flex;
+  flex-direction: column;
+  max-width: $left-max-w;
+}
+
+.player0Hand {
+  margin-top: px2vh(6);
+  position: relative;
+  height: $meld-card-h;
+  overflow: hidden;
+}
+
+.player0Melds {
+  margin-top: $ai-hand-to-meld-gap;
   display: flex;
   flex-wrap: wrap;
-  gap: 8rpx;
+  gap: px2vw(2);
+  max-width: $left-max-w;
 }
 
-.aiDiscards {
+.player0Discards {
+  margin-top: $meld-to-discard-gap;
   display: flex;
   flex-wrap: wrap;
-  gap: 4rpx;
+  gap: $discard-card-gap;
+  max-width: $left-max-w;
 }
 
-.meldGroup {
+// ============================================
+// Player 2 区域 (AI 玩家2 - 右上)
+// ============================================
+.player2Area {
+  position: absolute;
+  right: px2vw(9.6);
+  top: px2vh(4.8);
   display: flex;
-  gap: 2rpx;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: $right-max-w;
 }
 
-.deckArea {
-  flex: 1;
+.player2Hand {
+  margin-top: px2vh(6);
+  position: relative;
+  height: $meld-card-h;
+  overflow: hidden;
   display: flex;
+  justify-content: flex-end;
+}
+
+.player2Melds {
+  margin-top: $ai-hand-to-meld-gap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: px2vw(2);
+  max-width: $right-max-w;
+  justify-content: flex-end;
+}
+
+.player2Discards {
+  margin-top: $meld-to-discard-gap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $discard-card-gap;
+  max-width: $right-max-w;
+  justify-content: flex-end;
+}
+
+// ============================================
+// 中央区域 (牌堆 + 出牌)
+// ============================================
+.centerArea {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: px2vh(9.6);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: px2vh(5.4);
+}
+
+.deckStack {
+  position: relative;
+  width: px2vw(80);
+  height: px2vh(20);
+}
+
+.deckCardLayer {
+  position: absolute;
+  width: px2vw(80);
+  height: px2vh(20);
+  background: linear-gradient(135deg, #1B5E20, #2E7D32);
+  border-radius: px2vw(3);
+  border: 1.5px solid rgba(0, 0, 0, 0.6);
 }
 
 .deckCount {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.myArea {
-  display: flex;
-  flex-direction: column;
-  padding: 8rpx 24rpx 16rpx;
-  gap: 8rpx;
-}
-
-.myMelds {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-
-.myHand {
-  display: flex;
-  align-items: flex-end;
-  gap: 0;
-  overflow-x: auto;
-  padding: 8rpx 0;
-  min-height: 200rpx;
-}
-
-.myDiscards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4rpx;
-}
-
-.discardBtn {
-  @include button-reset;
-  position: fixed;
-  right: 32rpx;
-  bottom: 120rpx;
-  width: 160rpx;
-  height: $button-height-lg;
-  background: linear-gradient(135deg, $color-gold, $color-orange);
-  border-radius: $radius-button;
-  box-shadow: 0 0 24rpx rgba(255, 215, 0, 0.4);
-  z-index: 100;
-  transition: all $transition-fast;
-
-  &:active {
-    opacity: 0.9;
-    transform: scale(0.98);
-  }
-}
-
-.discardBtnText {
-  font-size: 32rpx;
-  font-weight: $font-weight-bold;
-  color: #1a0a00;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: px2vw(48);
+  font-weight: 900;
+  color: #fff;
+  text-shadow:
+    0 0 px2vw(24) $color-gold,
+    0 0 px2vw(12) $color-gold,
+    0 px2vw(6) rgba(0, 0, 0, 0.95);
+  z-index: 5;
   white-space: nowrap;
 }
 
-// 飘分面板
-.piaoPanel {
+.playedCard {
+  width: $h-card-w;
+  height: $h-card-h;
+  border-radius: px2vw(4);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.playedCardChar {
+  font-size: px2vw(28);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.playedCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(8) rgba(231, 76, 60, 0.5);
+}
+
+.playedCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(8) rgba(39, 174, 96, 0.5);
+}
+
+.playedCardCharBlack {
+  color: #2c3e50;
+}
+
+// ============================================
+// Player 1 区域 (人类 我 - 底部)
+// ============================================
+.player1Area {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.player1TopRow {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  padding-left: px2vw(10);
+  gap: px2vw(6);
+}
+
+.player1LeftCol {
+  display: flex;
+  flex-direction: column;
+  gap: px2vh(2);
+  max-width: $left-max-w;
+  flex-shrink: 0;
+}
+
+.player1Melds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: px2vw(2);
+  max-width: $left-max-w;
+}
+
+.player1Discards {
+  margin-top: $meld-to-discard-gap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $discard-card-gap;
+  max-width: $left-max-w;
+}
+
+.player1InfoWrap {
+  margin-top: $avatar-to-meld-gap;
+}
+
+.player1HandWrap {
+  width: 100%;
+  display: flex;
   justify-content: center;
-  min-height: 100vh;
-  gap: 32rpx;
+  padding-bottom: px2vh(5);
+}
+
+.player1Hand {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  position: relative;
+}
+
+// ============================================
+// 手牌列 (人类玩家 - 按句分组)
+// ============================================
+.handSentenceGroup {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  margin-right: $hand-sentence-gap;
+
+  &:last-child {
+    margin-right: 0;
+  }
+}
+
+.handCardStack {
+  position: relative;
+  width: $hand-card-w;
+  cursor: pointer;
+}
+
+.handCard {
+  width: $hand-card-w;
+  height: $hand-card-h;
+  border-radius: px2vw(6);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 0;
+  transition: transform 0.15s ease;
+}
+
+.handCardSelected {
+  transform: translateY(-1 * $selected-offset-y);
+  border-color: $color-gold;
+  box-shadow: 0 0 px2vw(16) rgba(255, 215, 0, 0.5);
+  z-index: 10;
+}
+
+.handCardChar {
+  font-size: px2vw(56);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.handCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(8) rgba(231, 76, 60, 0.5);
+}
+
+.handCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(8) rgba(39, 174, 96, 0.5);
+}
+
+.handCardCharBlack {
+  color: #2c3e50;
+}
+
+.handCardCountBadge {
+  position: absolute;
+  top: px2vh(2);
+  right: px2vw(2);
+  min-width: px2vw(36);
+  height: px2vw(36);
+  border-radius: 50%;
+  background: #ff4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: px2vw(20);
+  font-weight: bold;
+  color: #fff;
+  z-index: 5;
+}
+
+.handCardTingBadge {
+  position: absolute;
+  top: px2vh(2);
+  right: px2vw(2);
+  width: px2vw(12);
+  height: px2vw(12);
+  border-radius: 50%;
+  background: #ff4444;
+  z-index: 5;
+}
+
+// ============================================
+// AI 手牌 (牌背)
+// ============================================
+.aiCardBack {
+  width: $meld-card-w;
+  height: $meld-card-h;
+  border-radius: px2vw(3);
+  background: linear-gradient(135deg, #1B5E20, #2E7D32);
+  border: 1.5px solid rgba(0, 0, 0, 0.6);
+  position: absolute;
+  top: 0;
+}
+
+.aiCardBackInner {
+  position: absolute;
+  top: px2vw(2);
+  left: px2vw(2);
+  right: px2vw(2);
+  bottom: px2vw(2);
+  border-radius: px2vw(2);
+  background: #2E7D32;
+}
+
+// ============================================
+// 组合牌 (meld)
+// ============================================
+.meldGroup {
+  display: flex;
+  gap: 0;
+  position: relative;
+}
+
+.meldCard {
+  width: $meld-card-w;
+  height: $meld-card-h;
+  border-radius: px2vw(3);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+}
+
+.meldCardChar {
+  font-size: px2vw(22);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.meldCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(4) rgba(231, 76, 60, 0.5);
+}
+
+.meldCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(4) rgba(39, 174, 96, 0.5);
+}
+
+.meldCardCharBlack {
+  color: #2c3e50;
+}
+
+// ============================================
+// 弃牌
+// ============================================
+.discardCard {
+  width: $small-card-w;
+  height: $small-card-h;
+  border-radius: px2vw(2);
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discardCardChar {
+  font-size: px2vw(18);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.discardCardCharRed {
+  color: #e74c3c;
+  text-shadow: 0 0 px2vw(3) rgba(231, 76, 60, 0.5);
+}
+
+.discardCardCharGreen {
+  color: #27ae60;
+  text-shadow: 0 0 px2vw(3) rgba(39, 174, 96, 0.5);
+}
+
+.discardCardCharBlack {
+  color: #2c3e50;
+}
+
+.discardCardLast {
+  border-color: $color-gold;
+  box-shadow: 0 0 px2vw(8) rgba(255, 215, 0, 0.4);
+  animation: discardPulse 1s ease-in-out infinite;
+}
+
+@keyframes discardPulse {
+  0%, 100% { box-shadow: 0 0 px2vw(4) rgba(255, 215, 0, 0.3); }
+  50% { box-shadow: 0 0 px2vw(12) rgba(255, 215, 0, 0.6); }
+}
+
+// ============================================
+// 操作按钮区域
+// ============================================
+.actionButtonsArea {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: px2vh(240);
+  z-index: 20;
+}
+
+// ============================================
+// 回合信息 (右下角)
+// ============================================
+.roundInfoArea {
+  position: absolute;
+  right: px2vw(9.6);
+  bottom: px2vh(9.6);
+  z-index: 15;
+}
+
+// ============================================
+// 飘分选择弹窗
+// ============================================
+.piaoPopup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.piaoPanel {
+  padding: px2vh(12) px2vw(16);
+  background: rgba(26, 92, 46, 0.95);
+  border-radius: px2vw(15);
+  border: 2px solid $color-gold;
+  box-shadow: 0 0 px2vw(15) rgba(255, 215, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: px2vh(6);
 }
 
 .piaoTitle {
-  font-size: 48rpx;
-  font-weight: $font-weight-bold;
+  font-size: px2vw(26);
+  font-weight: bold;
   color: $color-gold;
-  text-shadow: 0 0 20rpx rgba(255, 215, 0, 0.4);
+  text-shadow: 0 0 px2vw(8) $color-gold;
 }
 
-.piaoPlayer {
-  font-size: 32rpx;
+.piaoSubtitle {
+  font-size: px2vw(20);
+  color: #fff;
+}
+
+.piaoPlayerName {
+  font-size: px2vw(24);
   color: rgba(255, 255, 255, 0.8);
 }
 
 .piaoOptions {
   display: flex;
-  gap: 24rpx;
+  gap: px2vw(12);
+  margin-top: px2vh(6);
 }
 
 .piaoBtn {
-  @include button-reset;
-  min-width: 128rpx;
-  height: $button-height-md;
-  background: rgba(255, 255, 255, 0.1);
-  border: 2rpx solid rgba(255, 255, 255, 0.2);
-  border-radius: $radius-button;
-  transition: all $transition-fast;
+  min-width: px2vw(72);
+  min-height: px2vh(64);
+  padding: px2vh(12) px2vw(16);
+  border-radius: px2vw(8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
 
   &:active {
     opacity: 0.9;
@@ -215,9 +702,78 @@
   }
 }
 
+.piaoBtn0 {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.piaoBtn5 {
+  background: #4a90e2;
+}
+
+.piaoBtn10 {
+  background: #f5a623;
+}
+
+.piaoBtn20 {
+  background: #ff6b6b;
+}
+
 .piaoBtnText {
-  font-size: 28rpx;
-  font-weight: $font-weight-semibold;
-  color: $color-text-white;
-  white-space: nowrap;
+  font-size: px2vw(24);
+  font-weight: bold;
+  color: #fff;
+}
+
+// ============================================
+// 胡牌面板
+// ============================================
+.huPanelOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+}
+
+// ============================================
+// 听牌徽章
+// ============================================
+.tingBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: px2vw(40);
+  height: px2vw(40);
+  border-radius: 50%;
+  background: linear-gradient(135deg, $color-gold, $color-gold-dark);
+  box-shadow: 0 0 px2vw(8) rgba(255, 215, 0, 0.5);
+  font-size: px2vw(22);
+  font-weight: bold;
+  color: #333;
+  margin-left: px2vw(4);
+}
+
+// ============================================
+// 返回按钮
+// ============================================
+.backBtn {
+  position: absolute;
+  top: px2vh(4.8);
+  left: 50%;
+  transform: translateX(-300%);
+  width: px2vw(48);
+  height: px2vw(48);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  cursor: pointer;
+}
+
+.backBtnText {
+  font-size: px2vw(28);
+  color: #fff;
 }

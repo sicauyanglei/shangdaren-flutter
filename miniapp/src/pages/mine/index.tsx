@@ -20,6 +20,7 @@ const Mine: React.FC = () => {
 
   return (
     <View className={styles.page}>
+      <View className={styles.content}>
       <View className={styles.header}>
         <Text className={styles.headerTitle}>我的</Text>
       </View>
@@ -70,6 +71,7 @@ const Mine: React.FC = () => {
       <View className={styles.aboutCard}>
         <Text className={styles.aboutText}>上大人字牌 v1.0.0</Text>
         <Text className={styles.aboutDesc}>传统字牌 · 智慧博弈</Text>
+      </View>
       </View>
     </View>
   );

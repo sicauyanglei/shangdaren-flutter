@@ -13,14 +13,14 @@ export const CARD_GROUPS: CardChar[][] = [
   ['福', '禄', '寿'],
 ];
 
-// 红字（上/大/人/福/禄/寿）
-export const RED_CHARS: CardChar[] = ['上', '大', '人', '福', '禄', '寿'];
+// 红字（每句首字：上/丘/化/七/尔/八/佳/福）
+export const RED_CHARS: CardChar[] = ['上', '丘', '化', '七', '尔', '八', '佳', '福'];
 
-// 绿字（丘/乙/己/化/三/千/尔/小/生/佳/作/亡）
-export const GREEN_CHARS: CardChar[] = ['丘', '乙', '己', '化', '三', '千', '尔', '小', '生', '佳', '作', '亡'];
+// 绿字（每句中字：大/乙/三/十/小/九/作/禄）
+export const GREEN_CHARS: CardChar[] = ['大', '乙', '三', '十', '小', '九', '作', '禄'];
 
-// 黑字（七/十/土/八/九/子）
-export const BLACK_CHARS: CardChar[] = ['七', '十', '土', '八', '九', '子'];
+// 黑字（每句末字：人/己/千/土/生/子/亡/寿）
+export const BLACK_CHARS: CardChar[] = ['人', '己', '千', '土', '生', '子', '亡', '寿'];
 
 // 卡牌颜色类型
 export type CardColor = 'red' | 'green' | 'black';

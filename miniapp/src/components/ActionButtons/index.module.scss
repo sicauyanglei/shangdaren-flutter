@@ -1,68 +1,185 @@
-@use '@/styles/variables.scss' as *;
+// ActionButtons - 匹配 Flame 版本 GameArtButton 样式
+// 使用 px 单位（横屏模式），渐变背景 + 内边框 + 发光动画
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
 
 .container {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
-  padding: 16rpx 32rpx;
+  gap: 14px;
+  padding: 12px 24px;
 }
 
+// ---- 基础按钮 ----
 .btn {
-  @include button-reset;
-  min-width: 96rpx;
-  height: $button-height-md;
-  border-radius: $radius-button;
-  padding: 0 32rpx;
-  transition: all $transition-fast;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  min-height: 56px;
+  padding: 12px 24px;
+  border-radius: 16px;
+  border: 2.5px solid transparent;
+  box-sizing: border-box;
+  transition: transform 0.1s ease, opacity 0.1s ease;
 
   &:active {
+    transform: scale(0.93);
     opacity: 0.9;
-    transform: scale(0.98);
+  }
+
+  // 发光效果伪元素
+  &::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    bottom: -4px;
+    left: -4px;
+    border-radius: 20px;
+    pointer-events: none;
+    animation: glow-pulse 1.5s ease-in-out infinite;
   }
 }
 
-.btnText {
-  font-size: $font-size-lg;
-  font-weight: $font-weight-bold;
-  color: $color-text-white;
+// ---- 醒目按钮（自摸/胡）更大更突出 ----
+.btnProminent {
+  min-width: 130px;
+  min-height: 72px;
+  padding: 18px 36px;
+
+  &::after {
+    border-radius: 20px;
+  }
 }
 
-.btnTextZimo, .btnTextHu {
-  font-size: 44rpx;
-  font-weight: $font-weight-bold;
-  color: $color-text-white;
-  text-shadow: 0 0 12rpx rgba(255, 215, 0, 0.6);
+// ---- 内边框装饰（匹配 Flame 的 innerBorderColor） ----
+.btnInner {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+// ---- 自摸按钮 ----
 .btnZimo {
   background: linear-gradient(135deg, #ff6b6b, #e74c3c);
-  border: 2rpx solid rgba(255, 107, 107, 0.5);
-  box-shadow: 0 0 20rpx rgba(231, 76, 60, 0.4);
+  border-color: rgba(255, 107, 107, 0.5);
+  box-shadow: 0 4px 12px rgba(183, 28, 28, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(255, 107, 107, 0.5);
+  }
 }
 
+.btnInnerZimo {
+  border-color: rgba(255, 138, 128, 0.4);
+}
+
+// ---- 胡按钮 ----
 .btnHu {
   background: linear-gradient(135deg, #ffd700, #ff8c00);
-  border: 2rpx solid rgba(255, 215, 0, 0.5);
-  box-shadow: 0 0 20rpx rgba(255, 215, 0, 0.4);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(255, 215, 0, 0.5);
+  }
 }
 
+.btnInnerHu {
+  border-color: rgba(255, 224, 130, 0.4);
+}
+
+// ---- 招按钮 ----
 .btnZhao {
   background: linear-gradient(135deg, #9b59b6, #8e44ad);
-  border: 2rpx solid rgba(155, 89, 182, 0.5);
+  border-color: rgba(155, 89, 182, 0.5);
+  box-shadow: 0 4px 12px rgba(142, 68, 173, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(155, 89, 182, 0.4);
+  }
 }
 
+.btnInnerZhao {
+  border-color: rgba(206, 147, 216, 0.4);
+}
+
+// ---- 碰按钮 ----
 .btnPeng {
   background: linear-gradient(135deg, #3498db, #2980b9);
-  border: 2rpx solid rgba(52, 152, 219, 0.5);
+  border-color: rgba(52, 152, 219, 0.5);
+  box-shadow: 0 4px 12px rgba(41, 128, 185, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(100, 181, 246, 0.4);
+  }
 }
 
+.btnInnerPeng {
+  border-color: rgba(100, 181, 246, 0.4);
+}
+
+// ---- 吃按钮 ----
 .btnChi {
-  background: linear-gradient(135deg, $color-teal, #2ecc71);
-  border: 2rpx solid rgba(78, 205, 196, 0.5);
+  background: linear-gradient(135deg, #4ecdc4, #2ecc71);
+  border-color: rgba(78, 205, 196, 0.5);
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(78, 205, 196, 0.4);
+  }
 }
 
+.btnInnerChi {
+  border-color: rgba(128, 203, 196, 0.4);
+}
+
+// ---- 过按钮 ----
 .btnPass {
   background: rgba(255, 255, 255, 0.15);
-  border: 2rpx solid rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  // 过按钮无发光效果
+  &::after {
+    display: none;
+  }
+}
+
+.btnInnerPass {
+  border-color: rgba(144, 164, 174, 0.4);
+}
+
+// ---- 文字样式 ----
+.btnText {
+  font-size: 30px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+// 醒目按钮文字（自摸/胡）更大更醒目
+.btnTextProminent {
+  font-size: 38px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+// 过按钮文字颜色较淡
+.btnTextPass {
+  color: #cfd8dc;
+  text-shadow: none;
 }

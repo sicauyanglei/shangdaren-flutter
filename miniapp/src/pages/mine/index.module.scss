@@ -1,18 +1,25 @@
 @use '@/styles/variables.scss' as *;
 
 .page {
-  min-height: 100vh;
-  padding: 0 $page-padding;
+  width: 100vw;
+  height: 100vh;
+  overflow: auto;
+  box-sizing: border-box;
   background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
-  padding-bottom: 120rpx;
+}
+
+.content {
+  max-width: 900rpx;
+  margin: 0 auto;
+  padding: 0 $page-padding 60rpx;
 }
 
 .header {
-  padding: 80rpx 0 32rpx;
+  padding: 40rpx 0 20rpx;
 }
 
 .headerTitle {
-  font-size: $font-size-xxl;
+  font-size: 36rpx;
   font-weight: $font-weight-bold;
   color: $color-gold;
   text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
@@ -21,17 +28,17 @@
 .profileCard {
   display: flex;
   align-items: center;
-  gap: $spacing-lg;
+  gap: $spacing-md;
   background: $color-bg-card;
   border-radius: $radius-lg;
   border: 2rpx solid $color-border;
-  padding: $spacing-lg;
+  padding: $spacing-md;
   margin-bottom: $spacing-md;
 }
 
 .avatar {
-  width: 120rpx;
-  height: 120rpx;
+  width: 96rpx;
+  height: 96rpx;
   border-radius: 50%;
   background: linear-gradient(135deg, $color-gold, $color-orange);
   display: flex;
@@ -42,7 +49,7 @@
 }
 
 .avatarText {
-  font-size: 40rpx;
+  font-size: 32rpx;
   font-weight: $font-weight-bold;
   color: #1a0a00;
 }
@@ -50,59 +57,59 @@
 .profileInfo {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 4rpx;
 }
 
 .profileName {
-  font-size: $font-size-xl;
+  font-size: $font-size-lg;
   font-weight: $font-weight-bold;
   color: $color-text-white;
 }
 
 .profileLevel {
-  font-size: $font-size-sm;
+  font-size: $font-size-xs;
   color: $color-gold;
   font-weight: $font-weight-semibold;
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: $spacing-sm;
-  margin-bottom: $spacing-lg;
+  margin-bottom: $spacing-md;
 }
 
 .statCard {
   background: $color-bg-card;
   border-radius: $radius-md;
   border: 2rpx solid rgba(255, 255, 255, 0.1);
-  padding: $spacing-lg;
+  padding: $spacing-md $spacing-sm;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  gap: 4rpx;
 }
 
 .statValue {
-  font-size: 44rpx;
+  font-size: 36rpx;
   font-weight: $font-weight-bold;
   color: $color-gold;
 }
 
 .statLabel {
-  font-size: $font-size-sm;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .section {
-  margin-bottom: $spacing-lg;
+  margin-bottom: $spacing-md;
 }
 
 .sectionTitle {
-  font-size: $font-size-lg;
+  font-size: $font-size-md;
   font-weight: $font-weight-semibold;
   color: $color-text-white;
-  margin-bottom: $spacing-md;
+  margin-bottom: $spacing-sm;
   display: block;
 }
 
@@ -115,10 +122,10 @@
 .achievementCard {
   display: flex;
   align-items: center;
-  gap: $spacing-md;
+  gap: $spacing-sm;
   background: $color-bg-card;
   border-radius: $radius-md;
-  padding: $spacing-md $spacing-lg;
+  padding: $spacing-sm $spacing-md;
   border: 2rpx solid rgba(255, 255, 255, 0.1);
 }
 
@@ -131,15 +138,15 @@
 }
 
 .achIcon {
-  width: 64rpx;
-  height: 64rpx;
+  width: 48rpx;
+  height: 48rpx;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .achIconText {
-  font-size: 40rpx;
+  font-size: 32rpx;
 }
 
 .unlocked .achIconText {
@@ -153,17 +160,17 @@
 .achInfo {
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 2rpx;
 }
 
 .achName {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: $font-weight-semibold;
   color: $color-text-white;
 }
 
 .achDesc {
-  font-size: $font-size-xs;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.5);
 }
 
@@ -171,16 +178,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
-  padding: $spacing-lg;
+  gap: 4rpx;
+  padding: $spacing-md;
 }
 
 .aboutText {
-  font-size: $font-size-sm;
+  font-size: $font-size-xs;
   color: rgba(255, 255, 255, 0.4);
 }
 
 .aboutDesc {
-  font-size: $font-size-xs;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.3);
 }

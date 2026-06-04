@@ -1,17 +1,25 @@
 @use '@/styles/variables.scss' as *;
 
 .page {
-  min-height: 100vh;
-  padding: 0 $page-padding;
+  width: 100vw;
+  height: 100vh;
+  overflow: auto;
+  box-sizing: border-box;
   background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
 }
 
+.content {
+  max-width: 900rpx;
+  margin: 0 auto;
+  padding: 0 $page-padding;
+}
+
 .header {
-  padding: 80rpx 0 32rpx;
+  padding: 40rpx 0 20rpx;
 }
 
 .headerTitle {
-  font-size: $font-size-xxl;
+  font-size: 36rpx;
   font-weight: $font-weight-bold;
   color: $color-gold;
   text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
@@ -21,12 +29,12 @@
   background: $color-bg-card;
   border-radius: $radius-lg;
   border: 2rpx solid $color-border;
-  padding: $spacing-lg;
+  padding: $spacing-md;
   margin-bottom: $spacing-md;
 }
 
 .section {
-  margin-bottom: $spacing-lg;
+  margin-bottom: $spacing-md;
 
   &:last-child {
     margin-bottom: 0;
@@ -34,10 +42,10 @@
 }
 
 .sectionTitle {
-  font-size: $font-size-lg;
+  font-size: $font-size-md;
   font-weight: $font-weight-semibold;
   color: $color-text-white;
-  margin-bottom: $spacing-md;
+  margin-bottom: $spacing-sm;
   display: block;
 }
 
@@ -48,7 +56,7 @@
 }
 
 .sliderValue {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: $font-weight-bold;
   color: $color-gold;
   min-width: 80rpx;
@@ -57,12 +65,12 @@
 
 .diffGroup {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .diffCard {
   flex: 1;
-  padding: 24rpx 16rpx;
+  padding: 16rpx 12rpx;
   background: rgba(255, 255, 255, 0.05);
   border: 2rpx solid rgba(255, 255, 255, 0.1);
   border-radius: $radius-md;
@@ -82,21 +90,21 @@
 
 .diffLabel {
   display: block;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: $font-weight-semibold;
   color: $color-text-white;
-  margin-bottom: 8rpx;
+  margin-bottom: 4rpx;
 }
 
 .diffDesc {
   display: block;
-  font-size: $font-size-xs;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
 }
 
 .ruleText {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   color: rgba(255, 255, 255, 0.7);
-  line-height: $line-height-loose;
+  line-height: $line-height-normal;
 }
