@@ -4,13 +4,31 @@ import { Card, CardChar } from './card';
 export type PlayerType = 'human' | 'ai';
 
 // 组合牌类型
-export type MeldType = 'sentence' | 'triple' | 'quad';
+export type MeldType = 'ju' | 'kan' | 'zhao' | 'dui' | 'kao';
 
 // 组合牌
 export interface Meld {
   type: MeldType;
   cards: Card[];
   isJing: boolean; // 是否含上/福（精）
+}
+
+// 获取组合牌胡数
+export function getMeldHuCount(meld: Meld, isHand: boolean = true, isPao: boolean = false): number {
+  switch (meld.type) {
+    case 'ju':
+      return meld.isJing ? 4 : 0;
+    case 'kan':
+      if (meld.isJing) return 12;
+      if (isPao) return 2;
+      return isHand ? 3 : 2;
+    case 'zhao':
+      return meld.isJing ? 16 : 6;
+    case 'dui':
+      return meld.isJing ? 8 : 0;
+    case 'kao':
+      return meld.isJing ? 4 : 0;
+  }
 }
 
 // 玩家
@@ -25,7 +43,10 @@ export interface Player {
   isDealer: boolean;
   score: number;
   huCount: number;
-  piaoValue: number;
+  piao: number;           // 飘分（与Flame一致）
+  piaoValue: number;      // 向后兼容别名，与piao保持同步
+  tingCards: Card[];      // 听牌列表：哪些牌可以胡
+  meldHuCount: number;    // 缓存的组合牌胡数
 }
 
 // 操作类型
@@ -55,6 +76,20 @@ export interface HuResult {
   huCount: number;
   multiplier: number;
   scoreChanges: number[];
+}
+
+// 局结果（用于总结算）
+export interface RoundResult {
+  roundNumber: number;
+  isLiuju: boolean;
+  winner?: string;
+  winnerIndex?: number;
+  huType?: string;
+  method?: string;
+  multiplier?: number;
+  score?: number;
+  scoreChanges?: number[];
+  piaoScores?: number[];
 }
 
 // 游戏状态
@@ -92,4 +127,12 @@ export interface GameState {
   countdown: number;
   // 新摸的牌ID
   newCardId: number | null;
+  // 人类玩家是否处于摸牌状态
+  isDrawing: boolean;
+  // 是否隐藏听牌徽章
+  hideTingBadge: boolean;
+  // 是否等待人类玩家响应
+  waitingForResponse: boolean;
+  // 局结果历史（用于总结算）
+  roundResults: RoundResult[];
 }

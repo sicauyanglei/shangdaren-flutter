@@ -3,7 +3,7 @@ import { Card, createDeck, shuffleDeck } from '../types/card';
 import { GameState, Player, Meld, HuResult, GamePhase, PendingAction } from '../types/player';
 import { calculateTotalHu, canHu, canZimo } from '../utils/huCalculator';
 import { isTing } from '../utils/tingChecker';
-import { calculateScoreChanges, getHuMultiplier } from '../utils/scoreCalculator';
+import { calculateScoreChanges, HuTypeResult } from '../utils/scoreCalculator';
 import { aiDecideDiscard, aiDecideChi, aiDecidePeng, aiDecideZhao } from '../utils/aiStrategy';
 
 interface GameStore extends GameState {
@@ -51,6 +51,10 @@ const initialState: GameState = {
   zhaoCandidates: [],
   countdown: 14,
   newCardId: null,
+  isDrawing: false,
+  hideTingBadge: false,
+  waitingForResponse: false,
+  roundResults: [],
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -65,19 +69,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         id: 0, name: '我', type: 'human',
         hand: [], melds: [], discards: [],
         isTing: false, isDealer: dealerIndex === 0,
-        score: 0, huCount: 0, piaoValue: 0,
+        score: 0, huCount: 0, piao: 0, piaoValue: 0, tingCards: [], meldHuCount: 0,
       },
       {
         id: 1, name: '玩家1', type: 'ai',
         hand: [], melds: [], discards: [],
         isTing: false, isDealer: dealerIndex === 1,
-        score: 0, huCount: 0, piaoValue: 0,
+        score: 0, huCount: 0, piao: 0, piaoValue: 0, tingCards: [], meldHuCount: 0,
       },
       {
         id: 2, name: '玩家2', type: 'ai',
         hand: [], melds: [], discards: [],
         isTing: false, isDealer: dealerIndex === 2,
-        score: 0, huCount: 0, piaoValue: 0,
+        score: 0, huCount: 0, piao: 0, piaoValue: 0, tingCards: [], meldHuCount: 0,
       },
     ];
 
@@ -117,7 +121,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const players = [...state.players];
     const pIdx = state.piaoCurrentPlayerIndex;
-    players[pIdx] = { ...players[pIdx], piaoValue: value };
+    players[pIdx] = { ...players[pIdx], piao: value, piaoValue: value };
 
     const nextIdx = pIdx + 1;
     if (nextIdx >= 3) {
@@ -139,7 +143,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     current.discards.push(discarded);
 
     // 检查听牌
-    current.isTing = isTing(current.hand);
+    current.isTing = isTing(current.hand, current.melds);
 
     // 下一玩家
     const nextPlayerIndex = (state.currentPlayerIndex + 1) % 3;
@@ -170,7 +174,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           if (discardIdx >= 0) {
             aiPlayers[nextPlayerIndex].hand.splice(discardIdx, 1);
             aiPlayers[nextPlayerIndex].discards.push(toDiscard);
-            aiPlayers[nextPlayerIndex].isTing = isTing(aiPlayers[nextPlayerIndex].hand);
+            aiPlayers[nextPlayerIndex].isTing = isTing(aiPlayers[nextPlayerIndex].hand, aiPlayers[nextPlayerIndex].melds);
           }
 
           set({

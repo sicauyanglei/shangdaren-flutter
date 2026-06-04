@@ -1,20 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text } from '@tarojs/components';
-import { Player } from '../../types/player';
+import { Player, RoundResult } from '../../types/player';
 import styles from './index.module.scss';
-
-export interface RoundResult {
-  roundNumber: number;
-  isLiuju: boolean;
-  winner?: string;
-  winnerIndex?: number;
-  huType?: string;
-  method?: string;
-  multiplier?: number;
-  score?: number;
-  scoreChanges?: number[];
-  piaoScores?: number[];
-}
 
 export interface SettlementScreenProps {
   players: Player[];

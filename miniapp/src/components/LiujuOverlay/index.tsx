@@ -1,16 +1,13 @@
 import React, { useMemo } from 'react';
 import { View, Text } from '@tarojs/components';
 import { Player } from '../../types/player';
-import { Card, CardChar, getCardGroup } from '../../types/card';
+import { Card, getCardGroup, isJingChar } from '../../types/card';
 import styles from './index.module.scss';
 
 interface LiujuOverlayProps {
   players: Player[];
   onClose: () => void;
 }
-
-// 精字判断（上/福）
-const isJingChar = (char: CardChar): boolean => char === '上' || char === '福';
 
 // 判断卡牌是否使用红色样式（精字 或 组1/组8）
 const isRedCard = (card: Card): boolean => {
