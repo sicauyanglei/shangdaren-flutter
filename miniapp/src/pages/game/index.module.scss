@@ -29,7 +29,7 @@ $deck-card-w: px2vw(160);    // 牌堆宽
 $deck-card-h: px2vh(40);     // 牌堆高
 
 // 间距常量
-$hand-stack-visible: px2vh(68);     // 同字竖向可见偏移
+$hand-stack-visible: px2vh(52);     // 同字竖向可见偏移
 $hand-sentence-gap: px2vw(2);       // 句组间距
 $selected-offset-y: px2vh(28);      // 选中卡牌上移
 $ai-hand-stack-visible: px2vw(15);  // AI手牌层叠偏移
@@ -66,7 +66,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(ellipse at center, #1a5c2e 0%, #0d3d1a 50%, #062810 100%);
+  background: radial-gradient(circle at center, #1a5c2e 0%, #0d3d1a 60%, #062810 100%);
   overflow: hidden;
   user-select: none;
 }
@@ -202,53 +202,79 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
-// 倒计时组件 (匹配 Flame _CountdownTimer)
+// 倒计时组件 (匹配 Flame _CountdownTimer 铃铛形状)
 // ============================================
 .countdownTimerWrap {
   position: absolute;
-  top: px2vh(-4);
-  left: px2vw(-4);
+  top: px2vh(-10);
+  left: px2vw(-10);
   z-index: 10;
 }
 
 .countdownTimer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.countdownBellTop {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.countdownRing {
+  position: absolute;
+  top: px2vh(5);
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+
+.countdownBody {
+  position: absolute;
+  top: px2vh(8);
+  left: 50%;
+  transform: translateX(-50%);
   width: px2vw(28);
   height: px2vw(28);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid $color-gold;
+  box-shadow:
+    0 px2vh(2) px2vw(8) rgba(0, 0, 0, 0.4),
+    0 px2vh(1) px2vw(2) rgba(255, 255, 255, 0.1) inset;
 }
 
 .countdownNormal {
-  background: linear-gradient(135deg, #2c3e50, #1a252f);
-  border-color: $color-gold;
-  box-shadow: 0 0 px2vw(6) rgba(255, 215, 0, 0.4);
+  background: linear-gradient(135deg, #2c3e50, #34495e);
 }
 
 .countdownWarning {
   background: linear-gradient(135deg, #c0392b, #e74c3c);
-  border-color: #ff4444;
-  box-shadow: 0 0 px2vw(8) rgba(255, 68, 68, 0.6);
   animation: countdownPulse 0.8s ease-in-out infinite;
 }
 
 .countdownNumber {
   font-size: px2vw(14);
   font-weight: bold;
-  color: #fff;
+  color: #ecf0f1;
   line-height: 1;
+}
+
+.countdownNumberWarning {
+  color: #fff;
 }
 
 @keyframes countdownPulse {
   0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 px2vw(6) rgba(255, 68, 68, 0.4);
+    transform: translateX(-50%) scale(1);
   }
   50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 px2vw(12) rgba(255, 68, 68, 0.8);
+    transform: translateX(-50%) scale(1.08);
   }
 }
 
@@ -257,13 +283,13 @@ $color-non-dealer-gradient-end: #2d5a3d;
 // ============================================
 .huCountBadgeWrap {
   position: absolute;
-  top: px2vh(-4);
-  right: px2vw(-4);
+  top: px2vh(-10);
+  right: px2vw(-10);
   z-index: 10;
 }
 
 .huCountBadge {
-  padding: px2vh(8) px2vw(4);
+  padding: px2vh(4) px2vw(8);
   background: linear-gradient(135deg, #ffd700, #daa520);
   border-radius: px2vw(8);
   box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
@@ -275,6 +301,32 @@ $color-non-dealer-gradient-end: #2d5a3d;
   font-size: px2vw(18);
   font-weight: bold;
   color: #1a0a00;
+  white-space: nowrap;
+}
+
+// ============================================
+// "胡"按钮徽章 (匹配 Flame canHu && isDrawing)
+// ============================================
+.huBadgeWrap {
+  position: absolute;
+  top: px2vh(-10);
+  right: px2vw(-10);
+  z-index: 11;
+}
+
+.huBadge {
+  padding: px2vh(4) px2vw(8);
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border-radius: px2vw(8);
+  box-shadow: 0 px2vw(4) rgba(0, 0, 0, 0.3);
+  min-width: px2vw(48);
+  text-align: center;
+}
+
+.huBadgeText {
+  font-size: px2vw(22);
+  font-weight: bold;
+  color: #fff;
   white-space: nowrap;
 }
 
@@ -811,11 +863,6 @@ $color-non-dealer-gradient-end: #2d5a3d;
   color: #fff;
 }
 
-.piaoPlayerName {
-  font-size: px2vw(24);
-  color: rgba(255, 255, 255, 0.8);
-}
-
 .piaoOptions {
   display: flex;
   gap: px2vw(12);
@@ -966,8 +1013,9 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 .zhaoCharBtn {
-  width: px2vw(80);
-  height: px2vh(64);
+  min-width: px2vw(68);
+  min-height: px2vh(68);
+  padding: px2vh(14) px2vw(20);
   border-radius: px2vw(8);
   display: flex;
   align-items: center;
@@ -983,8 +1031,8 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 .zhaoCharBtnNormal {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  border-color: rgba(52, 152, 219, 0.5);
+  background: linear-gradient(135deg, #4a90e2, #357abd);
+  border-color: rgba(74, 144, 226, 0.5);
 }
 
 .zhaoCharBtnJing {
@@ -1001,7 +1049,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 .zhaoCharBtnTextJing {
-  color: #1a0a00;
+  color: #333333;
   text-shadow: 0 px2vw(2) rgba(255, 255, 255, 0.3);
 }
 

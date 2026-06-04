@@ -25,7 +25,7 @@ const MELD_CARD_H = 56;
 const DECK_CARD_W = 160;
 const DECK_CARD_H = 40;
 
-const HAND_STACK_VISIBLE = 68;
+const HAND_STACK_VISIBLE = 52;
 const HAND_SENTENCE_GAP = 2;
 const AI_HAND_STACK_VISIBLE = 15;
 const MELD_STACK_VISIBLE = 17;
@@ -112,15 +112,45 @@ function getCharColorClass(char: CardChar): string {
 }
 
 // ============================================
-// 倒计时组件 (匹配 Flame _CountdownTimer)
+// 倒计时组件 (匹配 Flame _CountdownTimer 铃铛形状)
 // ============================================
 const CountdownTimer: React.FC<{
   countdown: number;
   isWarning: boolean;
 }> = ({ countdown, isWarning }) => {
+  const ringColor = isWarning ? '#CCff5050' : '#99ffd700';
+  const bellColor = isWarning ? '#CCff5050' : '#99ffd700';
+
   return (
-    <View className={`${styles.countdownTimer} ${isWarning ? styles.countdownWarning : styles.countdownNormal}`}>
-      <Text className={styles.countdownNumber}>{countdown}</Text>
+    <View className={styles.countdownTimer} style={{ width: px2vw(36), height: px2vh(42) }}>
+      {/* 铃铛顶部 */}
+      <View
+        className={styles.countdownBellTop}
+        style={{
+          width: px2vw(10),
+          height: px2vh(6),
+          background: bellColor,
+          borderRadius: `${px2vw(2)} ${px2vw(2)} 0 0`,
+        }}
+      />
+      {/* 铃铛环 */}
+      <View
+        className={styles.countdownRing}
+        style={{
+          width: px2vw(32),
+          height: px2vw(32),
+          border: `2px solid ${ringColor}`,
+          borderRadius: '50%',
+        }}
+      />
+      {/* 铃铛主体 (内圆) */}
+      <View
+        className={`${styles.countdownBody} ${isWarning ? styles.countdownWarning : styles.countdownNormal}`}
+      >
+        <Text className={`${styles.countdownNumber} ${isWarning ? styles.countdownNumberWarning : ''}`}>
+          {countdown}
+        </Text>
+      </View>
     </View>
   );
 };
@@ -149,7 +179,8 @@ const PlayerInfo: React.FC<{
   countdown?: number;
   showCountdown?: boolean;
   onAvatarClick?: () => void;
-}> = ({ player, isDealer, isCurrentTurn, countdown = 14, showCountdown = false, onAvatarClick }) => {
+  animatingScore?: number | null;
+}> = ({ player, isDealer, isCurrentTurn, countdown = 14, showCountdown = false, onAvatarClick, animatingScore }) => {
   if (!player) return null;
 
   const isWarning = countdown <= 5;
@@ -190,7 +221,9 @@ const PlayerInfo: React.FC<{
           <View className={styles.handCountBadge}>
             <Text>{player.hand.length}张</Text>
           </View>
-          <Text className={styles.playerScore}>{player.score}分</Text>
+          <Text className={`${styles.playerScore} ${animatingScore != null ? styles.playerScoreHighlight : ''}`}>
+            {animatingScore != null ? animatingScore : player.score}分
+          </Text>
         </View>
       </View>
     </View>
@@ -566,13 +599,11 @@ const Game: React.FC = () => {
   // 飘分阶段
   // ============================================
   if (store.isPiaoPhase) {
-    const piaoPlayer = store.players[store.piaoCurrentPlayerIndex];
     return (
       <View className={styles.page}>
         <View className={styles.piaoPopup}>
           <View className={styles.piaoPanel}>
             <Text className={styles.piaoTitle}>选择飘分</Text>
-            <Text className={styles.piaoPlayerName}>{piaoPlayer?.name}</Text>
             <Text className={styles.piaoSubtitle}>请选择本局飘分</Text>
             <View className={styles.piaoOptions}>
               {[
@@ -731,8 +762,16 @@ const Game: React.FC = () => {
                     showCountdown={humanHasPendingActions}
                     onAvatarClick={handleAvatarClick}
                   />
-                  {/* 胡数徽章 - 头像右上角 */}
-                  {humanPlayer && humanPlayer.huCount > 0 && (
+                  {/* "胡"按钮徽章 - canHu && isDrawing 时显示，优先于huCount徽章 */}
+                  {humanPlayer && store.canHu && store.newCardId !== null && (
+                    <View className={styles.huBadgeWrap}>
+                      <View className={styles.huBadge}>
+                        <Text className={styles.huBadgeText}>胡</Text>
+                      </View>
+                    </View>
+                  )}
+                  {/* 胡数徽章 - 头像右上角，"胡"按钮不显示时才显示 */}
+                  {humanPlayer && humanPlayer.huCount > 0 && !(store.canHu && store.newCardId !== null) && (
                     <View className={styles.huCountBadgeWrap}>
                       <HuCountBadge huCount={humanPlayer.huCount} />
                     </View>
