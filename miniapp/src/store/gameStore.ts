@@ -1290,6 +1290,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const wasWaitingForResponse = state.waitingForResponse;
 
+    // 匹配 Flame: 播放过牌音效
+    audioManager.playGuo();
+    stopCountdownTimer();
+
     set({
       canChi: false,
       canPeng: false,
@@ -1301,10 +1305,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
 
     if (wasWaitingForResponse) {
+      set({ isMyTurn: false });
       // 人类过牌后，处理AI待处理操作
       if (_pendingAIResponses && _pendingResponseCard && _pendingResponseDiscardPlayerId !== null) {
-        get()._processAIResponses(_pendingAIResponses, _pendingResponseCard, _pendingResponseDiscardPlayerId);
+        const pending = _pendingAIResponses;
+        const card = _pendingResponseCard;
+        const discardId = _pendingResponseDiscardPlayerId;
         clearPendingAIResponses();
+        get()._processAIResponses(pending, card, discardId);
       } else {
         clearPendingAIResponses();
         get()._nextTurn();
@@ -1312,6 +1320,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else {
       // 匹配 Flame: 过招按钮后，需要出牌，设置isMyTurn并启动countdown
       set({ isMyTurn: true });
+      get().startCountdown();
     }
   },
 
