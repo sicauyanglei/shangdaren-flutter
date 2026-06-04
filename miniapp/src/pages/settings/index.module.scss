@@ -1,110 +1,213 @@
-@use '@/styles/variables.scss' as *;
+/* Settings page - matching Flame SettingsScreen exactly */
 
-.page {
+/* Full-screen semi-transparent black overlay (Colors.black54) */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
-  overflow: auto;
-  box-sizing: border-box;
-  background: radial-gradient(ellipse at center, $color-primary 0%, $color-primary-dark 50%, darken($color-primary-dark, 8%) 100%);
+  background: rgba(0, 0, 0, 0.54);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
 
-.content {
-  max-width: 900rpx;
-  margin: 0 auto;
-  padding: 0 $page-padding;
+/* Outer panel: width 320px, black 0.85 opacity, border-radius 16 */
+.outerPanel {
+  width: 320px;
+  max-width: 320px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 16px;
 }
 
+/* Inner panel: dark gradient, border-radius 16, shadow, width 280px, padding 20px (top 0) */
+.innerPanel {
+  width: 280px;
+  padding: 0 20px 20px 20px;
+  background: linear-gradient(135deg, #2d2d2d, #1a1a1a);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Header wrapper - Stack with clipBehavior: none equivalent (overflow: visible) */
+.headerWrap {
+  position: relative;
+  overflow: visible;
+}
+
+/* Header with bottom border */
 .header {
-  padding: 40rpx 0 20rpx;
+  padding: 16px 0 14.4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
 }
 
 .headerTitle {
-  font-size: 36rpx;
-  font-weight: $font-weight-bold;
-  color: $color-gold;
-  text-shadow: 0 0 16rpx rgba(255, 215, 0, 0.3);
+  font-size: 20px;
+  font-weight: bold;
+  color: #ffffff;
 }
 
-.card {
-  background: $color-bg-card;
-  border-radius: $radius-lg;
-  border: 2rpx solid $color-border;
-  padding: $spacing-md;
-  margin-bottom: $spacing-md;
+/* Close button: Positioned at top-right (right: -16px), 44px red circle */
+.closeBtn {
+  position: absolute;
+  top: 4px;
+  right: -16px;
+  width: 44px;
+  height: 44px;
+  background: #ff6b6b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  z-index: 10;
 }
 
+.closeIcon {
+  font-size: 32px;
+  color: #ffffff;
+  line-height: 1;
+  margin-top: -2px;
+}
+
+/* Section spacing */
 .section {
-  margin-bottom: $spacing-md;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
+  margin-top: 20px;
 }
 
-.sectionTitle {
-  font-size: $font-size-md;
-  font-weight: $font-weight-semibold;
-  color: $color-text-white;
-  margin-bottom: $spacing-sm;
+.sectionLabel {
   display: block;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 9.6px;
 }
 
+/* Slider row */
 .sliderRow {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+}
+
+.sliderTrack {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.sliderActive {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 8px;
+  background: #ffd700;
+  border-radius: 4px;
+}
+
+.sliderThumb {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: #ffd700;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Native range input overlay - transparent, same size as track */
+.sliderInput {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 20px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .sliderValue {
-  font-size: $font-size-sm;
-  font-weight: $font-weight-bold;
-  color: $color-gold;
-  min-width: 80rpx;
-  white-space: nowrap;
+  width: 50px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-left: 14.4px;
+  flex-shrink: 0;
 }
 
-.diffGroup {
+/* Difficulty radio row */
+.diffRow {
   display: flex;
-  gap: 12rpx;
+  align-items: center;
 }
 
-.diffCard {
-  flex: 1;
-  padding: 16rpx 12rpx;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  border-radius: $radius-md;
-  text-align: center;
-  transition: all $transition-fast;
+.radioItem {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+  cursor: pointer;
 
-  &:active {
-    opacity: 0.9;
-    transform: scale(0.98);
+  &:last-child {
+    margin-right: 0;
   }
 }
 
-.diffActive {
-  background: rgba(255, 215, 0, 0.15);
-  border-color: rgba(255, 215, 0, 0.4);
+.radioOuter {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.diffLabel {
-  display: block;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-semibold;
-  color: $color-text-white;
-  margin-bottom: 4rpx;
+.radioInner {
+  width: 10px;
+  height: 10px;
+  background: #ffd700;
+  border-radius: 50%;
 }
 
-.diffDesc {
-  display: block;
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.5);
-  white-space: nowrap;
+.radioLabel {
+  font-size: 14px;
+  color: #ffffff;
+  margin-left: 8px;
 }
 
-.ruleText {
-  font-size: $font-size-sm;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: $line-height-normal;
+/* Divider + Exit button section */
+.dividerSection {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.exitBtn {
+  width: 100%;
+  height: 44px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.exitText {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 2px;
 }

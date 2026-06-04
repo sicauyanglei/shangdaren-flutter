@@ -66,26 +66,30 @@ const HuPanel: React.FC<HuPanelProps> = ({
 }) => {
   // 构建玩家条目排列（匹配 Flame 版本的 arrangedEntries 逻辑）
   const arrangedEntries = useMemo(() => {
+    // Flame: huScore = scores[winnerIndex], winner shows '+$huScore'
+    const winnerScore = Math.abs(scoreChanges.find(sc => sc.change > 0)?.change || 0);
+
     const winnerEntry: PanoEntry = {
       name: winnerName,
-      score: `+${Math.abs(scoreChanges.find(sc => sc.change > 0)?.change || 0)}`,
+      score: `+${winnerScore}`,
       label: '赢家',
       isWinner: true,
     };
 
     const losers: PanoEntry[] = [];
     if (method === '点炮') {
+      // Flame: dianpao loser shows '-$huScore' (same absolute value as winner)
       const dianpaoSc = scoreChanges.find(sc => sc.change < 0);
       if (dianpaoSc) {
         losers.push({
           name: dianpaoSc.name,
-          score: `${dianpaoSc.change}`,
+          score: `-${winnerScore}`,
           label: '点炮',
           isWinner: false,
         });
       }
     } else {
-      // 自摸：每个输家单独显示
+      // 自摸：每个输家单独显示（Flame: score = '$s' where s is already negative）
       scoreChanges.forEach(sc => {
         if (sc.change < 0) {
           losers.push({
@@ -98,6 +102,8 @@ const HuPanel: React.FC<HuPanelProps> = ({
       });
     }
 
+    // Arrange: loser(s) → arrow → winner → arrow → loser(s) for zimo
+    // Or: loser → arrow → winner for dianpao
     const items: PanoArrangeItem[] = [];
     if (method === '自摸' && losers.length === 2) {
       items.push({ entry: losers[0], showArrow: true });
@@ -113,33 +119,33 @@ const HuPanel: React.FC<HuPanelProps> = ({
     return items;
   }, [winnerName, method, scoreChanges]);
 
-  // 底部标签数据
+  // 底部标签数据（匹配 Flame 版本 tags 逻辑）
   const tags = useMemo(() => {
     const huTypeColor = getHuTypeColor(huType);
     const result: { text: string; color: string; bgColor: string }[] = [];
 
-    // 方法标签
+    // 方法标签 - Flame: Color(0x1AFFFFFF) bg, white text
     result.push({
       text: method,
       color: '#ffffff',
       bgColor: 'rgba(255,255,255,0.1)',
     });
 
-    // 胡型标签
+    // 胡型标签 - Flame: _getHuTypeColor text, color.withValues(alpha: 0.2) bg
     result.push({
       text: huType,
       color: huTypeColor,
       bgColor: huTypeColor + '33',
     });
 
-    // 胡数标签
+    // 胡数标签 - Flame: Color(0xFFffd700) text, Color(0x33ffd700) bg
     result.push({
       text: `${huCount}胡`,
       color: '#ffd700',
       bgColor: 'rgba(255,215,0,0.2)',
     });
 
-    // 倍数标签
+    // 倍数标签 - Flame: Color(0xFFff6b6b) text, Color(0x33ff6b6b) bg
     result.push({
       text: `${multiplier}倍`,
       color: '#ff6b6b',

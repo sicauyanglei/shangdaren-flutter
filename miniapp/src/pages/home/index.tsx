@@ -44,24 +44,24 @@ const Home: React.FC = () => {
           <Text className={styles.subtitle}>字 牌 游 戏</Text>
           {/* 装饰卡牌 - 上大人 */}
           <View className={styles.decoCards}>
-            <View className={styles.decoCard}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/shang.png')} mode='aspectFit' />
+            <View className={styles.decoCardRed}>
+              <Text className={styles.decoCardTextRed}>上</Text>
             </View>
-            <View className={styles.decoCard}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/da.png')} mode='aspectFit' />
+            <View className={styles.decoCardRed}>
+              <Text className={styles.decoCardTextRed}>大</Text>
             </View>
-            <View className={styles.decoCard}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/ren.png')} mode='aspectFit' />
+            <View className={styles.decoCardRed}>
+              <Text className={styles.decoCardTextRed}>人</Text>
             </View>
             <View className={styles.decoCardGap} />
             <View className={styles.decoCardGreen}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/fu.png')} mode='aspectFit' />
+              <Text className={styles.decoCardTextGreen}>福</Text>
             </View>
             <View className={styles.decoCardGreen}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/lu.png')} mode='aspectFit' />
+              <Text className={styles.decoCardTextGreen}>禄</Text>
             </View>
             <View className={styles.decoCardGreen}>
-              <Image className={styles.decoCardImg} src={require('../../assets/images/s/shou.png')} mode='aspectFit' />
+              <Text className={styles.decoCardTextGreen}>寿</Text>
             </View>
           </View>
         </View>

@@ -369,17 +369,24 @@ $color-non-dealer-gradient-end: #2d5a3d;
 
 .deckStack {
   position: relative;
-  width: px2vw(80);
-  height: px2vh(20);
 }
 
 .deckCardLayer {
   position: absolute;
-  width: px2vw(80);
-  height: px2vh(20);
   background: linear-gradient(135deg, #1B5E20, #2E7D32);
   border-radius: px2vw(3);
   border: 1.5px solid rgba(0, 0, 0, 0.6);
+  // 内层绿色 (匹配 Flame _drawAICardBack fallback)
+  &::after {
+    content: '';
+    position: absolute;
+    top: px2vw(2);
+    left: px2vw(2);
+    right: px2vw(2);
+    bottom: px2vw(2);
+    border-radius: px2vw(2);
+    background: #2E7D32;
+  }
 }
 
 .deckCount {
@@ -531,6 +538,8 @@ $color-non-dealer-gradient-end: #2d5a3d;
   position: absolute;
   left: 0;
   transition: transform 0.15s ease;
+  // 阴影 (匹配 Flame shadowPaint blur 6, black 0.4)
+  box-shadow: px2vw(3) px2vh(3) px2vw(6) rgba(0, 0, 0, 0.4);
 }
 
 .handCardSelected {
@@ -610,16 +619,18 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 // ============================================
-// AI 手牌 (牌背)
+// AI 手牌 (牌背) - 匹配 Flame _drawAICardBack
 // ============================================
 .aiCardBack {
   width: $meld-card-w;
   height: $meld-card-h;
   border-radius: px2vw(3);
-  background: linear-gradient(135deg, #1B5E20, #2E7D32);
+  background: #1B5E20;
   border: 1.5px solid rgba(0, 0, 0, 0.6);
   position: absolute;
   top: 0;
+  // 阴影 (匹配 Flame shadowRRect)
+  box-shadow: px2vw(1) px2vh(2) 0 rgba(0, 0, 0, 0.25);
 }
 
 .aiCardBackInner {
@@ -651,6 +662,7 @@ $color-non-dealer-gradient-end: #2d5a3d;
   align-items: center;
   justify-content: center;
   position: absolute;
+  box-shadow: px2vw(1) px2vh(1) px2vw(2) rgba(0, 0, 0, 0.3);
 }
 
 .meldCardChar {
@@ -708,24 +720,23 @@ $color-non-dealer-gradient-end: #2d5a3d;
 }
 
 .discardCardLast {
-  border-color: $color-gold;
-  box-shadow: 0 0 px2vw(8) rgba(255, 215, 0, 0.4);
-  animation: discardPulse 1s ease-in-out infinite;
+  border-color: $color-orange;
+  box-shadow: 0 0 px2vw(8) rgba(255, 152, 0, 0.4);
+  animation: discardPulse 0.5s ease-in-out infinite;
 }
 
 @keyframes discardPulse {
-  0%, 100% { box-shadow: 0 0 px2vw(4) rgba(255, 215, 0, 0.3); }
-  50% { box-shadow: 0 0 px2vw(12) rgba(255, 215, 0, 0.6); }
+  0%, 100% { box-shadow: 0 0 px2vw(4) rgba(255, 152, 0, 0.3); border-color: $color-orange; }
+  50% { box-shadow: 0 0 px2vw(12) rgba(255, 152, 0, 0.6); border-color: $color-gold; }
 }
 
 // ============================================
-// 操作按钮区域
+// 操作按钮区域 (bottom 由 inline style 动态设置)
 // ============================================
 .actionButtonsArea {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: px2vh(240);
   z-index: 20;
 }
 

@@ -1,70 +1,100 @@
 import React, { useState } from 'react';
-import { View, Text, Slider } from '@tarojs/components';
+import { View, Text } from '@tarojs/components';
+import Taro from '@tarojs/taro';
+import { useGameStore } from '../../store/gameStore';
 import styles from './index.module.scss';
 
 const Settings: React.FC = () => {
-  const [volume, setVolume] = useState(80);
-  const [difficulty, setDifficulty] = useState('hard');
+  const store = useGameStore();
+  const [volume, setVolume] = useState(store.volume);
+  const [difficulty, setDifficulty] = useState(store.difficulty);
 
-  const difficultyOptions = [
-    { label: '简单', value: 'easy', desc: 'AI较保守，适合新手' },
-    { label: '中等', value: 'medium', desc: 'AI平衡攻防' },
-    { label: '困难', value: 'hard', desc: 'AI激进，追求胡牌' },
-  ];
+  const handleClose = () => {
+    Taro.navigateBack();
+  };
+
+  const handleExitGame = () => {
+    Taro.navigateBack();
+  };
+
+  const handleVolumeChange = (e: any) => {
+    const val = Number(e.target.value);
+    setVolume(val);
+    store.setVolume(val);
+  };
+
+  const handleDifficultyChange = (value: string) => {
+    setDifficulty(value);
+    store.setDifficulty(value);
+  };
 
   return (
-    <View className={styles.page}>
-      <View className={styles.content}>
-      <View className={styles.header}>
-        <Text className={styles.headerTitle}>系统设置</Text>
-      </View>
-
-      <View className={styles.card}>
-        {/* 音效 */}
-        <View className={styles.section}>
-          <Text className={styles.sectionTitle}>音效大小</Text>
-          <View className={styles.sliderRow}>
-            <Slider
-              value={volume}
-              min={0}
-              max={100}
-              activeColor='#ffd700'
-              backgroundColor='rgba(255,255,255,0.2)'
-              blockSize={20}
-              onInput={e => setVolume(e.detail.value)}
-            />
-            <Text className={styles.sliderValue}>{volume}%</Text>
+    <View className={styles.overlay}>
+      <View className={styles.outerPanel}>
+        <View className={styles.innerPanel}>
+          {/* Header */}
+          <View className={styles.headerWrap}>
+            <View className={styles.header}>
+              <Text className={styles.headerTitle}>系统设置</Text>
+            </View>
+            <View className={styles.closeBtn} onClick={handleClose}>
+              <Text className={styles.closeIcon}>×</Text>
+            </View>
           </View>
-        </View>
 
-        {/* 难度 */}
-        <View className={styles.section}>
-          <Text className={styles.sectionTitle}>AI难度</Text>
-          <View className={styles.diffGroup}>
-            {difficultyOptions.map(opt => (
-              <View
-                key={opt.value}
-                className={`${styles.diffCard} ${difficulty === opt.value ? styles.diffActive : ''}`}
-                onClick={() => setDifficulty(opt.value)}
-              >
-                <Text className={styles.diffLabel}>{opt.label}</Text>
-                <Text className={styles.diffDesc}>{opt.desc}</Text>
+          {/* Volume Section */}
+          <View className={styles.section}>
+            <Text className={styles.sectionLabel}>音效大小</Text>
+            <View className={styles.sliderRow}>
+              <View className={styles.sliderTrack}>
+                <View className={styles.sliderActive} style={{ width: `${volume}%` }} />
+                <View
+                  className={styles.sliderThumb}
+                  style={{ left: `calc(${volume}% - 10px)` }}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={volume}
+                  className={styles.sliderInput}
+                  onChange={handleVolumeChange}
+                />
               </View>
-            ))}
+              <Text className={styles.sliderValue}>{volume}%</Text>
+            </View>
+          </View>
+
+          {/* Difficulty Section */}
+          <View className={styles.section}>
+            <Text className={styles.sectionLabel}>游戏难度</Text>
+            <View className={styles.diffRow}>
+              {[
+                { label: '简单', value: 'easy' },
+                { label: '中等', value: 'medium' },
+                { label: '困难', value: 'hard' },
+              ].map(opt => (
+                <View
+                  key={opt.value}
+                  className={styles.radioItem}
+                  onClick={() => handleDifficultyChange(opt.value)}
+                >
+                  <View className={styles.radioOuter}>
+                    {difficulty === opt.value && <View className={styles.radioInner} />}
+                  </View>
+                  <Text className={styles.radioLabel}>{opt.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Divider + Exit Button */}
+          <View className={styles.dividerSection}>
+            <View className={styles.exitBtn} onClick={handleExitGame}>
+              <Text className={styles.exitText}>退出游戏</Text>
+            </View>
           </View>
         </View>
-      </View>
-
-      {/* 游戏规则 */}
-      <View className={styles.card}>
-        <View className={styles.section}>
-          <Text className={styles.sectionTitle}>游戏规则</Text>
-          <Text className={styles.ruleText}>
-            上大人字牌，3人对战，逆时针出牌。8局制，庄家流转。
-            操作优先级：胡 &gt; 招 &gt; 碰 &gt; 吃。胡数≥11可胡牌。
-          </Text>
-        </View>
-      </View>
       </View>
     </View>
   );

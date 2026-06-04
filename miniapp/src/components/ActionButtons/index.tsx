@@ -39,10 +39,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           </View>
         </View>
       )}
-      {canZhao && (
-        <View className={`${styles.btn} ${styles.btnZhao}`} onClick={onZhao}>
-          <View className={`${styles.btnInner} ${styles.btnInnerZhao}`}>
-            <Text className={styles.btnText}>招</Text>
+      {canChi && (
+        <View className={`${styles.btn} ${styles.btnChi}`} onClick={onChi}>
+          <View className={`${styles.btnInner} ${styles.btnInnerChi}`}>
+            <Text className={styles.btnText}>吃</Text>
           </View>
         </View>
       )}
@@ -53,10 +53,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           </View>
         </View>
       )}
-      {canChi && (
-        <View className={`${styles.btn} ${styles.btnChi}`} onClick={onChi}>
-          <View className={`${styles.btnInner} ${styles.btnInnerChi}`}>
-            <Text className={styles.btnText}>吃</Text>
+      {canZhao && (
+        <View className={`${styles.btn} ${styles.btnZhao}`} onClick={onZhao}>
+          <View className={`${styles.btnInner} ${styles.btnInnerZhao}`}>
+            <Text className={`${styles.btnText} ${styles.btnTextZhao}`}>招</Text>
           </View>
         </View>
       )}

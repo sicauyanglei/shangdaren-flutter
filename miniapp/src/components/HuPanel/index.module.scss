@@ -7,6 +7,7 @@
   left: 0;
   right: 0;
   bottom: 0;
+  // Flame: Color(0x88000000) = rgba(0,0,0,0.533)
   background: rgba(0, 0, 0, 0.53);
   display: flex;
   align-items: center;
@@ -17,12 +18,13 @@
 .panel {
   position: relative;
   width: 640px;
-  background: linear-gradient(135deg, #1a472a, #0d2818);
+  // Flame: LinearGradient(colors: [Color(0xF01a472a), Color(0xF80d2818)])
+  // 0xF0 = 240/255 ≈ 0.94, 0xF8 = 248/255 ≈ 0.97
+  background: linear-gradient(135deg, rgba(26, 71, 42, 0.94), rgba(13, 40, 24, 0.97));
   border-radius: 16px;
   border: 2px solid #ffd700;
-  box-shadow:
-    0 0 20px rgba(255, 215, 0, 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.5);
+  // Flame: inflate(8) rect with Color(0x33ffd700) blur 20
+  box-shadow: 0 0 20px 8px rgba(255, 215, 0, 0.2);
   padding: 28px 32px 20px;
 }
 
@@ -34,12 +36,14 @@
   width: 48px;
   height: 48px;
   border-radius: 24px;
-  background: #cc0000cc;
+  // Flame: Color(0xCCcc0000) = rgba(204,0,0,0.8)
+  background: rgba(204, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+  // Flame: closeBtnR.inflate(3) with Color(0x40000000) blur 6
+  box-shadow: 0 0 6px 3px rgba(0, 0, 0, 0.25);
 }
 
 .closeText {
@@ -56,6 +60,7 @@
   font-size: 22px;
   font-weight: 700;
   color: #ffd700;
+  // Flame: Shadow(color: Color(0x80ffd700), blurRadius: 15)
   text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
   margin-bottom: 16px;
 }
@@ -80,13 +85,18 @@
 }
 
 .winnerCard {
+  // Flame: LinearGradient(colors: [Color(0x26ffd700), Color(0x1Aff8c00)])
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.1));
+  // Flame: Color(0x80ffd700) stroke width 2
   border: 2px solid rgba(255, 215, 0, 0.5);
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.1);
+  // Flame: cardR.inflate(4) with Color(0x1Affd700) blur 10
+  box-shadow: 0 0 10px 4px rgba(255, 215, 0, 0.1);
 }
 
 .loserCard {
+  // Flame: Color(0x1Aff6b6b) = rgba(255,107,107,0.1)
   background: rgba(255, 107, 107, 0.1);
+  // Flame: Color(0x33ff6b6b) stroke width 1
   border: 1px solid rgba(255, 107, 107, 0.2);
 }
 
@@ -114,11 +124,13 @@
 
 .panoScoreWinner {
   color: #ffd700;
+  // Flame: Shadow(color: Color(0x80ffd700), blurRadius: 15)
   text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
 }
 
 .panoScoreLoser {
   color: #ff6b6b;
+  // Flame: Shadow(color: Color(0x66ff6b6b), blurRadius: 6)
   text-shadow: 0 0 6px rgba(255, 107, 107, 0.4);
 }
 
@@ -139,6 +151,7 @@
 // 箭头
 .panoArrow {
   font-size: 20px;
+  // Flame: Color(0x4Dffd700) = rgba(255,215,0,0.3)
   color: rgba(255, 215, 0, 0.3);
   font-weight: 700;
   line-height: 1;
@@ -147,6 +160,7 @@
 // 分隔线
 .divider {
   height: 1px;
+  // Flame: Color(0x1Fffd700) = rgba(255,215,0,0.12)
   background: rgba(255, 215, 0, 0.12);
   margin: 0 20px 12px;
 }

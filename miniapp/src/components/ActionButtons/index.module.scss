@@ -73,9 +73,11 @@
 }
 
 // ---- 自摸按钮 ----
+// bgColors: #b71c1c → #e53935, borderColor: #ffd700, innerBorderColor: #FF8A80
+// shadowColor: #b71c1c, glowColor: #ff6b6b
 .btnZimo {
-  background: linear-gradient(135deg, #ff6b6b, #e74c3c);
-  border-color: rgba(255, 107, 107, 0.5);
+  background: linear-gradient(135deg, #b71c1c, #e53935);
+  border-color: #ffd700;
   box-shadow: 0 4px 12px rgba(183, 28, 28, 0.5);
 
   &::after {
@@ -84,59 +86,33 @@
 }
 
 .btnInnerZimo {
-  border-color: rgba(255, 138, 128, 0.4);
+  border-color: #FF8A80;
 }
 
 // ---- 胡按钮 ----
+// bgColors: #c0392b → #e74c3c, borderColor: #ffd700, innerBorderColor: #FF8A80
+// shadowColor: #c0392b, glowColor: #ff6b6b
 .btnHu {
-  background: linear-gradient(135deg, #ffd700, #ff8c00);
-  border-color: rgba(255, 215, 0, 0.5);
-  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.5);
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+  border-color: #ffd700;
+  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.5);
 
   &::after {
-    box-shadow: 0 0 20px 2px rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 20px 2px rgba(255, 107, 107, 0.5);
   }
 }
 
 .btnInnerHu {
-  border-color: rgba(255, 224, 130, 0.4);
-}
-
-// ---- 招按钮 ----
-.btnZhao {
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
-  border-color: rgba(155, 89, 182, 0.5);
-  box-shadow: 0 4px 12px rgba(142, 68, 173, 0.5);
-
-  &::after {
-    box-shadow: 0 0 20px 2px rgba(155, 89, 182, 0.4);
-  }
-}
-
-.btnInnerZhao {
-  border-color: rgba(206, 147, 216, 0.4);
-}
-
-// ---- 碰按钮 ----
-.btnPeng {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  border-color: rgba(52, 152, 219, 0.5);
-  box-shadow: 0 4px 12px rgba(41, 128, 185, 0.5);
-
-  &::after {
-    box-shadow: 0 0 20px 2px rgba(100, 181, 246, 0.4);
-  }
-}
-
-.btnInnerPeng {
-  border-color: rgba(100, 181, 246, 0.4);
+  border-color: #FF8A80;
 }
 
 // ---- 吃按钮 ----
+// bgColors: #1a6b3c → #27ae60, borderColor: #ffd700, innerBorderColor: #81C784
+// shadowColor: #1a6b3c, glowColor: #4ecdc4
 .btnChi {
-  background: linear-gradient(135deg, #4ecdc4, #2ecc71);
-  border-color: rgba(78, 205, 196, 0.5);
-  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.5);
+  background: linear-gradient(135deg, #1a6b3c, #27ae60);
+  border-color: #ffd700;
+  box-shadow: 0 4px 12px rgba(26, 107, 60, 0.5);
 
   &::after {
     box-shadow: 0 0 20px 2px rgba(78, 205, 196, 0.4);
@@ -144,14 +120,50 @@
 }
 
 .btnInnerChi {
-  border-color: rgba(128, 203, 196, 0.4);
+  border-color: #81C784;
+}
+
+// ---- 碰按钮 ----
+// bgColors: #1a5c6b → #2980b9, borderColor: #ffd700, innerBorderColor: #64B5F6
+// shadowColor: #1a5c6b, glowColor: #64B5F6
+.btnPeng {
+  background: linear-gradient(135deg, #1a5c6b, #2980b9);
+  border-color: #ffd700;
+  box-shadow: 0 4px 12px rgba(26, 92, 107, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(100, 181, 246, 0.4);
+  }
+}
+
+.btnInnerPeng {
+  border-color: #64B5F6;
+}
+
+// ---- 招按钮 ----
+// bgColors: #b8860b → #daa520, borderColor: #FFF8E1, innerBorderColor: #FFD54F
+// shadowColor: #b8860b, glowColor: #ffd700, textColor: #3E2723 (dark!)
+.btnZhao {
+  background: linear-gradient(135deg, #b8860b, #daa520);
+  border-color: #FFF8E1;
+  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.5);
+
+  &::after {
+    box-shadow: 0 0 20px 2px rgba(255, 215, 0, 0.4);
+  }
+}
+
+.btnInnerZhao {
+  border-color: #FFD54F;
 }
 
 // ---- 过按钮 ----
+// bgColors: #37474F → #546E7A, borderColor: #90A4AE, innerBorderColor: #78909C
+// shadowColor: #263238, NO glow, textColor: #CFD8DC
 .btnPass {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #37474F, #546E7A);
+  border-color: #90A4AE;
+  box-shadow: 0 4px 12px rgba(38, 50, 56, 0.5);
 
   // 过按钮无发光效果
   &::after {
@@ -160,7 +172,7 @@
 }
 
 .btnInnerPass {
-  border-color: rgba(144, 164, 174, 0.4);
+  border-color: #78909C;
 }
 
 // ---- 文字样式 ----
@@ -169,17 +181,24 @@
   font-weight: 900;
   color: #ffffff;
   letter-spacing: 2px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 // 醒目按钮文字（自摸/胡）更大更醒目
+// Flame: text shadow from borderColor at 0.6 opacity with blur 4
 .btnTextProminent {
   font-size: 38px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 8px rgba(255, 215, 0, 0.6);
+  text-shadow: 0 2px 4px rgba(255, 215, 0, 0.6), 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+// 招按钮文字颜色为深色
+.btnTextZhao {
+  color: #3E2723;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 // 过按钮文字颜色较淡
 .btnTextPass {
-  color: #cfd8dc;
+  color: #CFD8DC;
   text-shadow: none;
 }

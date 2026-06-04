@@ -22,6 +22,8 @@ const px2vh = (px: number) => (px / DH * 100) + 'vh';
 const HAND_CARD_H = 224;
 const MELD_CARD_W = 34;
 const MELD_CARD_H = 56;
+const DECK_CARD_W = 160;
+const DECK_CARD_H = 40;
 
 const HAND_STACK_VISIBLE = 68;
 const HAND_SENTENCE_GAP = 2;
@@ -31,6 +33,26 @@ const DISCARD_CARD_GAP = 1;
 const MAX_DISCARD_PER_ROW = 8;
 const LEFT_MAX_W = 340;
 const RIGHT_MAX_W = 280;
+
+// 牌堆层数计算 (匹配 Flame _getDeckLayerCount)
+function getDeckLayerCount(count: number): number {
+  if (count >= 60) return 10;
+  if (count >= 50) return 8;
+  if (count >= 40) return 7;
+  if (count >= 30) return 6;
+  if (count >= 20) return 5;
+  if (count >= 10) return 4;
+  if (count >= 5) return 3;
+  if (count > 0) return 2;
+  return 0;
+}
+
+// 手牌最大堆叠数计算 (匹配 Flame _maxStackCount)
+function maxStackCount(hand: Card[]): number {
+  const sentenceGroups = groupHandBySentence(hand);
+  if (sentenceGroups.length === 0) return 0;
+  return Math.max(...sentenceGroups.map(sg => sg.stacks.length), 0);
+}
 
 // ============================================
 // 手牌按句分组
@@ -641,24 +663,38 @@ const Game: React.FC = () => {
 
       {/* ====== 中央区域 (牌堆 + 出牌) ====== */}
       <View className={styles.centerArea}>
-        {/* 牌堆 */}
-        {store.deck.length > 0 && (
-          <View className={styles.deckStack}>
-            {Array.from({ length: Math.min(Math.ceil(store.deck.length / 10), 10) }, (_, i) => (
-              <View
-                key={i}
-                className={styles.deckCardLayer}
-                style={{
-                  left: px2vw(i * 2),
-                  top: px2vh(i * 0.5),
-                  opacity: 0.4 + (i / 10) * 0.6,
-                  zIndex: i,
-                }}
-              />
-            ))}
-            <Text className={styles.deckCount}>{store.deck.length}</Text>
-          </View>
-        )}
+        {/* 牌堆 (匹配 Flame _renderDeck + _renderDeckIndicator) */}
+        {store.deck.length > 0 && (() => {
+          const layerCount = getDeckLayerCount(store.deck.length);
+          const deckScale = 0.5;
+          const deckW = DECK_CARD_W * deckScale;
+          const deckH = DECK_CARD_H * deckScale;
+          return (
+            <View
+              className={styles.deckStack}
+              style={{
+                width: px2vw(deckW + (layerCount - 1) * 4 * deckScale),
+                height: px2vh(deckH + (layerCount - 1) * 1 * deckScale),
+              }}
+            >
+              {Array.from({ length: layerCount }, (_, i) => (
+                <View
+                  key={i}
+                  className={styles.deckCardLayer}
+                  style={{
+                    width: px2vw(deckW),
+                    height: px2vh(deckH),
+                    left: px2vw(i * 4 * deckScale),
+                    top: px2vh(i * 1 * deckScale),
+                    opacity: 0.4 + (i / layerCount) * 0.6,
+                    zIndex: i,
+                  }}
+                />
+              ))}
+              <Text className={styles.deckCount}>{store.deck.length}</Text>
+            </View>
+          );
+        })()}
 
         {/* 最后出的牌 (横向) */}
         {store.lastDiscard && (
@@ -726,30 +762,40 @@ const Game: React.FC = () => {
         </View>
       </View>
 
-      {/* ====== 操作按钮 ====== */}
-      <View className={styles.actionButtonsArea}>
-        {isMyTurn && selectedCardId !== null && (
-          <View
-            className={styles.discardBtn}
-            onClick={handleDiscard}
-          >
-            <Text className={styles.discardBtnText}>出牌</Text>
+      {/* ====== 操作按钮 (匹配 Flame game_overlay.dart L138-185) ====== */}
+      {(() => {
+        // 动态计算按钮位置: bottom = designHeight - handTopY + 2
+        const hand = humanPlayer?.hand ?? [];
+        const msc = maxStackCount(hand);
+        const totalH = msc === 0 ? HAND_CARD_H : (msc - 1) * HAND_STACK_VISIBLE + HAND_CARD_H;
+        const handTopY = DH - totalH - 10;
+        const btnBottom = DH - handTopY + 2;
+        return (
+          <View className={styles.actionButtonsArea} style={{ bottom: px2vh(btnBottom) }}>
+            {isMyTurn && selectedCardId !== null && (
+              <View
+                className={styles.discardBtn}
+                onClick={handleDiscard}
+              >
+                <Text className={styles.discardBtnText}>出牌</Text>
+              </View>
+            )}
+            <ActionButtons
+              canChi={store.canChi}
+              canPeng={store.canPeng}
+              canZhao={store.canZhao}
+              canHu={store.canHu && !store.isZimoOpportunity}
+              canZimo={store.canHu && store.isZimoOpportunity}
+              onChi={() => store.doAction({ playerId: 0, action: 'chi' })}
+              onPeng={() => store.doAction({ playerId: 0, action: 'peng' })}
+              onZhao={() => store.doAction({ playerId: 0, action: 'zhao' })}
+              onHu={() => store.doAction({ playerId: 0, action: 'hu' })}
+              onZimo={() => store.doAction({ playerId: 0, action: 'zimo' })}
+              onPass={() => store.passAction()}
+            />
           </View>
-        )}
-        <ActionButtons
-          canChi={store.canChi}
-          canPeng={store.canPeng}
-          canZhao={store.canZhao}
-          canHu={store.canHu && !store.isZimoOpportunity}
-          canZimo={store.canHu && store.isZimoOpportunity}
-          onChi={() => store.doAction({ playerId: 0, action: 'chi' })}
-          onPeng={() => store.doAction({ playerId: 0, action: 'peng' })}
-          onZhao={() => store.doAction({ playerId: 0, action: 'zhao' })}
-          onHu={() => store.doAction({ playerId: 0, action: 'hu' })}
-          onZimo={() => store.doAction({ playerId: 0, action: 'zimo' })}
-          onPass={() => store.passAction()}
-        />
-      </View>
+        );
+      })()}
 
       {/* ====== 回合信息 (右下角) ====== */}
       <View className={styles.roundInfoArea}>
@@ -758,7 +804,6 @@ const Game: React.FC = () => {
           dealerName={store.players[store.dealerIndex]?.name || ''}
           showHuDisplay={store.showHuResult || store.showLiujuResult}
           isLastRound={store.roundNumber >= 8}
-          countdown={store.countdown}
           onNextRound={() => store.nextRound()}
           onShowSettlement={() => store.nextRound()}
         />
