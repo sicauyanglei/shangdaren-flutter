@@ -90,7 +90,7 @@ const initialState: GameState = {
   isZimoOpportunity: false,
   showZhaoSelection: false,
   zhaoCandidates: [],
-  countdown: 14,
+  countdown: 0,
   newCardId: null,
   isDrawing: false,
   hideTingBadge: false,
@@ -168,9 +168,18 @@ function canPengWith(player: Player, card: Card): boolean {
 
 /** 判断玩家是否可以招别人出的牌 */
 function canZhaoWith(player: Player, card: Card): boolean {
-  if (getTotalCardCount(player) !== 19) return false;
-  const count = player.hand.filter(c => c.char === card.char).length;
-  return count >= 3;
+  const totalCount = getTotalCardCount(player);
+  // 19张牌时可以招（手牌3张+出的1张）
+  if (totalCount === 19) {
+    const count = player.hand.filter(c => c.char === card.char).length;
+    if (count >= 3) return true;
+  }
+  // 20张牌时，已有坎可以升级为招
+  if (totalCount === 20) {
+    const existingKan = player.melds.find(m => m.type === 'kan' && m.cards[0].char === card.char);
+    if (existingKan) return true;
+  }
+  return false;
 }
 
 /** 判断玩家是否可以吃别人出的牌 */
@@ -401,7 +410,7 @@ function _rebuildPublicCardCount(players: Player[]): void {
   }
 }
 
-/** 停止倒计时 */
+/** 停止倒计时（仅清除interval，不设置countdown值） */
 function stopCountdownTimer(): void {
   _countdownTimerId++;
   if (_countdownInterval) {
@@ -546,6 +555,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isDrawing: false,
       hideTingBadge: false,
       waitingForResponse: false,
+      piaoSetCount: 0,
+      countdown: 0,
     });
 
     // 进入飘分阶段或直接开始
@@ -901,7 +912,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const card = player.hand[cardIdx];
     // 匹配 Flame: 清除操作按钮状态
-    set({ canChi: false, canPeng: false, canZhao: false, canHu: false, canZimo: false, isZimoOpportunity: false });
+    // 匹配 Flame: 出牌时停止倒计时
+    set({ canChi: false, canPeng: false, canZhao: false, canHu: false, canZimo: false, isZimoOpportunity: false, countdown: 0 });
     stopCountdownTimer();
     get()._doDiscard(humanIdx, card);
   },
@@ -909,6 +921,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   _doDiscard: (playerIdx: number, card: Card) => {
     _skipDraw = false;
     stopCountdownTimer();
+    set({ countdown: 0 });
 
     // 匹配 Flame: 出牌动画延迟350ms，然后完成出牌
     _pendingDiscardCard = card;
@@ -1173,6 +1186,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     _pendingResponseDiscardPlayerId = discardPlayerId;
 
     set(updates);
+    // 匹配 Flame: 显示人类操作按钮后启动倒计时
+    get().startCountdown();
   },
 
   // ============================================================
@@ -1196,6 +1211,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // 匹配 Flame: respondHu 中清除待处理AI响应
     clearPendingAIResponses();
     stopCountdownTimer();
+    set({ countdown: 0 });
 
     // 匹配 Flame: 自摸时使用_lastDrawnCard作为zimoCard
     get()._handleHu(
@@ -1296,6 +1312,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // 匹配 Flame: 播放过牌音效
     audioManager.playGuo();
     stopCountdownTimer();
+    set({ countdown: 0 });
 
     set({
       canChi: false,
@@ -1836,6 +1853,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 匹配 Flame: 胡牌时停止倒计时，递增版本计数器
     stopCountdownTimer();
+    set({ countdown: 0 });
     incrementAllVersions();
 
     // 匹配 Flame: 设置 isHandlingHu
@@ -1875,6 +1893,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 播放胡牌音效
     stopCountdownTimer();
+    set({ countdown: 0 });
     if (isZimo) {
       audioManager.playZimo();
     } else {
@@ -1977,6 +1996,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 匹配 Flame: 流局时停止倒计时，递增版本计数器
     stopCountdownTimer();
+    set({ countdown: 0 });
     incrementAllVersions();
 
     // 播放流局音效

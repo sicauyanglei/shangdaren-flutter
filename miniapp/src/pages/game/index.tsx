@@ -937,9 +937,6 @@ const Game: React.FC = () => {
   // 是否处于胡牌/流局显示状态
   const isHuDisplay = store.showHuResult || store.showLiujuResult;
 
-  // 人类玩家有待处理操作时显示倒计时
-  const humanHasPendingActions = store.canChi || store.canPeng || store.canZhao || store.canHu || store.canZimo;
-
   const handleCardClick = (cardId: number) => {
     if (!isMyTurn) return;
     setSelectedCardId(cardId === selectedCardId ? null : cardId);
@@ -1057,7 +1054,7 @@ const Game: React.FC = () => {
           isDealer={aiPlayer1?.isDealer ?? false}
           isCurrentTurn={store.currentPlayerIndex === 1}
           countdown={store.countdown}
-          showCountdown={store.currentPlayerIndex === 1 && store.phase === 'playing'}
+          showCountdown={store.currentPlayerIndex === 1 && !store.isMyTurn && !store.waitingForResponse && store.phase === 'playing' && store.countdown > 0}
         />
         <View className={styles.player0Hand}>
           {isHuDisplay ? (
@@ -1099,7 +1096,7 @@ const Game: React.FC = () => {
           isDealer={aiPlayer2?.isDealer ?? false}
           isCurrentTurn={store.currentPlayerIndex === 2}
           countdown={store.countdown}
-          showCountdown={store.currentPlayerIndex === 2 && store.phase === 'playing'}
+          showCountdown={store.currentPlayerIndex === 2 && !store.isMyTurn && !store.waitingForResponse && store.phase === 'playing' && store.countdown > 0}
         />
         <View className={styles.player2Hand}>
           {isHuDisplay ? (
@@ -1202,7 +1199,7 @@ const Game: React.FC = () => {
                     isDealer={humanPlayer?.isDealer ?? false}
                     isCurrentTurn={store.currentPlayerIndex === 0}
                     countdown={store.countdown}
-                    showCountdown={humanHasPendingActions}
+                    showCountdown={(store.isMyTurn || store.waitingForResponse) && store.countdown > 0}
                     onAvatarClick={handleAvatarClick}
                   />
                   {/* "胡"按钮徽章 - canHu && isDrawing 时显示，优先于huCount徽章 (匹配Flame) */}
