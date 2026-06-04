@@ -4,7 +4,7 @@ import { GameState, Player, HuResult, PendingAction, RoundResult } from '../type
 import { calculateTotalHu, canHu, canZimo, detectHuType } from '../utils/huCalculator';
 import { isTing, getTingCards } from '../utils/tingChecker';
 import { calculateScoreChanges } from '../utils/scoreCalculator';
-import { aiDecideDiscard, aiDecideChi, aiDecidePeng, aiDecideZhao } from '../utils/aiStrategy';
+import { aiDecideDiscard, aiDecideChi, aiDecidePeng, aiDecideZhao, aiDecideZhaoFromHand, GameContext, buildVisibleCount, calculateTotalUnknown } from '../utils/aiStrategy';
 
 // ============================================================
 // Store接口：状态 + 操作方法
@@ -228,32 +228,42 @@ function hasCompleteSentenceWithSingleCards(player: Player, card: Card): boolean
   return allPresent && allSingle && groupChars.includes(card.char);
 }
 
+/** 构建AI的GameContext */
+function buildAIContext(state: GameState, currentPlayerId: number): GameContext {
+  const visibleCount = buildVisibleCount(state.players, state.deck.length, currentPlayerId);
+  const totalUnknown = calculateTotalUnknown(state.players, state.deck.length, currentPlayerId);
+  return {
+    players: state.players,
+    deckSize: state.deck.length,
+    currentPlayerId,
+    visibleCount,
+    totalUnknown,
+  };
+}
+
 /** AI决定是否招手牌中的4张同字 */
-function aiShouldZhaoFromHand(_player: Player, _char: string, difficulty: string): boolean {
-  // 简单策略：总是招
-  if (difficulty === 'easy') return true;
-  // 中等和困难：总是招（招牌本身很强）
-  return true;
+function aiShouldZhaoFromHand(player: Player, char: string, difficulty: string, ctx?: GameContext): boolean {
+  return aiDecideZhaoFromHand(player, char, difficulty, ctx);
 }
 
 /** AI选择出牌 */
-function aiSelectDiscard(player: Player, difficulty: string): Card {
-  return aiDecideDiscard(player.hand, player.melds, difficulty);
+function aiSelectDiscard(player: Player, difficulty: string, ctx?: GameContext): Card {
+  return aiDecideDiscard(player.hand, player.melds, difficulty, ctx);
 }
 
 /** AI决定是否招别人出的牌 */
-function aiShouldZhaoRespond(player: Player, card: Card, difficulty: string): boolean {
-  return aiDecideZhao(player, card, difficulty);
+function aiShouldZhaoRespond(player: Player, card: Card, difficulty: string, ctx?: GameContext): boolean {
+  return aiDecideZhao(player, card, difficulty, ctx);
 }
 
 /** AI决定是否碰别人出的牌 */
-function aiShouldPengRespond(player: Player, card: Card, difficulty: string): boolean {
-  return aiDecidePeng(player, card, difficulty);
+function aiShouldPengRespond(player: Player, card: Card, difficulty: string, ctx?: GameContext): boolean {
+  return aiDecidePeng(player, card, difficulty, ctx);
 }
 
 /** AI决定是否吃别人出的牌 */
-function aiShouldChiRespond(player: Player, card: Card, difficulty: string): boolean {
-  return aiDecideChi(player, card, difficulty);
+function aiShouldChiRespond(player: Player, card: Card, difficulty: string, ctx?: GameContext): boolean {
+  return aiDecideChi(player, card, difficulty, ctx);
 }
 
 /** 更新玩家的听牌状态和胡数 */
@@ -670,7 +680,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const candidates = getZhaoCandidates(aiPlayer);
       let shouldZhao = true;
       for (const ch of candidates) {
-        if (!aiShouldZhaoFromHand(aiPlayer, ch, state.difficulty)) {
+        if (!aiShouldZhaoFromHand(aiPlayer, ch, state.difficulty, buildAIContext(state, aiPlayer.id))) {
           shouldZhao = false;
           break;
         }
@@ -682,7 +692,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // AI出牌
-    const toDiscard = aiSelectDiscard(aiPlayer, state.difficulty);
+    const toDiscard = aiSelectDiscard(aiPlayer, state.difficulty, buildAIContext(state, aiPlayer.id));
     get()._doDiscard(playerIdx, toDiscard);
   },
 
@@ -784,13 +794,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       if (p.type === 'ai') {
         // AI使用策略判断
-        if (canZhaoWith(p, card) && aiShouldZhaoRespond(p, card, state.difficulty)) {
+        const aiCtx = buildAIContext(state, p.id);
+        if (canZhaoWith(p, card) && aiShouldZhaoRespond(p, card, state.difficulty, aiCtx)) {
           actions.push('zhao');
         }
-        if (canPengWith(p, card) && aiShouldPengRespond(p, card, state.difficulty)) {
+        if (canPengWith(p, card) && aiShouldPengRespond(p, card, state.difficulty, aiCtx)) {
           actions.push('peng');
         }
-        if (canChiWith(p, i, card, discardPlayerId) && aiShouldChiRespond(p, card, state.difficulty)) {
+        if (canChiWith(p, i, card, discardPlayerId) && aiShouldChiRespond(p, card, state.difficulty, aiCtx)) {
           actions.push('chi');
         }
       } else {
@@ -1378,7 +1389,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({ isMyTurn: true });
         get()._checkHumanActionsAfterDraw(true);
       } else {
-        const toDiscard = aiSelectDiscard(player, state.difficulty);
+        const toDiscard = aiSelectDiscard(player, state.difficulty, buildAIContext(state, player.id));
         get()._doDiscard(playerIdx, toDiscard);
       }
       return;

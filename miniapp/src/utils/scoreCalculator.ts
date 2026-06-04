@@ -56,7 +56,7 @@ export function calculateScoreChanges(
       changes[i] = -loserScore;
       loserSum += loserScore;
     }
-    changes[winnerIndex] = winnerPiao * 2 + loserSum;
+    changes[winnerIndex] = loserSum;
   } else {
     // 点炮
     if (dianpaoIndex === undefined) return changes;
