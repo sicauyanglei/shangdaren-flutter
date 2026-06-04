@@ -308,11 +308,22 @@ const AIHandCardsHu: React.FC<{
   maxWidth: number;
   highlightCardId?: number | null;
   highlightLabel?: string;
-}> = ({ hand, leftToRight, highlightCardId, highlightLabel }) => {
+  highlightCard?: Card | null;
+}> = ({ hand, leftToRight, highlightCardId, highlightLabel, highlightCard }) => {
   if (hand.length === 0) return null;
 
+  // 匹配Flame: 如果高亮卡牌不在手牌中，添加进去并排序
+  let cards = [...hand];
+  if (highlightCard && highlightCardId != null && !cards.some(c => c.id === highlightCardId)) {
+    cards.push(highlightCard);
+    cards.sort((a, b) => {
+      if (a.sentence !== b.sentence) return a.sentence - b.sentence;
+      return a.position - b.position;
+    });
+  }
+
   // 按句分组 (匹配Flame _groupHandBySentenceForAI)
-  const sentenceGroups = groupHandBySentence(hand);
+  const sentenceGroups = groupHandBySentence(cards);
   const cw = HU_AI_HAND_CARD_W;
   const ch = HU_AI_HAND_CARD_H;
   const sv = HU_AI_HAND_STACK_VISIBLE;
@@ -532,11 +543,12 @@ const HumanHandCards: React.FC<{
   onCardClick: (cardId: number) => void;
   onCardDoubleClick: (cardId: number) => void;
   isTing: boolean;
+  tingCards: Card[];
   hideTingBadge: boolean;
   newCardId: number | null;
   highlightCardId?: number | null;
   highlightLabel?: string;
-}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, hideTingBadge, newCardId, highlightCardId, highlightLabel }) => {
+}> = ({ hand, selectedCardId, onCardClick, onCardDoubleClick, isTing, tingCards, hideTingBadge, newCardId, highlightCardId, highlightLabel }) => {
   const sentenceGroups = useMemo(() => groupHandBySentence(hand), [hand]);
   const lastClickRef = useRef<{ cardId: number; time: number } | null>(null);
 
@@ -623,7 +635,7 @@ const HumanHandCards: React.FC<{
                       <Text>{stack.cards.length}</Text>
                     </View>
                   )}
-                  {isTing && !hideTingBadge && !showCount && (
+                  {isTing && !hideTingBadge && !showCount && tingCards.some(tc => tc.id === stack.cards[stack.cards.length - 1].id) && (
                     <View className={styles.handCardTingBadge} style={{ top: px2vh(topOffset + 2) }} />
                   )}
                   {/* 新牌标记 */}
@@ -1055,6 +1067,7 @@ const Game: React.FC = () => {
               maxWidth={LEFT_MAX_W}
               highlightCardId={isHuDisplay && huResult?.winnerId === 1 ? huCardId : null}
               highlightLabel={isHuDisplay && huResult?.winnerId === 1 ? huLabel : undefined}
+              highlightCard={isHuDisplay && huResult?.winnerId === 1 ? huResult?.huCard : null}
             />
           ) : (
             <AIHandCards
@@ -1096,6 +1109,7 @@ const Game: React.FC = () => {
               maxWidth={RIGHT_MAX_W}
               highlightCardId={isHuDisplay && huResult?.winnerId === 2 ? huCardId : null}
               highlightLabel={isHuDisplay && huResult?.winnerId === 2 ? huLabel : undefined}
+              highlightCard={isHuDisplay && huResult?.winnerId === 2 ? huResult?.huCard : null}
             />
           ) : (
             <AIHandCards
@@ -1225,6 +1239,7 @@ const Game: React.FC = () => {
             onCardClick={handleCardClick}
             onCardDoubleClick={handleCardDoubleClick}
             isTing={humanPlayer?.isTing ?? false}
+            tingCards={humanPlayer?.tingCards ?? []}
             hideTingBadge={store.hideTingBadge}
             newCardId={store.newCardId}
             highlightCardId={isHuDisplay && huResult?.winnerId === 0 ? huCardId : null}

@@ -95,6 +95,7 @@ const initialState: GameState = {
   isDrawing: false,
   hideTingBadge: false,
   waitingForResponse: false,
+  piaoSetCount: 0,
   isMyTurn: false,
   isHandlingHu: false,
   roundResults: [],
@@ -568,7 +569,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     let piaoCurrentPlayerIndex = state.piaoCurrentPlayerIndex;
     const players = clonePlayers(state.players);
-    let piaoSetCount = players.filter(p => p.piao > 0 || p.type === 'ai').length;
+    let piaoSetCount = state.piaoSetCount;
 
     // 处理AI飘分
     while (true) {
@@ -594,6 +595,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             players,
             isPiaoPhase: false,
             piaoCurrentPlayerIndex: 0,
+            piaoSetCount: 0,
             phase: 'playing',
           });
           get()._startTurn();
@@ -605,7 +607,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    set({ players, piaoCurrentPlayerIndex });
+    set({ players, piaoCurrentPlayerIndex, piaoSetCount });
   },
 
   setPiao: (value) => {
@@ -615,13 +617,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     players[pIdx] = { ...players[pIdx], piao: value, piaoValue: value };
 
     const nextIdx = (pIdx + 1) % 3;
-    const piaoSetCount = players.filter(p => p.piao > 0).length;
+    // 匹配Flame: 使用piaoSetCount计数器，飘0分也算已设置
+    const piaoSetCount = state.piaoSetCount + 1;
 
     if (piaoSetCount >= 3) {
-      set({ players, isPiaoPhase: false, piaoCurrentPlayerIndex: 0, phase: 'playing' });
+      set({ players, isPiaoPhase: false, piaoCurrentPlayerIndex: 0, piaoSetCount: 0, phase: 'playing' });
       get()._startTurn();
     } else {
-      set({ players, piaoCurrentPlayerIndex: nextIdx });
+      set({ players, piaoCurrentPlayerIndex: nextIdx, piaoSetCount });
       get()._processAIPiao();
     }
   },

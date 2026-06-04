@@ -136,6 +136,8 @@ export interface GameState {
   hideTingBadge: boolean;
   // 是否等待人类玩家响应
   waitingForResponse: boolean;
+  // 飘分已设置计数器
+  piaoSetCount: number;
   // 是否轮到人类玩家出牌
   isMyTurn: boolean;
   // 是否正在处理胡牌
