@@ -1,4 +1,4 @@
-import { Card, CardChar } from './card';
+import { Card } from './card';
 
 // 玩家类型
 export type PlayerType = 'human' | 'ai';
@@ -76,6 +76,9 @@ export interface HuResult {
   huCount: number;
   multiplier: number;
   scoreChanges: number[];
+  winnerHand?: Card[];
+  winnerMelds?: Meld[];
+  loserHands?: { name: string; hand: Card[]; score: number }[];
 }
 
 // 局结果（用于总结算）

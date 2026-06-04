@@ -528,6 +528,50 @@ function distanceToTing(hand: Card[], melds: Meld[]): number {
   return Math.min(pairDist, normalDist);
 }
 
+// ============================================================
+// distanceToTing缓存机制（匹配Flame的_distanceCache）
+// ============================================================
+
+let _distanceCache = new Map<string, number>();
+let _huScoreCache = new Map<string, number>();
+
+/** 生成手牌缓存key */
+function handCacheKey(hand: Card[], melds: Meld[]): string {
+  const charCount = new Map<string, number>();
+  for (const c of hand) {
+    charCount.set(c.char, (charCount.get(c.char) || 0) + 1);
+  }
+  const meldKey = melds.map(m => `${m.type}${m.cards[0].char}${m.isJing ? 'j' : ''}`).join(',');
+  const handKey = Array.from(charCount.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([ch, cnt]) => `${ch}${cnt}`).join('');
+  return `${handKey}|${meldKey}`;
+}
+
+/** 带缓存的听牌距离计算（匹配Flame的_distanceCache） */
+function distanceToTingCached(hand: Card[], melds: Meld[]): number {
+  const key = handCacheKey(hand, melds);
+  const cached = _distanceCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = distanceToTing(hand, melds);
+  _distanceCache.set(key, result);
+  return result;
+}
+
+/** 带缓存的胡数评估（匹配Flame的_huScoreCache） */
+function evaluateHuScoreCached(hand: Card[], melds: Meld[]): number {
+  const key = handCacheKey(hand, melds);
+  const cached = _huScoreCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = evaluateHuScore(hand, melds);
+  _huScoreCache.set(key, result);
+  return result;
+}
+
+/** 清除缓存（每次selectDiscardHard调用前清除，避免缓存膨胀） */
+function clearAICaches(): void {
+  _distanceCache.clear();
+  _huScoreCache.clear();
+}
+
 /** 评估手牌潜力和距离（匹配Flame的_evaluateHandPotentialAndDistance，含可见牌概率） */
 function evaluateHandPotentialAndDistance(
   hand: Card[],
@@ -776,14 +820,14 @@ function findBestDiscardAfterMeld(
   hand: Card[],
   melds: Meld[],
 ): { bestHand: Card[]; bestDist: number } {
-  if (hand.length === 0) return { bestHand: hand, bestDist: distanceToTing(hand, melds) };
+  if (hand.length === 0) return { bestHand: hand, bestDist: distanceToTingCached(hand, melds) };
 
   let bestDist = 99;
   let bestHand = hand;
 
   for (const card of hand) {
     const testHand = hand.filter(c => c.id !== card.id);
-    const dist = distanceToTing(testHand, melds);
+    const dist = distanceToTingCached(testHand, melds);
     if (dist < bestDist) {
       bestDist = dist;
       bestHand = testHand;
@@ -830,7 +874,7 @@ function lookaheadScore(
       sentence,
       position,
     }];
-    const dist = distanceToTing(simHand, melds);
+    const dist = distanceToTingCached(simHand, melds);
     if (dist <= 0) {
       totalScore += prob * 500;
     } else {
@@ -852,7 +896,7 @@ function twoStepLookahead(
 ): number {
   const testHand = hand.filter(c => c.id !== cardToDiscard.id);
 
-  const distBefore = distanceToTing(testHand, melds);
+  const distBefore = distanceToTingCached(testHand, melds);
   if (distBefore > 5) return 0;
 
   const handGroups = new Set<number>();
@@ -884,7 +928,7 @@ function twoStepLookahead(
         sentence,
         position,
       }];
-      const dist = distanceToTing(simHand, melds);
+      const dist = distanceToTingCached(simHand, melds);
       const improvement = distBefore - dist;
       if (improvement > 0) {
         totalScore += prob * improvement * 60;
@@ -904,7 +948,7 @@ function twoStepLookahead(
       sentence,
       position,
     }];
-    const dist = distanceToTing(simHand, melds);
+    const dist = distanceToTingCached(simHand, melds);
 
     if (dist <= 0) {
       totalScore += prob * 1000;
@@ -926,7 +970,7 @@ function expectedStepsToTing(
   visibleCount: Map<string, number>,
   totalUnknown: number,
 ): number {
-  const currentDist = distanceToTing(hand, melds);
+  const currentDist = distanceToTingCached(hand, melds);
   if (currentDist <= 0) return 0;
 
   let totalImproveProb = 0;
@@ -954,7 +998,7 @@ function expectedStepsToTing(
       sentence,
       position,
     }];
-    const newDist = distanceToTing(simHand, melds);
+    const newDist = distanceToTingCached(simHand, melds);
     const improvement = currentDist - newDist;
     if (improvement > 0) {
       totalImproveProb += prob * improvement;
@@ -1066,7 +1110,7 @@ function evaluateDanger(
     danger *= 0.1;
   }
 
-  const actualMyDist = myDist ?? distanceToTing([...player.hand], player.melds);
+  const actualMyDist = myDist ?? distanceToTingCached([...player.hand], player.melds);
   if (actualMyDist <= 2) {
     danger *= 0.15;
   } else if (actualMyDist <= 4) {
@@ -1177,12 +1221,15 @@ export function aiCanHu(hand: Card[], melds: Meld[], playerIsTing: boolean): boo
  */
 export function aiCanZhao(hand: Card[], melds: Meld[], discardedChar: CardChar): boolean {
   const totalCount = getTotalCardCount(hand, melds);
+  const sameCount = hand.filter(c => c.char === discardedChar).length;
 
-  if (discardedChar) {
-    const sameCount = hand.filter(c => c.char === discardedChar).length;
-    if (sameCount < 3) return false;
-    if (totalCount === 19) return true;
-    return false;
+  // 手牌中有3张同字，且总牌数19张时可以招别人出的牌
+  if (sameCount >= 3 && totalCount === 19) return true;
+
+  // 手牌中有1张以上同字，且已有该字的坎可以升级为招（匹配Flame）
+  if (sameCount >= 1) {
+    const existingKan = melds.find(m => m.type === 'kan' && m.cards[0].char === discardedChar);
+    if (existingKan) return true;
   }
 
   return false;
@@ -1332,6 +1379,9 @@ function evaluateCardMedium(card: Card, hand: Card[], melds: Meld[], charCount: 
 function selectDiscardHard(hand: Card[], melds: Meld[], ctx?: GameContext): Card {
   if (hand.length <= 1) return hand[0];
 
+  // 匹配Flame: 每次selectDiscard调用前清除缓存
+  clearAICaches();
+
   // 如果已经听牌
   if (isTing(hand, melds)) {
     return selectDiscardWhenTing(hand, melds, ctx);
@@ -1373,7 +1423,7 @@ function selectDiscardWhenTing(hand: Card[], melds: Meld[], ctx?: GameContext): 
       }
     }
 
-    const huScore = evaluateHuScore(testHand, melds);
+    const huScore = evaluateHuScoreCached(testHand, melds);
 
     if (tingCount > bestTingCount ||
         (tingCount === bestTingCount && tingProb > bestTingProb) ||
@@ -1395,20 +1445,19 @@ function selectDiscardWhenTing(hand: Card[], melds: Meld[], ctx?: GameContext): 
     return safeCards[0];
   }
 
-  // 兜底：出剩余最多的牌
-  if (ctx) {
-    const scored = hand.map(card => {
-      let score = 0;
+  // 兜底：出剩余最多的牌（匹配Flame，无ctx时也按剩余牌数排序）
+  const scored = hand.map(card => {
+    let score = 0;
+    if (ctx) {
       const rem = remainingCount(card.char, ctx.visibleCount);
       score += rem * 10;
-      if (isJingChar(card.char)) score -= 100;
-      return { card, score };
-    });
-    scored.sort((a, b) => b.score - a.score);
-    return scored[0].card;
-  }
-
-  return hand[0];
+    }
+    if (isJingChar(card.char)) score -= 100;
+    else if (isYin(card)) score -= 20;
+    return { card, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].card;
 }
 
 /** 出牌优先级（值越高越应该出） */
@@ -1447,7 +1496,7 @@ function selectDiscardOptimized(hand: Card[], melds: Meld[], ctx?: GameContext):
     }
 
     const testHand = hand.filter(c => c.id !== card.id);
-    const quickDist = distanceToTing(testHand, melds);
+    const quickDist = distanceToTingCached(testHand, melds);
 
     if (quickDist <= 2) {
       if (isTing(testHand, melds)) {
@@ -1464,7 +1513,7 @@ function selectDiscardOptimized(hand: Card[], melds: Meld[], ctx?: GameContext):
             tingProb += rem / totalUnknown;
           }
         }
-        const huScore = evaluateHuScore(testHand, melds);
+        const huScore = evaluateHuScoreCached(testHand, melds);
 
         if (tingRem > bestTingRem ||
             (tingRem === bestTingRem && tingProb > bestTingProb) ||
@@ -1680,7 +1729,7 @@ function decideActionHard(actions: string[], _hand: Card[], _melds: Meld[]): str
 // AI吃碰招决策（匹配Flame的shouldChi/shouldPeng/shouldZhao）
 // ============================================================
 
-/** AI决定是否吃牌 */
+/** AI决定是否吃牌（匹配Flame的shouldChi三级判断） */
 export function aiDecideChi(
   player: Player,
   discardedCard: Card,
@@ -1693,7 +1742,10 @@ export function aiDecideChi(
 
   // 困难模式：评估吃牌收益（匹配Flame的shouldChi）
   if (difficulty === 'hard') {
-    return evaluateChiBenefit(player, discardedCard, ctx);
+    const benefit = evaluateChiBenefit(player, discardedCard, ctx);
+    if (benefit < 0) return false;
+    if (player.isTing) return benefit >= 10000;
+    return benefit > 0;
   }
 
   // 中等模式：吃牌后检查听牌
@@ -1717,8 +1769,8 @@ export function aiDecideChi(
 
     if (isTing(testHand, [...player.melds, newMeld])) return true;
 
-    const distBefore = distanceToTing(player.hand, player.melds);
-    const distAfter = distanceToTing(testHand, [...player.melds, newMeld]);
+    const distBefore = distanceToTingCached(player.hand, player.melds);
+    const distAfter = distanceToTingCached(testHand, [...player.melds, newMeld]);
     return distAfter <= distBefore;
   }
 
@@ -1726,19 +1778,19 @@ export function aiDecideChi(
   return Math.random() > 0.5;
 }
 
-/** 评估吃牌收益（困难模式，匹配Flame的_evaluateChiBenefit） */
-function evaluateChiBenefit(player: Player, discardedCard: Card, ctx?: GameContext): boolean {
+/** 评估吃牌收益（困难模式，匹配Flame的_evaluateChiBenefit，返回数值分数） */
+function evaluateChiBenefit(player: Player, discardedCard: Card, ctx?: GameContext): number {
   const hand = player.hand;
   const sentence = CHAR_SENTENCE_MAP[discardedCard.char];
-  if (!sentence) return false;
+  if (!sentence) return -1;
   const group = GROUP_CHARS[sentence - 1];
   const neededChars = group.filter(ch => ch !== discardedCard.char);
 
   const hasAll = neededChars.every(ch => hand.some(c => c.char === ch));
-  if (!hasAll) return false;
+  if (!hasAll) return -1;
 
   if (hasCompleteSentenceWithSingleCards(hand, discardedCard.char)) {
-    return false;
+    return -1;
   }
 
   const visibleCount = ctx?.visibleCount || new Map<string, number>();
@@ -1771,18 +1823,18 @@ function evaluateChiBenefit(player: Player, discardedCard: Card, ctx?: GameConte
 
   const newMelds = [...player.melds, newMeld];
 
-  // 吃牌后听牌，极大收益
-  if (isTing(testHand, newMelds)) return true;
+  // 吃牌后听牌，极大收益（匹配Flame: benefit >= 10000）
+  if (isTing(testHand, newMelds)) return 10000;
 
   // 已听牌时，只有吃后仍听牌才吃
   if (player.isTing) {
-    return isTing(testHand, newMelds);
+    return isTing(testHand, newMelds) ? 10000 : -1;
   }
 
-  const distBefore = distanceToTing([...hand], player.melds);
+  const distBefore = distanceToTingCached([...hand], player.melds);
   const { bestHand, bestDist: distAfterDiscard } = findBestDiscardAfterMeld(testHand, newMelds);
 
-  if (distAfterDiscard > distBefore) return false;
+  if (distAfterDiscard > distBefore) return -1;
 
   let benefit = (distBefore - distAfterDiscard) * 300.0;
 
@@ -1793,7 +1845,7 @@ function evaluateChiBenefit(player: Player, discardedCard: Card, ctx?: GameConte
   if (distAfterDiscard <= 2) benefit += 800;
   if (distAfterDiscard <= 4) benefit += 300;
 
-  benefit += evaluateHuScore(bestHand, newMelds) * 4;
+  benefit += evaluateHuScoreCached(bestHand, newMelds) * 4;
 
   // 进张概率评估（匹配Flame）
   let chiAfterProb = 0;
@@ -1813,7 +1865,7 @@ function evaluateChiBenefit(player: Player, discardedCard: Card, ctx?: GameConte
 
   benefit -= consumptionCost;
 
-  return benefit > 0;
+  return benefit;
 }
 
 /** AI决定是否碰牌（匹配Flame的shouldPeng） */
@@ -1848,14 +1900,14 @@ export function aiDecidePeng(
     if (isTing(testHand, newMelds)) return true;
     if (player.isTing && !isTing(testHand, newMelds)) return false;
 
-    const distBefore = distanceToTing([...player.hand], player.melds);
+    const distBefore = distanceToTingCached([...player.hand], player.melds);
     const { bestDist: distAfterDiscard } = findBestDiscardAfterMeld(testHand, newMelds);
 
     if (distAfterDiscard > distBefore) return false;
     if (distAfterDiscard < distBefore) return true;
 
     // 距离不变时，评估碰牌后手牌质量和进张损失（匹配Flame）
-    const huScoreAfter = evaluateHuScore(testHand, newMelds);
+    const huScoreAfter = evaluateHuScoreCached(testHand, newMelds);
     if (huScoreAfter > 0) return true;
 
     // 匹配 Flame: 评估碰牌前的进张（该字参与的其他组合价值）
@@ -1867,7 +1919,7 @@ export function aiDecidePeng(
       const hasPartner = otherChars.some(ch => player.hand.some(c => c.char === ch));
       // 有同组伙伴时，如果碰牌后胡数更高，仍然碰
       if (hasPartner) {
-        const huScoreBefore = evaluateHuScore(player.hand, player.melds);
+        const huScoreBefore = evaluateHuScoreCached(player.hand, player.melds);
         if (huScoreAfter > huScoreBefore) return true;
         // 否则保留灵活性，不碰
         return false;
@@ -1909,8 +1961,8 @@ export function aiDecidePeng(
 
     if (isTing(testHand, [...player.melds, newMeld])) return true;
 
-    const distBefore = distanceToTing([...player.hand], player.melds);
-    const distAfter = distanceToTing(testHand, [...player.melds, newMeld]);
+    const distBefore = distanceToTingCached([...player.hand], player.melds);
+    const distAfter = distanceToTingCached(testHand, [...player.melds, newMeld]);
     return distAfter <= distBefore;
   }
 
@@ -1988,8 +2040,8 @@ function evaluateZhaoBenefit(player: Player, character: string): boolean {
     if (isTing(testHand, newMelds)) return true;
     if (player.isTing && !isTing(testHand, newMelds)) return false;
 
-    const distBefore = distanceToTing([...hand], player.melds);
-    const distAfter = distanceToTing(testHand, newMelds);
+    const distBefore = distanceToTingCached([...hand], player.melds);
+    const distAfter = distanceToTingCached(testHand, newMelds);
 
     if (distAfter > distBefore + 1) return false;
 
@@ -2006,9 +2058,9 @@ function evaluateZhaoBenefit(player: Player, character: string): boolean {
       isJing: isJingChar(kanCards[0].char),
     };
 
-    const huZhao = evaluateHuScore(testHand, newMelds);
-    const huKan = evaluateHuScore(kanHand, [...player.melds, kanMeld]);
-    const distKan = distanceToTing(kanHand, [...player.melds, kanMeld]);
+    const huZhao = evaluateHuScoreCached(testHand, newMelds);
+    const huKan = evaluateHuScoreCached(kanHand, [...player.melds, kanMeld]);
+    const distKan = distanceToTingCached(kanHand, [...player.melds, kanMeld]);
 
     if (huZhao >= huKan && distAfter <= distKan) return true;
     if (huZhao > huKan + 4) return true;

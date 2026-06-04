@@ -1299,6 +1299,10 @@ const Game: React.FC = () => {
               change,
               label: idx === store.huResult!.winnerId ? '赢家' : '输家',
             }))}
+            winnerHand={store.huResult.winnerHand}
+            winnerMelds={store.huResult.winnerMelds}
+            huCard={store.huResult.huCard}
+            loserHands={store.huResult.loserHands}
             onClose={store.closeHuResult}
           />
         </View>

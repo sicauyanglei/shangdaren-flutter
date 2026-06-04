@@ -1919,6 +1919,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       huCount: winner.huCount,
       multiplier: isZimo ? huTypeResult.zimo : huTypeResult.dianpao,
       scoreChanges,
+      winnerHand: [...winner.hand],
+      winnerMelds: winner.melds.map(m => ({ ...m, cards: [...m.cards] })),
+      loserHands: state.players
+        .filter((_, idx) => idx !== winnerIdx && scoreChanges[idx] < 0)
+        .map((p) => ({
+          name: p.name,
+          hand: [...p.hand],
+          score: Math.abs(scoreChanges[state.players.indexOf(p)]),
+        })),
     };
 
     // 局结果

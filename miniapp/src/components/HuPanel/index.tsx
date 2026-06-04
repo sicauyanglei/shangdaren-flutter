@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text } from '@tarojs/components';
+import type { Card } from '../../types/card';
+import type { Meld } from '../../types/player';
 import styles from './index.module.scss';
 
 interface HuPanelProps {
@@ -9,6 +11,10 @@ interface HuPanelProps {
   huCount: number;
   multiplier: number;
   scoreChanges: { name: string; change: number; label: string }[];
+  winnerHand?: Card[];
+  winnerMelds?: Meld[];
+  huCard?: Card;
+  loserHands?: { name: string; hand: Card[]; score: number }[];
   onClose: () => void;
 }
 
@@ -49,6 +55,15 @@ const getHuTypeColor = (huTypeName: string): string => {
   }
 };
 
+// 获取卡牌颜色样式（匹配Flame的card color逻辑）
+const getCharColor = (char: string): string => {
+  const redChars = ['上', '丘', '化', '七', '尔', '八', '佳', '福'];
+  const greenChars = ['大', '乙', '三', '十', '小', '九', '作', '禄'];
+  if (redChars.includes(char)) return '#cc0000';
+  if (greenChars.includes(char)) return '#1b8c1b';
+  return '#222222';
+};
+
 interface PanoEntry {
   name: string;
   score: string;
@@ -61,12 +76,148 @@ interface PanoArrangeItem {
   showArrow: boolean;
 }
 
+// 赢家手牌展示（匹配Flutter的_buildHandDisplay）
+const HandDisplay: React.FC<{ hand: Card[]; huCard?: Card; method: string }> = ({ hand, huCard, method }) => {
+  const groups = useMemo(() => {
+    const sorted = [...hand].sort((a, b) => {
+      if (a.sentence !== b.sentence) return a.sentence - b.sentence;
+      return a.position - b.position;
+    });
+
+    // 按sentence分组，再按position分组
+    const sentenceGroups = new Map<number, Map<number, Card[]>>();
+    for (const card of sorted) {
+      if (!sentenceGroups.has(card.sentence)) {
+        sentenceGroups.set(card.sentence, new Map());
+      }
+      const posMap = sentenceGroups.get(card.sentence)!;
+      if (!posMap.has(card.position)) {
+        posMap.set(card.position, []);
+      }
+      posMap.get(card.position)!.push(card);
+    }
+
+    // 胡牌卡牌移到同组最后位置（匹配Flutter逻辑）
+    if (huCard && sentenceGroups.has(huCard.sentence)) {
+      const group = sentenceGroups.get(huCard.sentence)!;
+      if (group.has(huCard.position)) {
+        const cards = group.get(huCard.position)!;
+        const huIdx = cards.findIndex(c => c.id === huCard.id);
+        if (huIdx >= 0) {
+          cards.splice(huIdx, 1);
+          cards.push(huCard);
+          // 重排position顺序，胡牌卡牌所在position排最后
+          const newPositions = new Map<number, Card[]>();
+          let posIdx = 0;
+          for (const [pos, posCards] of group) {
+            if (pos === huCard.position) continue;
+            if (posCards && posCards.length > 0) {
+              newPositions.set(posIdx, [...posCards]);
+              posIdx++;
+            }
+          }
+          newPositions.set(posIdx, cards);
+          sentenceGroups.set(huCard.sentence, newPositions);
+        }
+      }
+    }
+
+    return sentenceGroups;
+  }, [hand, huCard, method]);
+
+  return (
+    <View className={styles.handContainer}>
+      {Array.from<[number, Map<number, Card[]>]>(groups.entries()).map(([sentence, positions]) => (
+        <View key={sentence} className={styles.handGroup}>
+          {Array.from<[number, Card[]]>(positions.entries()).map(([posIdx, cards]) => {
+            const card = cards[0];
+            const count = cards.length;
+            const isHuCard = huCard != null && cards.some(c => c.id === huCard.id);
+
+            return (
+              <View
+                key={posIdx}
+                className={styles.handCardWrapper}
+                style={{ marginTop: posIdx === 0 ? 0 : -140 }}
+              >
+                <View className={styles.handCard} style={{ color: getCharColor(card.char) }}>
+                  <Text className={styles.handCardChar}>{card.char}</Text>
+                </View>
+                {isHuCard && (
+                  <View className={styles.huCardLabel}>
+                    <Text className={styles.huCardLabelText}>
+                      {method === '自摸' ? '自摸' : '炮'}
+                    </Text>
+                  </View>
+                )}
+                {count > 1 && (
+                  <View className={styles.cardCountBadge}>
+                    <Text className={styles.cardCountText}>{count}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+};
+
+// 赢家组合牌展示（匹配Flutter的_buildMeldsDisplay）
+const MeldsDisplay: React.FC<{ melds: Meld[] }> = ({ melds }) => {
+  if (!melds || melds.length === 0) return null;
+
+  return (
+    <View className={styles.meldsContainer}>
+      {melds.map((meld, idx) => {
+        const sortedCards = [...meld.cards].sort((a, b) => a.position - b.position);
+        return (
+          <View key={idx} className={styles.meldGroup}>
+            {sortedCards.map((card, cIdx) => (
+              <View key={cIdx} className={styles.meldCard} style={{ color: getCharColor(card.char) }}>
+                <Text className={styles.meldCardChar}>{card.char}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+// 输家手牌展示（匹配Flutter的_buildLosersDisplay）
+const LosersDisplay: React.FC<{ losers: { name: string; hand: Card[]; score: number }[] }> = ({ losers }) => {
+  if (!losers || losers.length === 0) return null;
+
+  return (
+    <View className={styles.losersRow}>
+      {losers.map((loser, idx) => (
+        <View key={idx} className={styles.loserCard}>
+          <Text className={styles.loserName}>{loser.name}</Text>
+          <View className={styles.loserHandRow}>
+            {loser.hand.sort((a, b) => {
+              if (a.sentence !== b.sentence) return a.sentence - b.sentence;
+              return a.position - b.position;
+            }).map((card, cIdx) => (
+              <View key={cIdx} className={styles.loserHandCard} style={{ color: getCharColor(card.char) }}>
+                <Text className={styles.loserHandChar}>{card.char}</Text>
+              </View>
+            ))}
+          </View>
+          <Text className={styles.loserScore}>-{loser.score}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 const HuPanel: React.FC<HuPanelProps> = ({
-  winnerName, method, huType, huCount, multiplier, scoreChanges, onClose,
+  winnerName, method, huType, huCount, multiplier, scoreChanges,
+  winnerHand, winnerMelds, huCard, loserHands, onClose,
 }) => {
   // 构建玩家条目排列（匹配 Flame 版本的 arrangedEntries 逻辑）
   const arrangedEntries = useMemo(() => {
-    // Flame: huScore = scores[winnerIndex], winner shows '+$huScore'
     const winnerScore = Math.abs(scoreChanges.find(sc => sc.change > 0)?.change || 0);
 
     const winnerEntry: PanoEntry = {
@@ -78,7 +229,6 @@ const HuPanel: React.FC<HuPanelProps> = ({
 
     const losers: PanoEntry[] = [];
     if (method === '点炮') {
-      // Flame: dianpao loser shows '-$huScore' (same absolute value as winner)
       const dianpaoSc = scoreChanges.find(sc => sc.change < 0);
       if (dianpaoSc) {
         losers.push({
@@ -89,7 +239,6 @@ const HuPanel: React.FC<HuPanelProps> = ({
         });
       }
     } else {
-      // 自摸：每个输家单独显示（Flame: score = '$s' where s is already negative）
       scoreChanges.forEach(sc => {
         if (sc.change < 0) {
           losers.push({
@@ -102,8 +251,6 @@ const HuPanel: React.FC<HuPanelProps> = ({
       });
     }
 
-    // Arrange: loser(s) → arrow → winner → arrow → loser(s) for zimo
-    // Or: loser → arrow → winner for dianpao
     const items: PanoArrangeItem[] = [];
     if (method === '自摸' && losers.length === 2) {
       items.push({ entry: losers[0], showArrow: true });
@@ -124,28 +271,24 @@ const HuPanel: React.FC<HuPanelProps> = ({
     const huTypeColor = getHuTypeColor(huType);
     const result: { text: string; color: string; bgColor: string }[] = [];
 
-    // 方法标签 - Flame: Color(0x1AFFFFFF) bg, white text
     result.push({
       text: method,
       color: '#ffffff',
       bgColor: 'rgba(255,255,255,0.1)',
     });
 
-    // 胡型标签 - Flame: _getHuTypeColor text, color.withValues(alpha: 0.2) bg
     result.push({
       text: huType,
       color: huTypeColor,
       bgColor: huTypeColor + '33',
     });
 
-    // 胡数标签 - Flame: Color(0xFFffd700) text, Color(0x33ffd700) bg
     result.push({
       text: `${huCount}胡`,
       color: '#ffd700',
       bgColor: 'rgba(255,215,0,0.2)',
     });
 
-    // 倍数标签 - Flame: Color(0xFFff6b6b) text, Color(0x33ff6b6b) bg
     result.push({
       text: `${multiplier}倍`,
       color: '#ff6b6b',
@@ -187,6 +330,29 @@ const HuPanel: React.FC<HuPanelProps> = ({
             </React.Fragment>
           ))}
         </View>
+
+        {/* 赢家手牌展示（匹配Flutter的_buildHandDisplay） */}
+        {winnerHand && winnerHand.length > 0 && (
+          <View className={styles.sectionContainer}>
+            <Text className={styles.sectionTitle}>赢家手牌</Text>
+            <HandDisplay hand={winnerHand} huCard={huCard} method={method} />
+          </View>
+        )}
+
+        {/* 赢家组合牌展示（匹配Flutter的_buildMeldsDisplay） */}
+        {winnerMelds && winnerMelds.length > 0 && (
+          <View className={styles.sectionContainer}>
+            <Text className={styles.sectionTitle}>组合牌</Text>
+            <MeldsDisplay melds={winnerMelds} />
+          </View>
+        )}
+
+        {/* 输家手牌展示（匹配Flutter的_buildLosersDisplay） */}
+        {loserHands && loserHands.length > 0 && (
+          <View className={styles.sectionContainer}>
+            <LosersDisplay losers={loserHands} />
+          </View>
+        )}
 
         {/* 分隔线 */}
         <View className={styles.divider} />
