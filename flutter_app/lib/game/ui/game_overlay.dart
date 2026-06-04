@@ -82,7 +82,10 @@ class GameOverlay extends StatelessWidget {
             player: player0,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: gameState.currentPlayerIndex == 0
+            countdown:
+                (gameState.currentPlayerIndex == 0 &&
+                    !gameState.isMyTurn &&
+                    !gameState.waitingForResponse)
                 ? gameState.countdown
                 : 0,
             animatingScore: displayScores[0],
@@ -95,7 +98,10 @@ class GameOverlay extends StatelessWidget {
             player: player2,
             dealerIndex: gameState.dealerIndex,
             currentPlayerIndex: gameState.currentPlayerIndex,
-            countdown: gameState.currentPlayerIndex == 2
+            countdown:
+                (gameState.currentPlayerIndex == 2 &&
+                    !gameState.isMyTurn &&
+                    !gameState.waitingForResponse)
                 ? gameState.countdown
                 : 0,
             animatingScore: displayScores[2],
@@ -137,25 +143,42 @@ class GameOverlay extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ActionButtons(
-                  canChi: gameState.canChi,
-                  canPeng: gameState.canPeng,
-                  canZhao: gameState.canZhao,
-                  canHu: gameState.canHu && !gameState.isZimoOpportunity,
-                  onChi: onChi,
-                  onPeng: onPeng,
-                  onZhao: onZhao,
-                  onHu: onHu,
-                  onPass: onPass,
-                ),
-                if (gameState.canHu && gameState.isZimoOpportunity) ...[
-                  const SizedBox(width: 14),
+                if (gameState.canHu && gameState.isZimoOpportunity)
                   GameArtButton(
                     label: '自摸',
                     type: GameButtonType.zimo,
                     onTap: onHu,
                   ),
+                if (gameState.canHu &&
+                    gameState.isZimoOpportunity &&
+                    (gameState.canChi ||
+                        gameState.canPeng ||
+                        gameState.canZhao)) ...[
+                  const SizedBox(width: 14),
+                  ActionButtons(
+                    canChi: gameState.canChi,
+                    canPeng: gameState.canPeng,
+                    canZhao: gameState.canZhao,
+                    canHu: false,
+                    onChi: onChi,
+                    onPeng: onPeng,
+                    onZhao: onZhao,
+                    onHu: onHu,
+                    onPass: onPass,
+                  ),
                 ],
+                if (!gameState.isZimoOpportunity)
+                  ActionButtons(
+                    canChi: gameState.canChi,
+                    canPeng: gameState.canPeng,
+                    canZhao: gameState.canZhao,
+                    canHu: gameState.canHu && !gameState.isZimoOpportunity,
+                    onChi: onChi,
+                    onPeng: onPeng,
+                    onZhao: onZhao,
+                    onHu: onHu,
+                    onPass: onPass,
+                  ),
               ],
             ),
           ),
@@ -165,6 +188,7 @@ class GameOverlay extends StatelessWidget {
           right: 9.6,
           child: _RoundInfo(
             roundNumber: gameState.roundNumber,
+            dealerName: gameState.players[gameState.dealerIndex].name,
             showHuDisplay: gameState.showHuResult || gameState.showLiujuResult,
             isLastRound: gameState.roundNumber >= 8,
             onNextRound: onNextRound,
@@ -348,33 +372,6 @@ class _AIPlayerInfo extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isCurrentTurn)
-                Positioned(
-                  top: -8,
-                  left: -8,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2c3e50), Color(0xFF34495e)],
-                        begin: Alignment(-0.7, -0.7),
-                        end: Alignment(0.7, 0.7),
-                      ),
-                      border: Border.all(
-                        color: const Color(0xFFffd700).withOpacity(0.6),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               if (isCurrentTurn && countdown > 0)
                 Positioned(
                   top: -10,
@@ -754,6 +751,7 @@ class _MyPlayerInfo extends StatelessWidget {
 
 class _RoundInfo extends StatefulWidget {
   final int roundNumber;
+  final String dealerName;
   final bool showHuDisplay;
   final bool isLastRound;
   final VoidCallback? onNextRound;
@@ -761,6 +759,7 @@ class _RoundInfo extends StatefulWidget {
 
   const _RoundInfo({
     required this.roundNumber,
+    this.dealerName = '',
     this.showHuDisplay = false,
     this.isLastRound = false,
     this.onNextRound,
@@ -857,19 +856,78 @@ class _RoundInfoState extends State<_RoundInfo> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14.4),
+        color: Colors.black.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFffd700).withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFffd700).withOpacity(0.08),
+            blurRadius: 12,
+          ),
+        ],
       ),
-      child: Text(
-        '${widget.roundNumber}/8',
-        style: const TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFFffd700),
-          shadows: [Shadow(color: Color(0x80000000), blurRadius: 5)],
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFffd700), Color(0xFFff8c00)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              widget.dealerName.isEmpty ? '庄' : widget.dealerName,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF1a0a00),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '第${widget.roundNumber}局',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFffd700),
+                  shadows: [Shadow(color: Color(0x80ffd700), blurRadius: 6)],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 110,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: const Color(0x1AFFFFFF),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: widget.roundNumber / 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4ecdc4), Color(0xFFffd700)],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

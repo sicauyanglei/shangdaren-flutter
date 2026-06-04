@@ -15,6 +15,7 @@ class Player {
   bool isTing;
   List<Card> tingCards;
   int huCount;
+  int meldHuCount;
 
   Player({
     required this.id,
@@ -28,6 +29,7 @@ class Player {
     this.isTing = false,
     List<Card>? tingCards,
     this.huCount = 0,
+    this.meldHuCount = 0,
   }) : hand = hand ?? [],
        melds = melds ?? [],
        discards = discards ?? [],

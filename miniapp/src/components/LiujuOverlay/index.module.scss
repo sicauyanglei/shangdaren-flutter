@@ -1,0 +1,209 @@
+// LiujuOverlay - 流局面板（匹配 Flame 版本 liuju_overlay.dart）
+// 使用 px 单位，横屏模式
+
+// --- 全屏遮罩 ---
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+// --- 主面板 ---
+.panel {
+  min-width: 680px;
+  max-width: 85vw;
+  max-height: 90vh;
+  padding: 28px;
+  background: rgba(26, 92, 46, 0.95);
+  border-radius: 20px;
+  border: 3px solid #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+// --- 标题区域 ---
+.titleArea {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 72px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  text-align: center;
+}
+
+// --- 关闭按钮 ---
+.closeBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:active {
+    opacity: 0.8;
+  }
+}
+
+.closeIcon {
+  font-size: 32px;
+  color: #ffd700;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// --- 副标题 ---
+.subtitle {
+  display: block;
+  text-align: center;
+  font-size: 30px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 10px;
+}
+
+// --- 备注 ---
+.note {
+  display: block;
+  text-align: center;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.54);
+  margin-bottom: 12px;
+}
+
+// --- 玩家手牌容器 ---
+.playersContainer {
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+// --- 单个玩家行 ---
+.playerRow {
+  margin: 4px 0;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.playerName {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd700;
+  margin-bottom: 6px;
+}
+
+// --- 手牌 + 组合牌 行 ---
+.cardsRow {
+  display: flex;
+  align-items: flex-start;
+}
+
+.handCards {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+// --- 组合牌分隔区 ---
+.meldSection {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+// --- 小卡牌 ---
+.smallCard {
+  width: 48px;
+  height: 72px;
+  border-radius: 2px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.smallCardRed {
+  background: #cc0000;
+  border-color: #ff4444;
+  box-shadow: 0 0 3px rgba(211, 47, 47, 0.6);
+}
+
+.smallCardGreen {
+  background: #228822;
+  border-color: #33bb33;
+  box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.smallCardText {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+// --- 确定按钮 ---
+.confirmBtn {
+  display: block;
+  margin: 0 auto;
+  width: 260px;
+  height: 68px;
+  border-radius: 20px;
+  background: #ffd700;
+  color: #1a472a;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 68px;
+  cursor: pointer;
+  border: none;
+  outline: none;
+
+  &:active {
+    opacity: 0.9;
+  }
+}

@@ -21,6 +21,17 @@ typedef MeldAnimCallback =
     void Function(List<Card> cards, int playerId, String meldType);
 
 class GameController {
+  static const List<List<String>> _groupChars = [
+    ['上', '大', '人'],
+    ['丘', '乙', '己'],
+    ['化', '三', '千'],
+    ['七', '十', '土'],
+    ['尔', '小', '生'],
+    ['八', '九', '子'],
+    ['佳', '作', '亡'],
+    ['福', '禄', '寿'],
+  ];
+
   final GameState state;
   AIController aiController;
   final Random _rng = Random();
@@ -275,7 +286,7 @@ class GameController {
         }
         onStateChanged?.call();
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (!state.gameStarted) return;
+          if (_isPaused || !state.gameStarted) return;
           _isStartingRound = false;
           _startTurn();
         });
@@ -401,7 +412,7 @@ class GameController {
     final player = state.players[1];
     state.canHu = !skipZimoCheck && _canZimo(player);
     state.isZimoOpportunity = state.canHu;
-    state.canZhao = _canZhaoAfterDraw(player) && !state.canHu;
+    state.canZhao = _canZhaoAfterDraw(player);
   }
 
   void _processAITurn(Player player) {
@@ -628,7 +639,6 @@ class GameController {
           }
         }
       } else {
-        // 人类玩家：只要能碰/招/吃就加入选项
         if (_canZhaoWith(p, card)) {
           actions.add('zhao');
         }
@@ -636,7 +646,9 @@ class GameController {
           actions.add('peng');
         }
         if (_canChiWith(p, i, card, discardPlayerId)) {
-          actions.add('chi');
+          if (!_hasCompleteSentenceWithSingleCards(p, card)) {
+            actions.add('chi');
+          }
         }
       }
 
@@ -761,10 +773,6 @@ class GameController {
       if (action == 'hu') {
         state.canHu = true;
         state.isZimoOpportunity = false;
-        state.canZhao = false;
-        state.canPeng = false;
-        state.canChi = false;
-        break;
       }
       if (action == 'zhao') state.canZhao = true;
       if (action == 'peng') state.canPeng = true;
@@ -825,7 +833,12 @@ class GameController {
       state.canZhao = false;
       final player = state.players[humanIndex];
       final candidates = _getZhaoCandidates(player);
-      if (candidates.isEmpty) return;
+      if (candidates.isEmpty) {
+        state.isMyTurn = true;
+        onStateChanged?.call();
+        startCountdown();
+        return;
+      }
       if (candidates.length == 1) {
         _handleZhaoFromHand(player, character: candidates.first);
       } else {
@@ -1066,6 +1079,7 @@ class GameController {
     if (!isZimo && !winner.isTing) {
       state.isHandlingHu = false;
       state.waitingForResponse = false;
+      state.isDrawing = false;
       _clearPendingAIResponses();
       onStateChanged?.call();
       _nextTurn();
@@ -1079,7 +1093,10 @@ class GameController {
       winner.hand.add(state.lastDiscardedCard!);
     }
 
-    final huTypeResult = HuCalculator.detectHuType(winner);
+    final huTypeResult = HuCalculator.detectHuType(
+      winner,
+      paoCard: isZimo ? null : state.lastDiscardedCard,
+    );
 
     if (isZimo) {
       _audio.playZimo();
@@ -1110,7 +1127,11 @@ class GameController {
       scoreChanges.add(entry.value);
     }
 
-    final totalHu = HuCalculator.calculateTotalHu(winner);
+    final totalHu = HuCalculator.calculateTotalHu(
+      winner,
+      paoCard: isZimo ? null : state.lastDiscardedCard,
+    );
+    winner.huCount = totalHu;
     final huTypeMultiplier = isZimo ? huTypeResult.zimo : huTypeResult.dianpao;
     final displayMultiplier = huTypeMultiplier;
     final method = isZimo ? '自摸' : '点炮';
@@ -1169,6 +1190,10 @@ class GameController {
     _audio.playLiuju();
 
     state.showLiujuResult = true;
+
+    for (final p in state.players) {
+      p.huCount = HuCalculator.calculateTotalHu(p);
+    }
 
     state.roundHistory.add({
       'roundNumber': state.roundNumber,
@@ -1232,6 +1257,8 @@ class GameController {
 
     if (state.isDrawing) {
       if (_pendingDrawCard != null && _pendingDrawPlayerId != null) {
+        _drawVersion++;
+        _drawAfterZhaoVersion++;
         final player = state.players[_pendingDrawPlayerId!];
         if (_pendingDrawPlayerId == 1) {
           if (_skipDraw) {
@@ -1256,12 +1283,14 @@ class GameController {
     }
 
     if (_pendingDiscardCard != null && _pendingDiscardPlayerId != null) {
+      _discardVersion++;
       final player = state.players[_pendingDiscardPlayerId!];
       _completeDiscard(player, _pendingDiscardCard!);
       return;
     }
 
     if (_pendingMeldAction != null) {
+      _meldActionVersion++;
       _pendingMeldAction!.call();
       _pendingMeldAction = null;
       return;
@@ -1270,6 +1299,7 @@ class GameController {
     if (_pendingCheckResponse &&
         _pendingCheckResponseCard != null &&
         _pendingCheckResponsePlayerId != null) {
+      _checkResponseVersion++;
       _checkResponses(
         _pendingCheckResponseCard!,
         _pendingCheckResponsePlayerId!,
@@ -1307,6 +1337,7 @@ class GameController {
       state.canPeng = false;
       state.canZhao = false;
       state.canHu = false;
+      state.isDrawing = false;
       onStateChanged?.call();
       if (player.type == PlayerType.human) {
         state.isMyTurn = true;
@@ -1331,6 +1362,7 @@ class GameController {
         isJing: zhaoCards.first.isJing,
       );
       player.melds.add(meld);
+      HuCalculator.updateMeldHuCache(player);
       for (final c in zhaoCards) {
         player.hand.remove(c);
       }
@@ -1441,6 +1473,7 @@ class GameController {
         player.melds.add(
           Meld(cards: newCards, type: MeldType.zhao, isJing: card.isJing),
         );
+        HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(newCards, playerIndex);
       } else {
@@ -1454,6 +1487,7 @@ class GameController {
             isJing: card.isJing,
           ),
         );
+        HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(zhaoCards, playerIndex);
       }
@@ -1506,6 +1540,7 @@ class GameController {
       player.melds.add(
         Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
       );
+      HuCalculator.updateMeldHuCache(player);
       _addToPublicCount(matching[0].character, 1);
       _addToPublicCount(matching[1].character, 1);
       player.hand.remove(matching[0]);
@@ -1580,6 +1615,7 @@ class GameController {
           isJing: meldCards.any((c) => c.isJing),
         ),
       );
+      HuCalculator.updateMeldHuCache(player);
       _addToPublicCount(chiCards[0].character, 1);
       _addToPublicCount(chiCards[1].character, 1);
       player.hand.remove(chiCards[0]);
@@ -1629,6 +1665,7 @@ class GameController {
   }
 
   bool _canZhaoAfterDraw(Player player) {
+    if (_getTotalCardCount(player) < 20) return false;
     return _getZhaoCandidates(player).isNotEmpty;
   }
 
@@ -1651,6 +1688,7 @@ class GameController {
   }
 
   bool _canPengWith(Player player, Card card) {
+    if (_getTotalCardCount(player) >= 20) return false;
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -1658,6 +1696,7 @@ class GameController {
   }
 
   bool _canZhaoWith(Player player, Card card) {
+    if (_getTotalCardCount(player) != 19) return false;
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -1670,6 +1709,7 @@ class GameController {
     Card card,
     int discardPlayerId,
   ) {
+    if (_getTotalCardCount(player) >= 20) return false;
     final isNextPlayer = playerIndex == (discardPlayerId + 1) % 3;
     if (!isNextPlayer) return false;
     return _findChiCards(player, card) != null;
@@ -1714,6 +1754,27 @@ class GameController {
     }
 
     return null;
+  }
+
+  bool _hasCompleteSentenceWithSingleCards(Player player, Card card) {
+    final hand = player.hand;
+    final sentence = card.sentence;
+    final groupChars = _groupChars[sentence - 1];
+
+    final charCount = <String, int>{};
+    for (final ch in groupChars) {
+      charCount[ch] = 0;
+    }
+    for (final c in hand) {
+      if (c.sentence == sentence && charCount.containsKey(c.character)) {
+        charCount[c.character] = charCount[c.character]! + 1;
+      }
+    }
+
+    final allPresent = charCount.values.every((count) => count >= 1);
+    final allSingle = charCount.values.every((count) => count == 1);
+
+    return allPresent && allSingle && groupChars.contains(card.character);
   }
 
   void _addToPublicCount(String character, int count) {

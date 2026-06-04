@@ -9,6 +9,32 @@ import '../models/meld.dart';
 import '../logic/hu_calculator.dart';
 import 'card_render.dart';
 
+class _PanoPlayerEntry {
+  final String name;
+  final String score;
+  final String label;
+  final bool isWinner;
+  double? _nameWidth;
+  double? _scoreWidth;
+  double? _labelWidth;
+  double? _cardWidth;
+  double? _cardHeight;
+
+  _PanoPlayerEntry({
+    required this.name,
+    required this.score,
+    required this.label,
+    required this.isWinner,
+  });
+}
+
+class _PanoArrangeItem {
+  final _PanoPlayerEntry entry;
+  final bool showArrow;
+
+  _PanoArrangeItem({required this.entry, required this.showArrow});
+}
+
 class GameBoard extends Component {
   static const double designWidth = 1280.0;
   static const double designHeight = 720.0;
@@ -432,7 +458,7 @@ class GameBoard extends Component {
       loserWidths.add(w);
       totalLoserW += w;
     }
-    totalLoserW += (losers.length > 0 ? losers.length - 1 : 0) * loserGap;
+    totalLoserW += (losers.isNotEmpty ? losers.length - 1 : 0) * loserGap;
 
     var loserX = cx - totalLoserW / 2;
 
@@ -1627,19 +1653,24 @@ class GameBoard extends Component {
     String? highlightLabel;
     if (showHuDisplay && huWinnerIndex == playerIndex) {
       if (huMethod == '点炮' && huDianpaoCard != null) {
-        cards.add(huDianpaoCard!);
-        cards.sort((a, b) {
-          if (a.sentence != b.sentence) return a.sentence.compareTo(b.sentence);
-          return a.position.compareTo(b.position);
-        });
+        if (!cards.any((c) => c.id == huDianpaoCard!.id)) {
+          cards.add(huDianpaoCard!);
+          cards.sort((a, b) {
+            if (a.sentence != b.sentence) {
+              return a.sentence.compareTo(b.sentence);
+            }
+            return a.position.compareTo(b.position);
+          });
+        }
         highlightCard = huDianpaoCard;
         highlightLabel = '炮';
       } else if (huMethod == '自摸' && huZimoCard != null) {
         if (!cards.any((c) => c.id == huZimoCard!.id)) {
           cards.add(huZimoCard!);
           cards.sort((a, b) {
-            if (a.sentence != b.sentence)
+            if (a.sentence != b.sentence) {
               return a.sentence.compareTo(b.sentence);
+            }
             return a.position.compareTo(b.position);
           });
         }
@@ -1654,6 +1685,9 @@ class GameBoard extends Component {
     final gap = huAiHandSentenceGap;
 
     final sentenceGroups = _groupHandBySentenceForAI(cards);
+
+    final labelPositions = <Offset>[];
+    String? pendingLabel;
 
     if (leftToRight) {
       double curX = edgeX;
@@ -1673,7 +1707,8 @@ class GameBoard extends Component {
           }
           _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
           if (highlightCard != null && drawCard.id == highlightCard.id) {
-            _drawHuCardLabel(canvas, cardX, curY, cw, ch, highlightLabel!);
+            labelPositions.add(Offset(cardX, curY));
+            pendingLabel = highlightLabel;
           }
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
@@ -1702,7 +1737,8 @@ class GameBoard extends Component {
           }
           _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
           if (highlightCard != null && drawCard.id == highlightCard.id) {
-            _drawHuCardLabel(canvas, cardX, curY, cw, ch, highlightLabel!);
+            labelPositions.add(Offset(cardX, curY));
+            pendingLabel = highlightLabel;
           }
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
@@ -1712,6 +1748,12 @@ class GameBoard extends Component {
           }
         }
         curX -= cw + gap;
+      }
+    }
+
+    if (pendingLabel != null) {
+      for (final pos in labelPositions) {
+        _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel);
       }
     }
   }
@@ -2380,8 +2422,8 @@ class GameBoard extends Component {
 
     final handArea = getPlayer1HandArea();
     final panelBottomY = handArea.top - 10;
-    final panelW = 540.0;
-    final panelH = 260.0;
+    final panelW = 640.0;
+    final panelH = 220.0;
     final panelX = (designWidth - panelW) / 2;
     final panelY = panelBottomY - panelH;
 
@@ -2473,7 +2515,12 @@ class GameBoard extends Component {
         ..strokeWidth = 2,
     );
 
+<<<<<<< HEAD
     final closeBtnSize = 60.0;
+=======
+    // Close button
+    final closeBtnSize = 48.0;
+>>>>>>> feature/frame/webgl
     final closeBtnX = panelX + panelW - closeBtnSize - 8;
     final closeBtnY = panelY + 8;
     _huPanelRect = Rect.fromLTWH(panelX, panelY, panelW, panelH);
@@ -2498,7 +2545,7 @@ class GameBoard extends Component {
       text: const TextSpan(
         text: '✕',
         style: TextStyle(
-          fontSize: 22,
+          fontSize: 32,
           color: Color(0xFFFFFFFF),
           fontWeight: FontWeight.bold,
         ),
@@ -2514,13 +2561,14 @@ class GameBoard extends Component {
       ),
     );
 
-    final titleY = panelY + 32;
+    // Title
+    final titleY = panelY + 28;
     final titleText = '$huWinnerName 胡牌!';
     final titleTp = TextPainter(
       text: TextSpan(
         text: titleText,
         style: TextStyle(
-          fontSize: 24,
+          fontSize: 22,
           color: const Color(0xFFffd700),
           fontWeight: FontWeight.bold,
           shadows: [Shadow(color: const Color(0x80ffd700), blurRadius: 15)],
@@ -2534,41 +2582,332 @@ class GameBoard extends Component {
       Offset(cx - titleTp.width / 2, titleY - titleTp.height / 2),
     );
 
-    final tagsY = panelY + 72;
-    final tagFontSize = 14.0;
-    final tagNumFontSize = 17.0;
+    // === Panorama players row ===
+    // Build all player entries: losers on left, winner in center, losers on right
+    final panoEntries = <_PanoPlayerEntry>[];
+
+    // Winner entry
+    panoEntries.add(
+      _PanoPlayerEntry(
+        name: huWinnerName,
+        score: '+$huScore',
+        label: '赢家',
+        isWinner: true,
+      ),
+    );
+
+    // Loser entries
+    final losers = <_PanoPlayerEntry>[];
+    if (huMethod == '点炮' && huDianpaoName.isNotEmpty) {
+      losers.add(
+        _PanoPlayerEntry(
+          name: huDianpaoName,
+          score: '-$huScore',
+          label: '点炮',
+          isWinner: false,
+        ),
+      );
+    } else if (huMethod == '自摸') {
+      for (int i = 0; i < _playerNames.length; i++) {
+        if (i == huWinnerIndex) continue;
+        final s = huScoreChanges[i];
+        if (s != null && s < 0) {
+          losers.add(
+            _PanoPlayerEntry(
+              name: _playerNames[i],
+              score: '$s',
+              label: '输家',
+              isWinner: false,
+            ),
+          );
+        }
+      }
+    }
+
+    // Arrange: loser(s) → arrow → winner → arrow → loser(s) for zimo
+    // Or: loser → arrow → winner for dianpao
+    final arrangedEntries = <_PanoArrangeItem>[];
+    if (huMethod == '自摸' && losers.length == 2) {
+      arrangedEntries.add(_PanoArrangeItem(entry: losers[0], showArrow: true));
+      arrangedEntries.add(
+        _PanoArrangeItem(entry: panoEntries[0], showArrow: true),
+      );
+      arrangedEntries.add(_PanoArrangeItem(entry: losers[1], showArrow: false));
+    } else if (losers.isNotEmpty) {
+      arrangedEntries.add(_PanoArrangeItem(entry: losers[0], showArrow: true));
+      arrangedEntries.add(
+        _PanoArrangeItem(entry: panoEntries[0], showArrow: false),
+      );
+    } else {
+      arrangedEntries.add(
+        _PanoArrangeItem(entry: panoEntries[0], showArrow: false),
+      );
+    }
+
+    // Measure widths
+    const panoNameFontSize = 13.0;
+    const panoScoreFontSize = 32.0;
+    const panoLabelFontSize = 10.0;
+    const panoPadH = 20.0;
+    const panoPadV = 10.0;
+    const panoArrowW = 30.0;
+    const panoGap = 12.0;
+
+    for (final item in arrangedEntries) {
+      final e = item.entry;
+      final nameTp = TextPainter(
+        text: TextSpan(
+          text: e.name,
+          style: TextStyle(
+            fontSize: panoNameFontSize,
+            fontWeight: FontWeight.bold,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFF999999),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      e._nameWidth = nameTp.width;
+
+      final scoreTp = TextPainter(
+        text: TextSpan(
+          text: e.score,
+          style: TextStyle(
+            fontSize: panoScoreFontSize,
+            fontWeight: FontWeight.w900,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFFff6b6b),
+            shadows: e.isWinner
+                ? [Shadow(color: const Color(0x80ffd700), blurRadius: 15)]
+                : [Shadow(color: const Color(0x66ff6b6b), blurRadius: 6)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      e._scoreWidth = scoreTp.width;
+
+      final labelTp = TextPainter(
+        text: TextSpan(
+          text: e.label,
+          style: TextStyle(
+            fontSize: panoLabelFontSize,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFF666666),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      e._labelWidth = labelTp.width;
+
+      final contentW = [
+        e._nameWidth!,
+        e._scoreWidth!,
+        e._labelWidth!,
+      ].reduce((a, b) => a > b ? a : b);
+      e._cardWidth = contentW + panoPadH * 2;
+      e._cardHeight =
+          panoNameFontSize +
+          panoScoreFontSize +
+          panoLabelFontSize +
+          panoPadV * 4;
+    }
+
+    // Calculate total width
+    double totalPanoW = 0;
+    for (int i = 0; i < arrangedEntries.length; i++) {
+      totalPanoW += arrangedEntries[i].entry._cardWidth!;
+      if (i < arrangedEntries.length - 1 && arrangedEntries[i].showArrow) {
+        totalPanoW += panoArrowW;
+      }
+      if (i < arrangedEntries.length - 1) {
+        totalPanoW += panoGap;
+      }
+    }
+
+    // Draw panorama row
+    final panoY = panelY + 56;
+    var panoX = cx - totalPanoW / 2;
+
+    for (int i = 0; i < arrangedEntries.length; i++) {
+      final item = arrangedEntries[i];
+      final e = item.entry;
+      final cw = e._cardWidth!;
+      final ch = e._cardHeight!;
+
+      // Draw card background
+      final cardR = RRect.fromRectAndRadius(
+        Rect.fromLTWH(panoX, panoY, cw, ch),
+        const Radius.circular(12),
+      );
+      if (e.isWinner) {
+        canvas.drawRRect(
+          cardR,
+          Paint()
+            ..shader = LinearGradient(
+              colors: [const Color(0x26ffd700), const Color(0x1Aff8c00)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(Rect.fromLTWH(panoX, panoY, cw, ch)),
+        );
+        canvas.drawRRect(
+          cardR,
+          Paint()
+            ..color = const Color(0x80ffd700)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+        // Glow
+        canvas.drawRRect(
+          cardR.inflate(4),
+          Paint()
+            ..color = const Color(0x1Affd700)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        );
+      } else {
+        canvas.drawRRect(cardR, Paint()..color = const Color(0x1Aff6b6b));
+        canvas.drawRRect(
+          cardR,
+          Paint()
+            ..color = const Color(0x33ff6b6b)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1,
+        );
+      }
+
+      // Draw name
+      final nameTp = TextPainter(
+        text: TextSpan(
+          text: e.name,
+          style: TextStyle(
+            fontSize: panoNameFontSize,
+            fontWeight: FontWeight.bold,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFF999999),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      nameTp.paint(
+        canvas,
+        Offset(panoX + (cw - nameTp.width) / 2, panoY + panoPadV),
+      );
+
+      // Draw score
+      final scoreTp = TextPainter(
+        text: TextSpan(
+          text: e.score,
+          style: TextStyle(
+            fontSize: panoScoreFontSize,
+            fontWeight: FontWeight.w900,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFFff6b6b),
+            shadows: e.isWinner
+                ? [Shadow(color: const Color(0x80ffd700), blurRadius: 15)]
+                : [Shadow(color: const Color(0x66ff6b6b), blurRadius: 6)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      scoreTp.paint(
+        canvas,
+        Offset(
+          panoX + (cw - scoreTp.width) / 2,
+          panoY + panoPadV + panoNameFontSize + 4,
+        ),
+      );
+
+      // Draw label
+      final labelTp = TextPainter(
+        text: TextSpan(
+          text: e.label,
+          style: TextStyle(
+            fontSize: panoLabelFontSize,
+            color: e.isWinner
+                ? const Color(0xFFffd700)
+                : const Color(0xFF666666),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      labelTp.paint(
+        canvas,
+        Offset(
+          panoX + (cw - labelTp.width) / 2,
+          panoY + ch - panoPadV - labelTp.height,
+        ),
+      );
+
+      panoX += cw;
+
+      // Draw arrow
+      if (i < arrangedEntries.length - 1 && item.showArrow) {
+        final arrowX = panoX + panoGap / 2;
+        final arrowY = panoY + ch / 2;
+        final arrowTp = TextPainter(
+          text: TextSpan(
+            text: '→',
+            style: TextStyle(
+              fontSize: 20,
+              color: const Color(0x4Dffd700),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        arrowTp.paint(
+          canvas,
+          Offset(
+            arrowX + (panoArrowW - arrowTp.width) / 2,
+            arrowY - arrowTp.height / 2,
+          ),
+        );
+        panoX += panoArrowW;
+      }
+
+      panoX += panoGap;
+    }
+
+    // === Bottom tags row ===
+    final bottomY = panelY + panelH - 40;
+    final tagFontSize = 18.0;
     const tagPadH = 10.0;
     const tagPadV = 4.0;
     const tagRadius = 10.0;
 
     final tags = <MapEntry<String, Color>>[];
+    final tagBgColors = <Color>[];
+
     if (huMethod == '点炮' && huDianpaoName.isNotEmpty) {
       tags.add(MapEntry('点炮', const Color(0xFFFFFFFF)));
+      tagBgColors.add(const Color(0x1AFFFFFF));
     } else if (huMethod == '自摸') {
       tags.add(MapEntry('自摸', const Color(0xFFFFFFFF)));
+      tagBgColors.add(const Color(0x1AFFFFFF));
     }
     tags.add(MapEntry(huType, _getHuTypeColor(huType)));
-    tags.add(MapEntry('胡数:$huCount', const Color(0xFFffd700)));
+    tagBgColors.add(_getHuTypeColor(huType).withValues(alpha: 0.2));
+    tags.add(MapEntry('$huCount胡', const Color(0xFFffd700)));
+    tagBgColors.add(const Color(0x33ffd700));
     tags.add(MapEntry('$huMultiplier倍', const Color(0xFFff6b6b)));
-
-    final tagBgColors = <Color>[
-      const Color(0x26FFFFFF),
-      _getHuTypeColor(huType).withValues(alpha: 0.2),
-      const Color(0x33ffd700),
-      const Color(0x33ff6b6b),
-    ];
+    tagBgColors.add(const Color(0x33ff6b6b));
 
     final tagWidths = <double>[];
     double totalTagW = 0;
     for (int i = 0; i < tags.length; i++) {
-      final spans = _buildTagSpans(
-        tags[i].key,
-        tags[i].value,
-        tagFontSize,
-        tagNumFontSize,
-      );
       final tp = TextPainter(
-        text: TextSpan(children: spans),
+        text: TextSpan(
+          text: tags[i].key,
+          style: TextStyle(
+            fontSize: tagFontSize,
+            color: tags[i].value,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         textDirection: TextDirection.ltr,
       );
       tp.layout();
@@ -2576,14 +2915,14 @@ class GameBoard extends Component {
       tagWidths.add(w);
       totalTagW += w;
     }
-    totalTagW += (tags.length - 1) * 8;
+    totalTagW += (tags.length - 1) * 10;
 
     var tagX = cx - totalTagW / 2;
     for (int i = 0; i < tags.length; i++) {
       final tw = tagWidths[i];
-      final tagH = tagNumFontSize + tagPadV * 2;
+      final tagH = tagFontSize + tagPadV * 2;
       final tagR = RRect.fromRectAndRadius(
-        Rect.fromLTWH(tagX, tagsY - tagH / 2, tw, tagH),
+        Rect.fromLTWH(tagX, bottomY - tagH / 2, tw, tagH),
         const Radius.circular(tagRadius),
       );
       canvas.drawRRect(tagR, Paint()..color = tagBgColors[i]);
@@ -2594,181 +2933,33 @@ class GameBoard extends Component {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
-      final spans = _buildTagSpans(
-        tags[i].key,
-        tags[i].value,
-        tagFontSize,
-        tagNumFontSize,
-      );
       final tp = TextPainter(
-        text: TextSpan(children: spans),
+        text: TextSpan(
+          text: tags[i].key,
+          style: TextStyle(
+            fontSize: tagFontSize,
+            color: tags[i].value,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         textDirection: TextDirection.ltr,
       );
       tp.layout();
       tp.paint(
         canvas,
-        Offset(tagX + (tw - tp.width) / 2, tagsY - tp.height / 2),
+        Offset(tagX + (tw - tp.width) / 2, bottomY - tp.height / 2),
       );
-      tagX += tw + 8;
+      tagX += tw + 10;
     }
 
-    final scoreY = panelY + 128;
-    final scoreText = '+$huScore';
-    final scorePaint = Paint()
-      ..shader = LinearGradient(
-        colors: [const Color(0xFFffd700), const Color(0xFFff8c00)],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(Rect.fromLTWH(0, 0, 200, 60));
-    final scoreTp = TextPainter(
-      text: TextSpan(
-        text: scoreText,
-        style: TextStyle(
-          fontSize: 60,
-          fontWeight: FontWeight.w900,
-          foreground: scorePaint,
-          shadows: [Shadow(color: const Color(0x80ffd700), blurRadius: 24)],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
+    // Divider line above tags
+    canvas.drawLine(
+      Offset(panelX + 20, bottomY - 18),
+      Offset(panelX + panelW - 20, bottomY - 18),
+      Paint()
+        ..color = const Color(0x1Fffd700)
+        ..strokeWidth = 1,
     );
-    scoreTp.layout();
-    final unitTp = TextPainter(
-      text: const TextSpan(
-        text: '分',
-        style: TextStyle(
-          fontSize: 20,
-          color: Color(0xB3ffd700),
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    unitTp.layout();
-    final totalScoreW = scoreTp.width + 4 + unitTp.width;
-    final scoreOffsetX = cx - totalScoreW / 2;
-    final scoreOffsetY = scoreY - scoreTp.height / 2;
-    scoreTp.paint(canvas, Offset(scoreOffsetX, scoreOffsetY));
-    unitTp.paint(
-      canvas,
-      Offset(scoreOffsetX + scoreTp.width + 4, scoreY - unitTp.height / 2 + 14),
-    );
-
-    final losersY = panelY + 196;
-    final loserFontSize = 13.0;
-    final loserScoreFontSize = 24.0;
-    final loserPadH = 16.0;
-    final loserPadV = 8.0;
-    final loserGap = 16.0;
-
-    final losers = <MapEntry<String, int>>[];
-    if (huMethod == '点炮' && huDianpaoName.isNotEmpty) {
-      losers.add(MapEntry(huDianpaoName, -huScore));
-    } else if (huMethod == '自摸') {
-      for (int i = 0; i < _playerNames.length; i++) {
-        if (i == huWinnerIndex) continue;
-        final s = huScoreChanges[i];
-        if (s != null && s < 0) {
-          losers.add(MapEntry(_playerNames[i], s));
-        }
-      }
-    }
-
-    if (losers.isNotEmpty) {
-      final loserWidths = <double>[];
-      double totalLoserW = 0;
-      for (final loser in losers) {
-        final nameTp = TextPainter(
-          text: TextSpan(
-            text: loser.key,
-            style: TextStyle(
-              fontSize: loserFontSize,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        nameTp.layout();
-        final scoreTp2 = TextPainter(
-          text: TextSpan(
-            text: '${loser.value}',
-            style: TextStyle(
-              fontSize: loserScoreFontSize,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        scoreTp2.layout();
-        final w =
-            (nameTp.width > scoreTp2.width ? nameTp.width : scoreTp2.width) +
-            loserPadH * 2;
-        loserWidths.add(w);
-        totalLoserW += w;
-      }
-      totalLoserW += (losers.length - 1) * loserGap;
-
-      var loserX = cx - totalLoserW / 2;
-      for (int i = 0; i < losers.length; i++) {
-        final lw = loserWidths[i];
-        final loserH = loserFontSize + loserScoreFontSize + loserPadV * 3;
-        final loserR = RRect.fromRectAndRadius(
-          Rect.fromLTWH(loserX, losersY - loserH / 2, lw, loserH),
-          const Radius.circular(8),
-        );
-        canvas.drawRRect(loserR, Paint()..color = const Color(0x1Aff6b6b));
-        canvas.drawRRect(
-          loserR,
-          Paint()
-            ..color = const Color(0x33ff6b6b)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1,
-        );
-
-        final nameTp = TextPainter(
-          text: TextSpan(
-            text: losers[i].key,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFFaaaaaa),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        nameTp.layout();
-        nameTp.paint(
-          canvas,
-          Offset(
-            loserX + (lw - nameTp.width) / 2,
-            losersY - loserH / 2 + loserPadV,
-          ),
-        );
-
-        final scoreTp2 = TextPainter(
-          text: TextSpan(
-            text: '${losers[i].value}',
-            style: const TextStyle(
-              fontSize: 24,
-              color: Color(0xFFff6b6b),
-              fontWeight: FontWeight.w900,
-              shadows: [Shadow(color: Color(0x66ff6b6b), blurRadius: 6)],
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        scoreTp2.layout();
-        scoreTp2.paint(
-          canvas,
-          Offset(
-            loserX + (lw - scoreTp2.width) / 2,
-            losersY - loserH / 2 + loserPadV + nameTp.height + 2,
-          ),
-        );
-
-        loserX += lw + loserGap;
-      }
-    }
 
     canvas.restore();
 
@@ -3110,7 +3301,7 @@ class GameBoard extends Component {
           const Radius.circular(13),
         ),
         Paint()
-          ..color = glowColor.withOpacity(0.3)
+          ..color = glowColor.withValues(alpha: 0.3)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
 
