@@ -19,6 +19,8 @@ const DH = 720;
 const px2vw = (px: number) => (px / DW * 100) + 'vw';
 const px2vh = (px: number) => (px / DH * 100) + 'vh';
 
+// @ts-ignore - 通过SCSS $hand-card-w使用
+const HAND_CARD_W = 65;  // 匹配 Flame handCardW=65.0
 const HAND_CARD_H = 224;
 const MELD_CARD_W = 34;
 const MELD_CARD_H = 56;
@@ -27,6 +29,8 @@ const DECK_CARD_H = 40;
 
 const HAND_STACK_VISIBLE = 68;
 const HAND_SENTENCE_GAP = 2;
+// @ts-ignore - 通过SCSS $selected-offset-y使用
+const SELECTED_OFFSET_Y = 28;  // 匹配 Flame selectedOffsetY=28.0
 const AI_HAND_STACK_VISIBLE = 15;
 const MELD_STACK_VISIBLE = 17;
 const DISCARD_CARD_GAP = 1;
@@ -39,11 +43,13 @@ const AI_HAND_TO_MELD_GAP = 2;
 const AI_HAND_TO_MELD_GAP_HU = 20;
 const MELD_GROUP_GAP = 2;
 const MAX_MELD_GROUPS_PER_ROW = 3;
+// @ts-ignore - 通过SCSS $avatar-to-meld-gap使用
+const AVATAR_TO_MELD_GAP = 6;  // 匹配 Flame avatarToMeldGap=6.0
 
-// 胡牌时AI手牌显示参数（匹配Flame规则14）
-const HU_AI_HAND_CARD_W = 32.4;
-const HU_AI_HAND_CARD_H = 134.4;
-const HU_AI_HAND_STACK_VISIBLE = 20;
+// 胡牌时AI手牌显示参数（匹配Flame huAiHandCardW/H/StackVisible）
+const HU_AI_HAND_CARD_W = 43.2;
+const HU_AI_HAND_CARD_H = 179.2;
+const HU_AI_HAND_STACK_VISIBLE = 35;
 const HU_AI_HAND_SENTENCE_GAP = 0;
 
 // 胡牌时组合牌显示参数

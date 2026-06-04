@@ -1858,32 +1858,23 @@ export function aiDecidePeng(
     const huScoreAfter = evaluateHuScore(testHand, newMelds);
     if (huScoreAfter > 0) return true;
 
-    // 检查该字是否参与了句/靠组合
-    const remaining = [...player.hand];
-    const aSet: InternalMeld[] = [];
-    const bSet: InternalMeld[] = [];
-    const cSet: InternalMeld[] = [];
-    const dSet: InternalMeld[] = [];
-    extractJu(remaining, aSet);
-    extractZhao(remaining, bSet);
-    extractKan(remaining, cSet);
-    extractDuiAndKao(remaining, dSet);
-
-    const inJu = aSet.some(m => m.cards.some(c => c.char === discardedCard.char));
-    const inKao = dSet.some(m =>
-      m.type === 'kao' && m.cards.some(c => c.char === discardedCard.char),
-    );
-    if (inJu || inKao) return false;
-
-    // 有同组伙伴时，碰牌后胡数更高才碰
-    const otherChars = GROUP_CHARS[discardedCard.sentence - 1].filter(ch => ch !== discardedCard.char);
-    const hasPartner = otherChars.some(ch => player.hand.some(c => c.char === ch));
-    if (hasPartner) {
-      const huScoreBefore = evaluateHuScore(player.hand, player.melds);
-      if (huScoreAfter > huScoreBefore) return true;
-      return false;
+    // 匹配 Flame: 评估碰牌前的进张（该字参与的其他组合价值）
+    const charInHand = player.hand.filter(c => c.char === discardedCard.char).length;
+    if (charInHand >= 2) {
+      // 手牌有2张同字，碰掉后少了1张可用的牌
+      // 检查该字同组的其他字在手牌中是否有
+      const otherChars = GROUP_CHARS[discardedCard.sentence - 1].filter(ch => ch !== discardedCard.char);
+      const hasPartner = otherChars.some(ch => player.hand.some(c => c.char === ch));
+      // 有同组伙伴时，如果碰牌后胡数更高，仍然碰
+      if (hasPartner) {
+        const huScoreBefore = evaluateHuScore(player.hand, player.melds);
+        if (huScoreAfter > huScoreBefore) return true;
+        // 否则保留灵活性，不碰
+        return false;
+      }
     }
 
+    // 碰牌增加面子，更倾向碰
     return testHand.length <= 10;
   }
 

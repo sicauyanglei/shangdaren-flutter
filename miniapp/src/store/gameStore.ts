@@ -29,16 +29,20 @@ interface GameStore extends GameState {
   closeLiujuResult: () => void;
   setVolume: (v: number) => void;
   setDifficulty: (d: string) => void;
+  startCountdown: (seconds?: number) => void;
   // 内部方法
   _startRound: () => void;
   _processAIPiao: () => void;
   _startTurn: () => void;
   _drawCardForHuman: () => void;
+  _completeDrawForHuman: (drawnCard: Card) => void;
   _drawCardForAI: (playerIdx: number) => void;
+  _completeDrawForAI: (drawnCard: Card, playerIdx: number) => void;
   _checkHumanActionsAfterDraw: (skipZimoCheck: boolean) => void;
   _processAITurn: (player: Player, playerIdx: number) => void;
   _aiContinueAfterDraw: (player: Player, playerIdx: number, drawnCard: Card | undefined, skipZimoCheck: boolean) => void;
   _doDiscard: (playerIdx: number, card: Card) => void;
+  _completeDiscard: (playerIdx: number, card: Card) => void;
   _checkResponses: (card: Card, discardPlayerId: number) => void;
   _processResponses: (responses: Map<number, string[]>, card: Card, discardPlayerId: number) => void;
   _processAIResponses: (responses: Map<number, string[]>, card: Card, discardPlayerId: number) => void;
@@ -47,9 +51,11 @@ interface GameStore extends GameState {
   _handleZhaoRespond: (playerIdx: number, card: Card, discardPlayerId: number) => void;
   _handleZhaoFromHand: (playerIdx: number, character: string) => void;
   _drawAfterZhao: (playerIdx: number) => void;
+  _completeDrawAfterZhaoForHuman: (drawnCard: Card, playerIdx: number) => void;
   _handleHu: (winnerIdx: number, isZimo: boolean, dianpaoIdx?: number, zimoCard?: Card) => void;
   _handleLiuju: () => void;
   _nextTurn: () => void;
+  _handleTimeout: () => void;
 }
 
 // ============================================================
@@ -290,7 +296,8 @@ function updatePlayerTingAndHu(player: Player): void {
 }
 
 // ============================================================
-// 模块级变量：暂存AI待处理响应（不属于Zustand状态）
+// 模块级变量：暂存AI待处理响应、版本计数器、pending动作（不属于Zustand状态）
+// 匹配 Flame game_controller.dart 的版本取消机制和pending机制
 // ============================================================
 
 let _pendingAIResponses: Map<number, string[]> | null = null;
@@ -299,10 +306,107 @@ let _pendingResponseDiscardPlayerId: number | null = null;
 let _skipDraw = false;
 let _hasDealerPlayedFirstTurn = false;
 
+// 版本计数器：用于取消过期的延迟动作
+let _drawVersion = 0;
+let _discardVersion = 0;
+let _drawAfterZhaoVersion = 0;
+let _aiTurnVersion = 0;
+let _aiContinueVersion = 0;
+let _checkResponseVersion = 0;
+let _meldActionVersion = 0;
+
+// Pending动作：延迟执行的组合牌动作
+let _pendingMeldAction: (() => void) | null = null;
+
+// Pending摸牌/出牌：用于动画延迟期间暂存
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingDrawCard: Card | null = null; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingDrawPlayerId: number | null = null; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingDiscardCard: Card | null = null; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingDiscardPlayerId: number | null = null; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingCheckResponse = false; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingCheckResponseCard: Card | null = null; // 用于暂停/恢复
+// @ts-ignore - 用于暂停/恢复机制
+let _pendingCheckResponsePlayerId: number | null = null; // 用于暂停/恢复
+
+// 最后摸的牌（匹配 Flame _lastDrawnCard）
+let _lastDrawnCard: Card | null = null;
+
+// 倒计时计时器
+let _countdownTimerId = 0;
+let _countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+// 游戏是否暂停/开始
+let _isPaused = false;
+// @ts-ignore - 用于防止重入
+let _isStartingRound = false; // 用于防止重入
+
+// 公开牌计数（用于AI策略）
+let _publicCardCount: Map<string, number> = new Map();
+
 function clearPendingAIResponses(): void {
   _pendingAIResponses = null;
   _pendingResponseCard = null;
   _pendingResponseDiscardPlayerId = null;
+}
+
+function clearAllPending(): void {
+  _pendingMeldAction = null;
+  _pendingDrawCard = null;
+  _pendingDrawPlayerId = null;
+  _pendingDiscardCard = null;
+  _pendingDiscardPlayerId = null;
+  _pendingCheckResponse = false;
+  _pendingCheckResponseCard = null;
+  _pendingCheckResponsePlayerId = null;
+  _lastDrawnCard = null;
+  clearPendingAIResponses();
+}
+
+/** 递增所有版本计数器，取消所有延迟动作 */
+function incrementAllVersions(): void {
+  _drawVersion++;
+  _discardVersion++;
+  _drawAfterZhaoVersion++;
+  _aiTurnVersion++;
+  _aiContinueVersion++;
+  _checkResponseVersion++;
+  _meldActionVersion++;
+}
+
+/** 公开牌计数：添加 */
+function _addToPublicCount(char: string, count: number): void {
+  const current = _publicCardCount.get(char) || 0;
+  _publicCardCount.set(char, current + count);
+}
+
+/** 公开牌计数：重建（发牌完成后调用） */
+function _rebuildPublicCardCount(players: Player[]): void {
+  _publicCardCount = new Map<string, number>();
+  for (const player of players) {
+    for (const card of player.discards) {
+      _addToPublicCount(card.char, 1);
+    }
+    for (const meld of player.melds) {
+      for (const card of meld.cards) {
+        _addToPublicCount(card.char, 1);
+      }
+    }
+  }
+}
+
+/** 停止倒计时 */
+function stopCountdownTimer(): void {
+  _countdownTimerId++;
+  if (_countdownInterval) {
+    clearInterval(_countdownInterval);
+    _countdownInterval = null;
+  }
 }
 
 // ============================================================
@@ -374,9 +478,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
+    // 匹配 Flame: 递增所有版本计数器，取消所有延迟动作
+    incrementAllVersions();
+    stopCountdownTimer();
+    clearAllPending();
+
     // 重置状态
     _skipDraw = false;
     _hasDealerPlayedFirstTurn = false;
+    _isStartingRound = true;
+    _isPaused = false;
+    _lastDrawnCard = null;
     const players = clonePlayers(state.players);
     for (const player of players) {
       player.hand = [];
@@ -406,6 +518,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       player.hand = sortHand(player.hand);
       updatePlayerTingAndHu(player);
     }
+
+    // 匹配 Flame: 重建公开牌计数
+    _rebuildPublicCardCount(players);
 
     set({
       phase: 'idle',
@@ -528,22 +643,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const player = state.players[currentIdx];
 
     if (player.type === 'ai') {
-      get()._processAITurn(player, currentIdx);
+      // 匹配 Flame: AI回合有延迟（800-1300ms随机）
+      set({ isMyTurn: false });
+      get().startCountdown();
+      const version = ++_aiTurnVersion;
+      const delay = 800 + Math.floor(Math.random() * 500);
+      setTimeout(() => {
+        if (_isPaused) return;
+        if (_aiTurnVersion !== version) return;
+        const s = get();
+        if (s.showHuResult || s.showLiujuResult) return;
+        get()._processAITurn(player, currentIdx);
+      }, delay);
     } else {
       // 人类玩家
       // 匹配 Flame: _skipDraw时跳过摸牌，直接出牌
       if (_skipDraw) {
         _skipDraw = false;
+        set({ isMyTurn: true, isDrawing: false });
         get()._checkHumanActionsAfterDraw(true);
+        get().startCountdown();
       } else if (!_hasDealerPlayedFirstTurn && currentIdx === state.dealerIndex) {
         // 匹配 Flame: 庄家第一回合不摸牌，直接出牌
         _hasDealerPlayedFirstTurn = true;
+        set({ isMyTurn: true, isDrawing: false });
         get()._checkHumanActionsAfterDraw(true);
+        get().startCountdown();
       } else {
         const totalCards = getTotalCardCount(player);
         if (totalCards >= 20) {
           // 20张牌，不能摸牌，必须出牌
+          set({ isMyTurn: true, isDrawing: false });
           get()._checkHumanActionsAfterDraw(true);
+          get().startCountdown();
         } else {
           get()._drawCardForHuman();
         }
@@ -561,25 +693,56 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
+    // 匹配 Flame: 摸牌动画延迟2100ms
     const deck = [...state.deck];
     const drawn = deck.shift()!;
+    _lastDrawnCard = drawn;
+    _pendingDrawCard = drawn;
+    _pendingDrawPlayerId = state.players.findIndex(p => p.type === 'human');
+
+    set({
+      deck,
+      isDrawing: true,
+      isMyTurn: false,
+      hideTingBadge: true, // 匹配 Flame: 摸牌动画开始后隐藏听牌徽章
+    });
+
+    const version = ++_drawVersion;
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_drawVersion !== version) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      get()._completeDrawForHuman(drawn);
+    }, 2100);
+  },
+
+  /** 匹配 Flame: _completeDrawForHuman - 摸牌动画完成后处理 */
+  _completeDrawForHuman: (drawnCard: Card) => {
+    const state = get();
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+
     const players = clonePlayers(state.players);
     const humanIdx = state.players.findIndex(p => p.type === 'human');
     const humanPlayer = players[humanIdx];
 
-    humanPlayer.hand.push(drawn);
+    humanPlayer.hand.push(drawnCard);
     humanPlayer.hand = sortHand(humanPlayer.hand);
     updatePlayerTingAndHu(humanPlayer);
 
     set({
       players,
-      deck,
       isDrawing: false,
-      newCardId: drawn.id,
+      isMyTurn: true,
+      newCardId: drawnCard.id,
       currentPlayerIndex: humanIdx,
     });
 
     get()._checkHumanActionsAfterDraw(false);
+    // 匹配 Flame: hideTingBadge = canHu
+    set({ hideTingBadge: get().canHu });
+    get().startCountdown();
   },
 
   _drawCardForAI: (playerIdx: number) => {
@@ -589,18 +752,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
+    // 匹配 Flame: AI摸牌动画延迟2100ms
     const deck = [...state.deck];
     const drawn = deck.shift()!;
+    _pendingDrawCard = drawn;
+    _pendingDrawPlayerId = playerIdx;
+
+    set({ deck, isDrawing: true });
+
+    const version = ++_drawVersion;
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_drawVersion !== version) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      get()._completeDrawForAI(drawn, playerIdx);
+    }, 2100);
+  },
+
+  /** 匹配 Flame: _completeDrawForAI - AI摸牌动画完成后处理 */
+  _completeDrawForAI: (drawnCard: Card, playerIdx: number) => {
+    const state = get();
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+
     const players = clonePlayers(state.players);
     const player = players[playerIdx];
 
-    player.hand.push(drawn);
+    player.hand.push(drawnCard);
     player.hand = sortHand(player.hand);
     updatePlayerTingAndHu(player);
 
-    set({ players, deck });
+    set({ players, isDrawing: false });
 
-    get()._aiContinueAfterDraw(player, playerIdx, drawn, false);
+    get()._aiContinueAfterDraw(player, playerIdx, drawnCard, false);
   },
 
   // ============================================================
@@ -614,6 +799,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const canZimoFlag = !skipZimoCheck && canPlayerZimo(player);
     const canZhaoFlag = canZhaoAfterDraw(player);
 
+    // 匹配 Flame: _checkMyActionsAfterDraw 只设置canHu/canZhao，不设置isMyTurn/isDrawing
+    // isMyTurn和isDrawing由调用方设置
     set({
       canHu: canZimoFlag,
       canZimo: canZimoFlag,
@@ -621,9 +808,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       canZhao: canZhaoFlag,
       canPeng: false,
       canChi: false,
-      isDrawing: false,
-      hideTingBadge: canZimoFlag,
-      isMyTurn: true, // 匹配 Flame: _completeDrawForHuman 中设置 isMyTurn = true
     });
   },
 
@@ -707,63 +891,74 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (state.canChi || state.canPeng || state.canZhao || state.canHu) return;
     if (state.isDrawing) return;
+    if (!state.isMyTurn) return; // 匹配 Flame: 非出牌回合不能出牌
 
     const cardIdx = player.hand.findIndex(c => c.id === cardId);
     if (cardIdx < 0) return;
 
     const card = player.hand[cardIdx];
+    // 匹配 Flame: 清除操作按钮状态
+    set({ canChi: false, canPeng: false, canZhao: false, canHu: false, canZimo: false, isZimoOpportunity: false });
+    stopCountdownTimer();
     get()._doDiscard(humanIdx, card);
   },
 
   _doDiscard: (playerIdx: number, card: Card) => {
-    const state = get();
     _skipDraw = false;
-    const players = clonePlayers(state.players);
-    const player = players[playerIdx];
+    stopCountdownTimer();
 
-    const cardIdx = player.hand.findIndex(c => c.id === card.id);
-    if (cardIdx < 0) {
-      // 卡牌不在手中，出最后一张
-      if (player.hand.length > 0) {
-        const lastCard = player.hand[player.hand.length - 1];
-        player.hand.pop();
-        player.discards.push(lastCard);
-        updatePlayerTingAndHu(player);
-
-        set({
-          players,
-          lastDiscard: lastCard,
-          lastDiscardPlayerId: playerIdx,
-          canChi: false,
-          canPeng: false,
-          canZhao: false,
-          canHu: false,
-          canZimo: false,
-          isZimoOpportunity: false,
-          isDrawing: false,
-          isMyTurn: false, // 匹配 Flame: 出牌后 isMyTurn = false
-        });
-
-        get()._checkResponses(lastCard, playerIdx);
-      }
-      return;
-    }
-
-    player.hand.splice(cardIdx, 1);
-    player.discards.push(card);
-    updatePlayerTingAndHu(player);
+    // 匹配 Flame: 出牌动画延迟350ms，然后完成出牌
+    _pendingDiscardCard = card;
+    _pendingDiscardPlayerId = playerIdx;
+    const version = ++_discardVersion;
 
     // 播放出牌音效
     audioManager.playDiscard(card.char);
 
-    const humanIdx = state.players.findIndex(p => p.type === 'human');
-    if (playerIdx === humanIdx) {
-      set({ hideTingBadge: !player.isTing });
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_discardVersion !== version) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      get()._completeDiscard(playerIdx, card);
+    }, 350);
+  },
+
+  /** 匹配 Flame: _completeDiscard - 出牌动画完成后处理 */
+  _completeDiscard: (playerIdx: number, card: Card) => {
+    const state = get();
+    _pendingDiscardCard = null;
+    _pendingDiscardPlayerId = null;
+
+    const players = clonePlayers(state.players);
+    const player = players[playerIdx];
+
+    const cardIdx = player.hand.findIndex(c => c.id === card.id);
+    let discardCard = card;
+    if (cardIdx < 0) {
+      // 卡牌不在手中，出最后一张
+      if (player.hand.length > 0) {
+        discardCard = player.hand[player.hand.length - 1];
+        player.hand.pop();
+      } else {
+        return;
+      }
+    } else {
+      player.hand.splice(cardIdx, 1);
     }
+
+    player.discards.push(discardCard);
+    _addToPublicCount(discardCard.char, 1);
+    updatePlayerTingAndHu(player);
+
+    const humanIdx = state.players.findIndex(p => p.type === 'human');
+    const hideTing = playerIdx === humanIdx ? !player.isTing : undefined;
+
+    _lastDrawnCard = null;
 
     set({
       players,
-      lastDiscard: card,
+      lastDiscard: discardCard,
       lastDiscardPlayerId: playerIdx,
       canChi: false,
       canPeng: false,
@@ -773,10 +968,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isZimoOpportunity: false,
       isDrawing: false,
       newCardId: null,
-      isMyTurn: false, // 匹配 Flame: 出牌后 isMyTurn = false
+      isMyTurn: false,
+      ...(hideTing !== undefined ? { hideTingBadge: hideTing } : {}),
     });
 
-    get()._checkResponses(card, playerIdx);
+    // 匹配 Flame: 响应检查延迟800ms
+    _pendingCheckResponse = true;
+    _pendingCheckResponseCard = discardCard;
+    _pendingCheckResponsePlayerId = playerIdx;
+    const version = ++_checkResponseVersion;
+
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_checkResponseVersion !== version) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      _pendingCheckResponse = false;
+      _pendingCheckResponseCard = null;
+      _pendingCheckResponsePlayerId = null;
+      get()._checkResponses(discardCard, playerIdx);
+    }, 800);
   },
 
   // ============================================================
@@ -981,12 +1192,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 匹配 Flame: respondHu 中清除待处理AI响应
     clearPendingAIResponses();
+    stopCountdownTimer();
 
+    // 匹配 Flame: 自摸时使用_lastDrawnCard作为zimoCard
     get()._handleHu(
       humanIdx,
       isZimo,
       isZimo ? undefined : state.lastDiscardPlayerId ?? undefined,
-      isZimo ? state.players[humanIdx].hand[state.players[humanIdx].hand.length - 1] : undefined,
+      isZimo ? _lastDrawnCard || state.players[humanIdx].hand[state.players[humanIdx].hand.length - 1] : undefined,
     );
   },
 
@@ -1159,65 +1372,91 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const players = clonePlayers(state.players);
     const player = players[playerIdx];
-    const discarder = players[discardPlayerId];
 
     const chiCards = findChiCards(player, card);
     if (!chiCards) {
+      set({ canChi: false, canPeng: false, canZhao: false, canHu: false });
       get()._nextTurn();
       return;
     }
 
     const meldCards = [card, chiCards[0], chiCards[1]];
 
-    // 从弃牌区移除
-    const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
-    if (discardIdx >= 0) {
-      discarder.discards.splice(discardIdx, 1);
-    }
-
-    // 从手牌移除吃的牌
-    const idx0 = player.hand.findIndex(c => c.id === chiCards[0].id);
-    if (idx0 >= 0) player.hand.splice(idx0, 1);
-    const idx1 = player.hand.findIndex(c => c.id === chiCards[1].id);
-    if (idx1 >= 0) player.hand.splice(idx1, 1);
-
-    // 添加组合牌
-    const hasJing = meldCards.some(c => isJingChar(c.char));
-    player.melds.push({
-      type: 'ju',
-      cards: meldCards,
-      isJing: hasJing,
-    });
-
-    updatePlayerTingAndHu(player);
-
     // 播放吃牌音效
     audioManager.playChi();
 
-    // 匹配 Flame: 吃后设置 _skipDraw = true
-    _skipDraw = true;
+    // 匹配 Flame: 使用 _pendingMeldAction 延迟1500ms执行
+    const meldVersion = ++_meldActionVersion;
+    _pendingMeldAction = () => {
+      const s = get();
+      const ps = clonePlayers(s.players);
+      const p = ps[playerIdx];
+      const discarder = ps[discardPlayerId];
 
-    set({
-      players,
-      currentPlayerIndex: playerIdx,
-      canChi: false,
-      canPeng: false,
-      canZhao: false,
-      canHu: false,
-      canZimo: false,
-      isZimoOpportunity: false,
-      waitingForResponse: false,
-    });
+      // 从弃牌区移除
+      const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
+      if (discardIdx >= 0) {
+        discarder.discards.splice(discardIdx, 1);
+        _addToPublicCount(card.char, -1);
+      }
 
-    // 匹配 Flame: 人类玩家吃后设置isMyTurn并启动countdown
-    const humanIdx = state.players.findIndex(p => p.type === 'human');
-    if (playerIdx === humanIdx) {
-      set({ isMyTurn: true, isDrawing: false });
-      get()._checkHumanActionsAfterDraw(true);
-    } else {
-      // AI出牌
-      get()._aiContinueAfterDraw(player, playerIdx, undefined, true);
-    }
+      // 添加组合牌
+      const hasJing = meldCards.some(c => isJingChar(c.char));
+      p.melds.push({ type: 'ju', cards: meldCards, isJing: hasJing });
+      _addToPublicCount(chiCards[0].char, 1);
+      _addToPublicCount(chiCards[1].char, 1);
+
+      // 从手牌移除吃的牌
+      const idx0 = p.hand.findIndex(c => c.id === chiCards[0].id);
+      if (idx0 >= 0) p.hand.splice(idx0, 1);
+      const idx1 = p.hand.findIndex(c => c.id === chiCards[1].id);
+      if (idx1 >= 0) p.hand.splice(idx1, 1);
+
+      _skipDraw = true;
+      updatePlayerTingAndHu(p);
+
+      set({
+        players: ps,
+        currentPlayerIndex: playerIdx,
+        canChi: false,
+        canPeng: false,
+        canZhao: false,
+        canHu: false,
+        canZimo: false,
+        isZimoOpportunity: false,
+        waitingForResponse: false,
+      });
+
+      _pendingMeldAction = null;
+
+      const humanIdx = s.players.findIndex(pp => pp.type === 'human');
+      if (playerIdx === humanIdx) {
+        set({ isMyTurn: true, isDrawing: false });
+        get()._checkHumanActionsAfterDraw(true);
+        get().startCountdown();
+      } else {
+        // 匹配 Flame: AI出牌延迟800-1300ms
+        const version = ++_aiContinueVersion;
+        const delay = 800 + Math.floor(Math.random() * 500);
+        setTimeout(() => {
+          if (_isPaused) return;
+          if (_aiContinueVersion !== version) return;
+          const ss = get();
+          if (ss.showHuResult || ss.showLiujuResult) return;
+          const aiP = ss.players[playerIdx];
+          get()._aiContinueAfterDraw(aiP, playerIdx, undefined, true);
+        }, delay);
+      }
+    };
+
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_meldActionVersion !== meldVersion) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      _pendingMeldAction?.();
+      _pendingMeldAction = null;
+    }, 1500);
   },
 
   // --- 碰 ---
@@ -1225,63 +1464,90 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const players = clonePlayers(state.players);
     const player = players[playerIdx];
-    const discarder = players[discardPlayerId];
 
     const matching = player.hand.filter(c => c.char === card.char);
     if (matching.length < 2) {
+      set({ canChi: false, canPeng: false, canZhao: false, canHu: false });
       get()._nextTurn();
       return;
     }
 
     const pengCards = [card, matching[0], matching[1]];
 
-    // 从弃牌区移除
-    const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
-    if (discardIdx >= 0) {
-      discarder.discards.splice(discardIdx, 1);
-    }
-
-    // 从手牌移除碰的牌
-    const idx0 = player.hand.findIndex(c => c.id === matching[0].id);
-    if (idx0 >= 0) player.hand.splice(idx0, 1);
-    const idx1 = player.hand.findIndex(c => c.id === matching[1].id);
-    if (idx1 >= 0) player.hand.splice(idx1, 1);
-
-    // 添加组合牌
-    player.melds.push({
-      type: 'kan',
-      cards: pengCards,
-      isJing: isJingChar(card.char),
-    });
-
-    updatePlayerTingAndHu(player);
-
     // 播放碰牌音效
     audioManager.playPeng();
 
-    // 匹配 Flame: 碰后设置 _skipDraw = true
-    _skipDraw = true;
+    // 匹配 Flame: 使用 _pendingMeldAction 延迟1500ms执行
+    const meldVersion = ++_meldActionVersion;
+    _pendingMeldAction = () => {
+      const s = get();
+      const ps = clonePlayers(s.players);
+      const p = ps[playerIdx];
+      const discarder = ps[discardPlayerId];
 
-    set({
-      players,
-      currentPlayerIndex: playerIdx,
-      canChi: false,
-      canPeng: false,
-      canZhao: false,
-      canHu: false,
-      canZimo: false,
-      isZimoOpportunity: false,
-      waitingForResponse: false,
-    });
+      // 从弃牌区移除
+      const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
+      if (discardIdx >= 0) {
+        discarder.discards.splice(discardIdx, 1);
+        _addToPublicCount(card.char, -1);
+      }
 
-    // 匹配 Flame: 人类玩家碰后设置isMyTurn并启动countdown
-    const humanIdx = state.players.findIndex(p => p.type === 'human');
-    if (playerIdx === humanIdx) {
-      set({ isMyTurn: true, isDrawing: false });
-      get()._checkHumanActionsAfterDraw(true);
-    } else {
-      get()._aiContinueAfterDraw(player, playerIdx, undefined, true);
-    }
+      // 添加组合牌
+      p.melds.push({ type: 'kan', cards: pengCards, isJing: isJingChar(card.char) });
+      _addToPublicCount(matching[0].char, 1);
+      _addToPublicCount(matching[1].char, 1);
+
+      // 从手牌移除碰的牌
+      const idx0 = p.hand.findIndex(c => c.id === matching[0].id);
+      if (idx0 >= 0) p.hand.splice(idx0, 1);
+      const idx1 = p.hand.findIndex(c => c.id === matching[1].id);
+      if (idx1 >= 0) p.hand.splice(idx1, 1);
+
+      _skipDraw = true;
+      updatePlayerTingAndHu(p);
+
+      set({
+        players: ps,
+        currentPlayerIndex: playerIdx,
+        canChi: false,
+        canPeng: false,
+        canZhao: false,
+        canHu: false,
+        canZimo: false,
+        isZimoOpportunity: false,
+        waitingForResponse: false,
+      });
+
+      _pendingMeldAction = null;
+
+      const humanIdx = s.players.findIndex(pp => pp.type === 'human');
+      if (playerIdx === humanIdx) {
+        set({ isMyTurn: true, isDrawing: false });
+        get()._checkHumanActionsAfterDraw(true);
+        get().startCountdown();
+      } else {
+        // 匹配 Flame: AI出牌延迟800-1300ms
+        const version = ++_aiContinueVersion;
+        const delay = 800 + Math.floor(Math.random() * 500);
+        setTimeout(() => {
+          if (_isPaused) return;
+          if (_aiContinueVersion !== version) return;
+          const ss = get();
+          if (ss.showHuResult || ss.showLiujuResult) return;
+          const aiP = ss.players[playerIdx];
+          get()._aiContinueAfterDraw(aiP, playerIdx, undefined, true);
+        }, delay);
+      }
+    };
+
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_meldActionVersion !== meldVersion) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      _pendingMeldAction?.();
+      _pendingMeldAction = null;
+    }, 1500);
   },
 
   // --- 招（响应别人出的牌） ---
@@ -1289,77 +1555,93 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const players = clonePlayers(state.players);
     const player = players[playerIdx];
-    const discarder = players[discardPlayerId];
 
     // 检查是否有现有坎可以升级为招
     const existingKan = player.melds.filter(
       m => m.type === 'kan' && m.cards[0].char === card.char
     );
 
+    let zhaoCards: Card[];
     if (existingKan.length > 0) {
-      // 坎升级为招（匹配 Flame L1468-1478）
-      const oldMeld = existingKan[0];
-      player.melds = player.melds.filter(m => m !== oldMeld);
-
-      // 从弃牌区移除
-      const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
-      if (discardIdx >= 0) {
-        discarder.discards.splice(discardIdx, 1);
-      }
-
-      const newCards = [...oldMeld.cards, card];
-      player.melds.push({
-        type: 'zhao',
-        cards: newCards,
-        isJing: isJingChar(card.char),
-      });
+      zhaoCards = [...existingKan[0].cards, card];
     } else {
       // 手牌中有3张同字
       const handMatching = player.hand.filter(c => c.char === card.char);
       if (handMatching.length < 3) {
+        set({ canChi: false, canPeng: false, canZhao: false, canHu: false });
         get()._nextTurn();
         return;
       }
-      const zhaoCards = [card, handMatching[0], handMatching[1], handMatching[2]];
+      zhaoCards = [card, handMatching[0], handMatching[1], handMatching[2]];
+    }
+
+    // 播放招牌音效
+    audioManager.playZhao();
+
+    // 匹配 Flame: 使用 _pendingMeldAction 延迟1500ms执行
+    const meldVersion = ++_meldActionVersion;
+    _pendingMeldAction = () => {
+      const s = get();
+      const ps = clonePlayers(s.players);
+      const p = ps[playerIdx];
+      const discarder = ps[discardPlayerId];
 
       // 从弃牌区移除
       const discardIdx = discarder.discards.findIndex(c => c.id === card.id);
       if (discardIdx >= 0) {
         discarder.discards.splice(discardIdx, 1);
+        _addToPublicCount(card.char, -1);
       }
 
-      // 从手牌移除
-      for (let i = 0; i < 3; i++) {
-        const idx = player.hand.findIndex(c => c.id === handMatching[i].id);
-        if (idx >= 0) player.hand.splice(idx, 1);
+      if (existingKan.length > 0) {
+        // 坎升级为招
+        const oldMeld = p.melds.find(m => m.type === 'kan' && m.cards[0].char === card.char);
+        if (oldMeld) {
+          p.melds = p.melds.filter(m => m !== oldMeld);
+          _addToPublicCount(card.char, -3);
+          const newCards = [...oldMeld.cards, card];
+          p.melds.push({ type: 'zhao', cards: newCards, isJing: isJingChar(card.char) });
+          _addToPublicCount(card.char, 4);
+        }
+      } else {
+        // 从手牌移除
+        const handMatching = p.hand.filter(c => c.char === card.char);
+        for (let i = 0; i < Math.min(3, handMatching.length); i++) {
+          const idx = p.hand.findIndex(c => c.id === handMatching[i].id);
+          if (idx >= 0) p.hand.splice(idx, 1);
+        }
+        p.melds.push({ type: 'zhao', cards: zhaoCards, isJing: isJingChar(card.char) });
+        _addToPublicCount(card.char, 4);
       }
 
-      player.melds.push({
-        type: 'zhao',
-        cards: zhaoCards,
-        isJing: isJingChar(card.char),
+      updatePlayerTingAndHu(p);
+
+      set({
+        players: ps,
+        currentPlayerIndex: playerIdx,
+        canChi: false,
+        canPeng: false,
+        canZhao: false,
+        canHu: false,
+        canZimo: false,
+        isZimoOpportunity: false,
+        waitingForResponse: false,
       });
-    }
 
-    updatePlayerTingAndHu(player);
+      _pendingMeldAction = null;
 
-    // 播放招牌音效
-    audioManager.playZhao();
+      // 招后补摸一张牌
+      get()._drawAfterZhao(playerIdx);
+    };
 
-    set({
-      players,
-      currentPlayerIndex: playerIdx,
-      canChi: false,
-      canPeng: false,
-      canZhao: false,
-      canHu: false,
-      canZimo: false,
-      isZimoOpportunity: false,
-      waitingForResponse: false,
-    });
-
-    // 招后补摸一张牌
-    get()._drawAfterZhao(playerIdx);
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_meldActionVersion !== meldVersion) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      _pendingMeldAction?.();
+      _pendingMeldAction = null;
+    }, 1500);
   },
 
   // --- 招（手牌中的4张同字） ---
@@ -1398,9 +1680,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       const humanIdx = state.players.findIndex(p => p.type === 'human');
       if (playerIdx === humanIdx) {
-        // 匹配 Flame: 设置isMyTurn并启动countdown
         set({ isMyTurn: true });
-        get()._checkHumanActionsAfterDraw(true);
+        get().startCountdown();
       } else {
         const toDiscard = aiSelectDiscard(player, state.difficulty, buildAIContext(state, player.id));
         get()._doDiscard(playerIdx, toDiscard);
@@ -1410,30 +1691,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const zhaoCards = (byChar.get(targetChar) || []).slice(0, 4);
 
-    // 从手牌移除
-    for (const c of zhaoCards) {
-      const idx = player.hand.findIndex(h => h.id === c.id);
-      if (idx >= 0) player.hand.splice(idx, 1);
-    }
+    // 播放招牌音效
+    audioManager.playZhao();
 
-    // 添加组合牌
-    player.melds.push({
-      type: 'zhao',
-      cards: zhaoCards,
-      isJing: isJingChar(targetChar as CardChar),
-    });
+    // 匹配 Flame: 使用 _pendingMeldAction 延迟1500ms执行
+    const meldVersion = ++_meldActionVersion;
+    _pendingMeldAction = () => {
+      const s = get();
+      const ps = clonePlayers(s.players);
+      const p = ps[playerIdx];
 
-    updatePlayerTingAndHu(player);
+      // 从手牌移除
+      for (const c of zhaoCards) {
+        const idx = p.hand.findIndex(h => h.id === c.id);
+        if (idx >= 0) p.hand.splice(idx, 1);
+      }
 
-    set({
-      players,
-      showZhaoSelection: false,
-      zhaoCandidates: [],
-      canZhao: false,
-    });
+      // 添加组合牌
+      p.melds.push({
+        type: 'zhao',
+        cards: zhaoCards,
+        isJing: isJingChar(targetChar as CardChar),
+      });
+      _addToPublicCount(targetChar, 4);
 
-    // 招后补摸一张牌
-    get()._drawAfterZhao(playerIdx);
+      updatePlayerTingAndHu(p);
+
+      set({
+        players: ps,
+        showZhaoSelection: false,
+        zhaoCandidates: [],
+        canZhao: false,
+      });
+
+      _pendingMeldAction = null;
+
+      // 招后补摸一张牌
+      get()._drawAfterZhao(playerIdx);
+    };
+
+    setTimeout(() => {
+      if (_isPaused) return;
+      if (_meldActionVersion !== meldVersion) return;
+      const s = get();
+      if (s.showHuResult || s.showLiujuResult) return;
+      _pendingMeldAction?.();
+      _pendingMeldAction = null;
+    }, 1500);
   },
 
   // --- 招后补摸 ---
@@ -1446,21 +1750,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const deck = [...state.deck];
     const drawn = deck.shift()!;
-    const players = clonePlayers(state.players);
-    const player = players[playerIdx];
-
-    player.hand.push(drawn);
-    player.hand = sortHand(player.hand);
-    updatePlayerTingAndHu(player);
-
-    set({ players, deck });
+    const version = ++_drawAfterZhaoVersion;
 
     const humanIdx = state.players.findIndex(p => p.type === 'human');
     if (playerIdx === humanIdx) {
-      get()._checkHumanActionsAfterDraw(false);
+      // 匹配 Flame: 人类玩家招后摸牌有2100ms延迟
+      set({ deck, isDrawing: true, isMyTurn: false, hideTingBadge: true });
+      _pendingDrawCard = drawn;
+      _pendingDrawPlayerId = playerIdx;
+
+      setTimeout(() => {
+        if (_isPaused) return;
+        if (_drawAfterZhaoVersion !== version) return;
+        const s = get();
+        if (s.showHuResult || s.showLiujuResult) return;
+        get()._completeDrawAfterZhaoForHuman(drawn, playerIdx);
+      }, 2100);
     } else {
-      get()._aiContinueAfterDraw(player, playerIdx, drawn, false);
+      // 匹配 Flame: AI招后摸牌，直接加牌，然后延迟800-1300ms继续
+      const players = clonePlayers(state.players);
+      const player = players[playerIdx];
+      player.hand.push(drawn);
+      player.hand = sortHand(player.hand);
+      updatePlayerTingAndHu(player);
+      set({ players, deck });
+
+      const aiVersion = ++_aiContinueVersion;
+      const delay = 800 + Math.floor(Math.random() * 500);
+      setTimeout(() => {
+        if (_isPaused) return;
+        if (_aiContinueVersion !== aiVersion) return;
+        const s = get();
+        if (s.showHuResult || s.showLiujuResult) return;
+        const aiP = s.players[playerIdx];
+        get()._aiContinueAfterDraw(aiP, playerIdx, drawn, false);
+      }, delay);
     }
+  },
+
+  /** 匹配 Flame: _completeDrawAfterZhaoForHuman */
+  _completeDrawAfterZhaoForHuman: (drawnCard: Card, playerIdx: number) => {
+    _pendingDrawCard = null;
+    _pendingDrawPlayerId = null;
+    _lastDrawnCard = drawnCard;
+
+    const state = get();
+    const players = clonePlayers(state.players);
+    const player = players[playerIdx];
+
+    player.hand.push(drawnCard);
+    player.hand = sortHand(player.hand);
+    updatePlayerTingAndHu(player);
+
+    set({ players, isMyTurn: true, isDrawing: false });
+
+    get()._checkHumanActionsAfterDraw(false);
+    // 匹配 Flame: hideTingBadge = canHu
+    set({ hideTingBadge: get().canHu });
+    get().startCountdown();
   },
 
   // ============================================================
@@ -1474,6 +1821,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ) => {
     const state = get();
     if (state.showHuResult) return;
+
+    // 匹配 Flame: 胡牌时停止倒计时，递增版本计数器
+    stopCountdownTimer();
+    incrementAllVersions();
 
     // 匹配 Flame: 设置 isHandlingHu
     set({ isHandlingHu: true, canChi: false, canPeng: false, canZhao: false, canHu: false, isMyTurn: false });
@@ -1500,22 +1851,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const discardIdx = discarder.discards.findIndex(c => c.id === state.lastDiscard!.id);
       if (discardIdx >= 0) {
         discarder.discards.splice(discardIdx, 1);
+        _addToPublicCount(state.lastDiscard.char, -1);
       }
       winner.hand.push(state.lastDiscard);
       winner.hand = sortHand(winner.hand);
     }
 
-    // 检测胡牌类型
-    const huTypeResult = detectHuType(winner.hand, winner.melds);
+    // 匹配 Flame: 传递paoCard参数给detectHuType
+    const paoCard = isZimo ? undefined : state.lastDiscard || undefined;
+    const huTypeResult = detectHuType(winner.hand, winner.melds, paoCard);
 
     // 播放胡牌音效
+    stopCountdownTimer();
     if (isZimo) {
       audioManager.playZimo();
     } else {
       audioManager.playHu();
     }
-    // 延迟播放胡型音效
-    audioManager.playHuType(huTypeResult.name);
+    // 匹配 Flame: 延迟播放胡型音效（AI 1000ms，人类 800ms）
+    const huTypeDelay = winner.type === 'ai' ? 1000 : 800;
+    setTimeout(() => {
+      audioManager.playHuType(huTypeResult.name);
+    }, huTypeDelay);
 
     // 计算分数
     const piaoValues = players.map(p => p.piao);
@@ -1596,6 +1953,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   _handleLiuju: () => {
     const state = get();
     if (state.showLiujuResult) return;
+
+    // 匹配 Flame: 流局时停止倒计时，递增版本计数器
+    stopCountdownTimer();
+    incrementAllVersions();
 
     // 播放流局音效
     audioManager.playLiuju();
@@ -1716,7 +2077,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // ============================================================
-  // 19. 设置
+  // 19. 倒计时
+  // ============================================================
+  startCountdown: (seconds: number = 30) => {
+    _countdownTimerId++;
+    const myId = _countdownTimerId;
+    stopCountdownTimer();
+    set({ countdown: seconds });
+
+    _countdownInterval = setInterval(() => {
+      if (myId !== _countdownTimerId) {
+        stopCountdownTimer();
+        return;
+      }
+      const state = get();
+      const newCountdown = state.countdown - 1;
+      set({ countdown: newCountdown });
+
+      // 匹配 Flame: 倒计时音效
+      const shouldPlaySound = state.isMyTurn || state.waitingForResponse;
+      if (shouldPlaySound) {
+        if (newCountdown === 10) {
+          audioManager.playHurry();
+        } else if (newCountdown <= 5 && newCountdown > 0) {
+          audioManager.play('出牌', 0.3);
+        }
+      }
+
+      if (newCountdown <= 0) {
+        stopCountdownTimer();
+        get()._handleTimeout();
+      }
+    }, 1000);
+  },
+
+  /** 匹配 Flame: _handleTimeout - 超时自动出牌 */
+  _handleTimeout: () => {
+    const state = get();
+    if (state.waitingForResponse) {
+      get().respondPass();
+    } else if (state.isMyTurn) {
+      const humanIdx = state.players.findIndex(p => p.type === 'human');
+      const player = state.players[humanIdx];
+
+      // 匹配 Flame: 优先出最后摸的牌
+      if (_lastDrawnCard) {
+        const drawnCardIndex = player.hand.findIndex(c => c.id === _lastDrawnCard!.id);
+        if (drawnCardIndex >= 0) {
+          get().discardCard(player.hand[drawnCardIndex].id);
+          _lastDrawnCard = null;
+          return;
+        }
+      }
+
+      // 否则出最后一张
+      if (player.hand.length > 0) {
+        get().discardCard(player.hand[player.hand.length - 1].id);
+      }
+    }
+  },
+
+  // ============================================================
+  // 20. 设置
   // ============================================================
   setVolume: (v: number) => set({ volume: v }),
   setDifficulty: (d: string) => set({ difficulty: d }),
