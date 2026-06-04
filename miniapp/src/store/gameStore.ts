@@ -5,6 +5,7 @@ import { calculateTotalHu, canHu, canZimo, detectHuType } from '../utils/huCalcu
 import { isTing, getTingCards } from '../utils/tingChecker';
 import { calculateScoreChanges } from '../utils/scoreCalculator';
 import { aiDecideDiscard, aiDecideChi, aiDecidePeng, aiDecideZhao, aiDecideZhaoFromHand, GameContext, buildVisibleCount, calculateTotalUnknown } from '../utils/aiStrategy';
+import { audioManager } from '../utils/audioManager';
 
 // ============================================================
 // Store接口：状态 + 操作方法
@@ -752,6 +753,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     player.discards.push(card);
     updatePlayerTingAndHu(player);
 
+    // 播放出牌音效
+    audioManager.playDiscard(card.char);
+
     const humanIdx = state.players.findIndex(p => p.type === 'human');
     if (playerIdx === humanIdx) {
       set({ hideTingBadge: !player.isTing });
@@ -1187,6 +1191,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     updatePlayerTingAndHu(player);
 
+    // 播放吃牌音效
+    audioManager.playChi();
+
     // 匹配 Flame: 吃后设置 _skipDraw = true
     _skipDraw = true;
 
@@ -1248,6 +1255,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
 
     updatePlayerTingAndHu(player);
+
+    // 播放碰牌音效
+    audioManager.playPeng();
 
     // 匹配 Flame: 碰后设置 _skipDraw = true
     _skipDraw = true;
@@ -1332,6 +1342,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     updatePlayerTingAndHu(player);
+
+    // 播放招牌音效
+    audioManager.playZhao();
 
     set({
       players,
@@ -1495,6 +1508,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // 检测胡牌类型
     const huTypeResult = detectHuType(winner.hand, winner.melds);
 
+    // 播放胡牌音效
+    if (isZimo) {
+      audioManager.playZimo();
+    } else {
+      audioManager.playHu();
+    }
+    // 延迟播放胡型音效
+    audioManager.playHuType(huTypeResult.name);
+
     // 计算分数
     const piaoValues = players.map(p => p.piao);
     const scoreChanges = calculateScoreChanges(
@@ -1574,6 +1596,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   _handleLiuju: () => {
     const state = get();
     if (state.showLiujuResult) return;
+
+    // 播放流局音效
+    audioManager.playLiuju();
 
     const players = clonePlayers(state.players);
     for (const p of players) {
