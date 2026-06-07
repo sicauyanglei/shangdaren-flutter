@@ -5,9 +5,9 @@ import 'package:flame/game.dart';
 import 'game/shangdaren_game.dart';
 import 'game/ui/start_screen.dart';
 import 'game/ui/settlement_screen.dart';
+import 'game/core/game_logger.dart';
 import 'game/ui/settings_screen.dart';
 import 'game/ui/game_overlay.dart';
-import 'game/core/game_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,6 +78,18 @@ class _GameHomePageState extends State<GameHomePage>
     _game.onShowHu = () {
       if (!mounted) return;
       final state = _game.gameController?.state;
+      GameLogger.i(
+        'SCORE',
+        'onShowHu: oldScores=${state?.huResultOldScores}, scoreChanges=${state?.huResultScoreChanges}',
+      );
+      if (state != null) {
+        for (int i = 0; i < state.players.length; i++) {
+          GameLogger.i(
+            'SCORE',
+            'onShowHu player$i: score=${state.players[i].score}',
+          );
+        }
+      }
       if (state != null && state.huResultOldScores != null) {
         for (final entry
             in state.huResultScoreChanges?.entries ?? <MapEntry<int, int>>[]) {
@@ -87,6 +99,10 @@ class _GameHomePageState extends State<GameHomePage>
                 state.players[entry.key].score;
             _displayScores[entry.key] = oldScore;
             _targetScores[entry.key] = state.players[entry.key].score;
+            GameLogger.i(
+              'SCORE',
+              'onShowHu displayScores[${entry.key}]=$oldScore -> targetScores[${entry.key}]=${state.players[entry.key].score}',
+            );
           }
         }
       }
@@ -131,6 +147,10 @@ class _GameHomePageState extends State<GameHomePage>
   }
 
   void _startScoreAnim(int playerId) {
+    GameLogger.i(
+      'SCORE',
+      '_startScoreAnim: playerId=$playerId, display=${_displayScores[playerId]}, target=${_targetScores[playerId]}',
+    );
     _scoreAnimTimers[playerId]?.cancel();
     final totalSteps = 10;
     var step = 0;
@@ -150,6 +170,10 @@ class _GameHomePageState extends State<GameHomePage>
           _scoreAnimTimers.remove(playerId);
           _displayScores.remove(playerId);
           _targetScores.remove(playerId);
+          GameLogger.i(
+            'SCORE',
+            '_startScoreAnim done: playerId=$playerId, player.score now=${_game.gameController?.state.players[playerId].score}',
+          );
           if (mounted) setState(() {});
         }
       },

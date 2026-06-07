@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import '../core/game_logger.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/player.dart';
@@ -165,12 +166,18 @@ class GameController {
     state.deck.shuffle();
 
     for (final player in state.players) {
+      GameLogger.i(
+        'SCORE',
+        'startRound player${player.id}: score=${player.score}',
+      );
       player.hand.clear();
       player.melds.clear();
       player.discards.clear();
       player.isTing = false;
       player.tingCards.clear();
       player.piao = 0;
+      player.huCount = 0;
+      player.meldHuCount = 0;
     }
 
     state.currentPlayerIndex = state.dealerIndex;
@@ -1123,6 +1130,10 @@ class GameController {
     }
     final scoreChanges = <int>[];
     for (final entry in scores.entries) {
+      GameLogger.i(
+        'SCORE',
+        'player${entry.key}: ${state.players[entry.key].score} + ${entry.value} = ${state.players[entry.key].score + entry.value}',
+      );
       state.players[entry.key].score += entry.value;
       scoreChanges.add(entry.value);
     }

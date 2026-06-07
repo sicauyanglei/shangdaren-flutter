@@ -34,11 +34,7 @@ const Home: React.FC = () => {
         <View className={styles.brandArea}>
           {/* Logo */}
           <View className={styles.logoWrap}>
-            <Image
-              className={styles.logoImage}
-              src={require('../../assets/images/logo1024.png')}
-              mode='aspectFill'
-            />
+            <Text className={styles.logoText}>上大人</Text>
           </View>
           <Text className={styles.title}>上大人</Text>
           <Text className={styles.subtitle}>字 牌 游 戏</Text>

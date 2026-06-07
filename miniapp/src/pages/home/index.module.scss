@@ -60,9 +60,11 @@
   overflow: hidden;
 }
 
-.logoImage {
-  width: 100%;
-  height: 100%;
+.logoText {
+  font-size: 64rpx;
+  font-weight: 900;
+  color: $color-gold;
+  text-shadow: 0 0 30rpx rgba(255, 215, 0, 0.4);
 }
 
 .title {

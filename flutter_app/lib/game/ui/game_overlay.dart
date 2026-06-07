@@ -453,14 +453,21 @@ class _AIPlayerInfo extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '${animatingScore ?? player!.score}分',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: animatingScore != null
-                          ? const Color(0xFFffd700)
-                          : const Color(0xFF4ecdc4),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final scoreVal = animatingScore ?? player!.score;
+                      return Text(
+                        '$scoreVal分',
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: animatingScore != null
+                              ? const Color(0xFFffd700)
+                              : scoreVal < 0
+                              ? const Color(0xFFff6b6b)
+                              : const Color(0xFF4ecdc4),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -730,14 +737,21 @@ class _MyPlayerInfo extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '${animatingScore ?? player!.score}分',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: animatingScore != null
-                          ? const Color(0xFFffd700)
-                          : const Color(0xFF4ecdc4),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final scoreVal = animatingScore ?? player!.score;
+                      return Text(
+                        '$scoreVal分',
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: animatingScore != null
+                              ? const Color(0xFFffd700)
+                              : scoreVal < 0
+                              ? const Color(0xFFff6b6b)
+                              : const Color(0xFF4ecdc4),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
