@@ -1686,6 +1686,23 @@ class GameBoard extends Component {
 
     final sentenceGroups = _groupHandBySentenceForAI(cards);
 
+    // 将点炮/自摸卡牌的字符栈移到句子组末尾，使其渲染在最下面
+    if (highlightCard != null) {
+      for (final sg in sentenceGroups) {
+        int highlightIdx = -1;
+        for (int i = 0; i < sg.length; i++) {
+          if (sg[i].any((c) => c.id == highlightCard.id)) {
+            highlightIdx = i;
+            break;
+          }
+        }
+        if (highlightIdx >= 0 && highlightIdx < sg.length - 1) {
+          final stack = sg.removeAt(highlightIdx);
+          sg.add(stack);
+        }
+      }
+    }
+
     final labelPositions = <Offset>[];
     String? pendingLabel;
 
