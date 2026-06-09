@@ -1471,18 +1471,29 @@ class GameBoard extends Component {
         huCard = huZimoCard;
       }
       if (huCard != null) {
-        final sorted = List<CardRender>.from(_player1Hand);
-        sorted.sort((a, b) {
-          if (a.card == null) return 1;
-          if (b.card == null) return -1;
-          if (a.card!.id == huCard!.id) return 1;
-          if (b.card!.id == huCard.id) return -1;
+        final huChar = huCard.character;
+        final normalCards = <CardRender>[];
+        final huCharCards = <CardRender>[];
+        for (final cr in _player1Hand) {
+          if (cr.card == null) continue;
+          if (cr.card!.character == huChar) {
+            huCharCards.add(cr);
+          } else {
+            normalCards.add(cr);
+          }
+        }
+        normalCards.sort((a, b) {
           if (a.card!.sentence != b.card!.sentence) {
             return a.card!.sentence.compareTo(b.card!.sentence);
           }
           return a.card!.position.compareTo(b.card!.position);
         });
-        renderOrder = sorted;
+        huCharCards.sort((a, b) {
+          if (a.card!.id == huCard!.id) return 1;
+          if (b.card!.id == huCard.id) return -1;
+          return a.card!.position.compareTo(b.card!.position);
+        });
+        renderOrder = [...normalCards, ...huCharCards];
       }
     }
 
