@@ -7,11 +7,11 @@ class HuCalculator {
 
   static bool isYinChar(String ch) => _yinChars.contains(ch);
 
-  static bool canHu(List<Card> hand, List<Meld> melds) {
+  static bool canHu(List<Card> hand, List<Meld> melds, {Card? paoCard}) {
     if (!_checkStructural(hand)) return false;
 
     final meldHu = calculateMeldHu(melds);
-    final handHu = calculateHandHu(hand, melds);
+    final handHu = calculateHandHu(hand, melds, paoCard: paoCard);
     final totalHu = meldHu + handHu;
 
     if (totalHu >= 11) return true;

@@ -156,7 +156,7 @@ function getZhaoCandidates(player: Player): string[] {
 function canHuWith(player: Player, card: Card): boolean {
   if (getTotalCardCount(player) >= 20) return false;
   const testHand = [...player.hand, card];
-  return canHu(testHand, player.melds, player.isTing);
+  return canHu(testHand, player.melds, player.isTing, card);
 }
 
 /** 判断玩家是否可以碰别人出的牌 */

@@ -342,21 +342,13 @@ const AIHandCardsHu: React.FC<{
           <View key={sg.sentence} style={{ position: 'absolute', left: px2vw(sgX), top: 0, width: px2vw(cw) }}>
             {sg.stacks.map((stack, stackIdx) => {
               const isHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
-              // AI玩家: 高亮卡牌移到组内索引0（最左边）确保层叠时不被遮挡
-              const sortedCards = isHighlight
-                ? [...stack.cards].sort((a, b) => {
-                    if (a.id === highlightCardId) return -1;
-                    if (b.id === highlightCardId) return 1;
-                    return 0;
-                  })
-                : stack.cards;
 
               return (
                 <View
                   key={stack.char}
                   style={{ position: 'relative', height: px2vh(ch), marginTop: stackIdx > 0 ? px2vh(sv - ch) : 0 }}
                 >
-                  {sortedCards.map((card, cardIdx) => {
+                  {stack.cards.map((card, cardIdx) => {
                     const colorClass = getCharColorClass(card.char);
                     const isCardHighlight = card.id === highlightCardId;
                     return (
@@ -369,7 +361,7 @@ const AIHandCardsHu: React.FC<{
                           left: 0,
                           width: px2vw(cw),
                           height: px2vh(ch),
-                          zIndex: cardIdx + 1,
+                          zIndex: isCardHighlight ? 99 : cardIdx + 1,
                         }}
                       >
                         <Text className={`${styles.huAiHandCardChar} ${styles[`huAiHandCardChar${colorClass}`]}`}>
@@ -378,7 +370,7 @@ const AIHandCardsHu: React.FC<{
                         {/* 点炮/自摸标签 */}
                         {isCardHighlight && highlightLabel && (
                           <Text className={styles.huCardLabel}>
-                            {highlightLabel}
+                            {highlightLabel.split('').join('\n')}
                           </Text>
                         )}
                       </View>
@@ -590,16 +582,6 @@ const HumanHandCards: React.FC<{
               const showCount = stack.cards.length > 1;
               const isNewCard = newCardId !== null && stack.cards.some(c => c.id === newCardId);
 
-              // 人类玩家: 胡牌卡牌重新排列到该组的最后一个位置（确保最后渲染，显示在最上面）
-              const hasHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
-              const sortedCards = hasHighlight
-                ? [...stack.cards].sort((a, b) => {
-                    if (a.id === highlightCardId) return 1;
-                    if (b.id === highlightCardId) return -1;
-                    return 0;
-                  })
-                : stack.cards;
-
               return (
                 <View
                   key={stack.char}
@@ -607,7 +589,7 @@ const HumanHandCards: React.FC<{
                   style={{ height: px2vh(HAND_CARD_H) }}
                   onClick={() => handleClick(stack.cards[stack.cards.length - 1].id)}
                 >
-                  {sortedCards.map((card, cardIdx) => {
+                  {stack.cards.map((card, cardIdx) => {
                     const isCardHighlight = card.id === highlightCardId;
                     return (
                       <View
@@ -615,7 +597,7 @@ const HumanHandCards: React.FC<{
                         className={`${styles.handCard} ${isSelected && card.id === selectedCardId ? styles.handCardSelected : ''}`}
                         style={{
                           top: px2vh(topOffset),
-                          zIndex: cardIdx + 1,
+                          zIndex: isCardHighlight ? 99 : cardIdx + 1,
                         }}
                       >
                         <Text className={`${styles.handCardChar} ${styles[`handCardChar${getCharColorClass(card.char)}`]}`}>
@@ -624,7 +606,7 @@ const HumanHandCards: React.FC<{
                         {/* 点炮/自摸标签 */}
                         {isCardHighlight && highlightLabel && (
                           <Text className={styles.huCardLabelHuman}>
-                            {highlightLabel}
+                            {highlightLabel.split('').join('\n')}
                           </Text>
                         )}
                       </View>

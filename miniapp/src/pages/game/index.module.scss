@@ -787,31 +787,35 @@ $color-non-dealer-gradient-end: #2d5a3d;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: px2vw(16);
+  font-size: px2vw(20);
   font-weight: bold;
   color: #ffffff;
   text-shadow:
     0 0 px2vw(10) #ff0000,
     0 0 px2vw(20) #ff0000;
   z-index: 10;
-  white-space: nowrap;
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.1;
   pointer-events: none;
 }
 
-// 人类玩家手牌上的点炮/自摸标签 (稍大一些以匹配大卡牌)
+// 人类玩家手牌上的点炮/自摸标签 (更大以匹配大卡牌)
 .huCardLabelHuman {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: px2vw(16);
+  font-size: px2vw(24);
   font-weight: bold;
   color: #ffffff;
   text-shadow:
     0 0 px2vw(10) #ff0000,
     0 0 px2vw(20) #ff0000;
   z-index: 10;
-  white-space: nowrap;
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.1;
   pointer-events: none;
 }
 

@@ -1695,7 +1695,7 @@ class GameController {
   bool _canHuWith(Player player, Card card) {
     if (_getTotalCardCount(player) >= 20) return false;
     final testHand = List<Card>.from(player.hand)..add(card);
-    return HuCalculator.canHu(testHand, player.melds);
+    return HuCalculator.canHu(testHand, player.melds, paoCard: card);
   }
 
   bool _canPengWith(Player player, Card card) {
