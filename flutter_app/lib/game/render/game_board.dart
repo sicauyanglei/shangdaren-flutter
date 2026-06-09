@@ -1661,6 +1661,7 @@ class GameBoard extends Component {
 
     Card? highlightCard;
     String? highlightLabel;
+    String? huChar;
     if (showHuDisplay && huWinnerIndex == playerIndex) {
       if (huMethod == '点炮' && huDianpaoCard != null) {
         if (!cards.any((c) => c.id == huDianpaoCard!.id)) {
@@ -1674,6 +1675,7 @@ class GameBoard extends Component {
         }
         highlightCard = huDianpaoCard;
         highlightLabel = '炮';
+        huChar = huDianpaoCard!.character;
       } else if (huMethod == '自摸' && huZimoCard != null) {
         if (!cards.any((c) => c.id == huZimoCard!.id)) {
           cards.add(huZimoCard!);
@@ -1686,6 +1688,7 @@ class GameBoard extends Component {
         }
         highlightCard = huZimoCard;
         highlightLabel = '自摸';
+        huChar = huZimoCard!.character;
       }
     }
 
@@ -1696,74 +1699,86 @@ class GameBoard extends Component {
 
     final sentenceGroups = _groupHandBySentenceForAI(cards);
 
-    final labelPositions = <Offset>[];
-    String? pendingLabel;
+    // Two-pass rendering: pass 0 renders normal cards, pass 1 renders huChar cards on top
+    for (int pass = 0; pass < 2; pass++) {
+      final renderHuChar = pass == 1;
+      final labelPositions = <Offset>[];
+      String? pendingLabel;
 
-    if (leftToRight) {
-      double curX = edgeX;
-      for (final sg in sentenceGroups) {
-        double curY = startY;
-        for (int i = 0; i < sg.length; i++) {
-          final stack = sg[i];
-          final cardX = curX;
-          Card drawCard = stack[0]!;
-          if (highlightCard != null) {
-            for (final c in stack) {
-              if (c.id == highlightCard.id) {
-                drawCard = c;
-                break;
+      if (leftToRight) {
+        double curX = edgeX;
+        for (final sg in sentenceGroups) {
+          double curY = startY;
+          for (int i = 0; i < sg.length; i++) {
+            final stack = sg[i];
+            final isHuCharStack =
+                huChar != null && stack.any((c) => c.character == huChar);
+            if (isHuCharStack != renderHuChar) {
+              if (i < sg.length - 1) curY += sv;
+              continue;
+            }
+            final cardX = curX;
+            Card drawCard = stack[0]!;
+            if (highlightCard != null) {
+              for (final c in stack) {
+                if (c.id == highlightCard.id) {
+                  drawCard = c;
+                  break;
+                }
               }
             }
+            _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
+            if (stack.length > 1) {
+              _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
+            }
+            if (highlightCard != null && drawCard.id == highlightCard.id) {
+              labelPositions.add(Offset(cardX, curY));
+              pendingLabel = highlightLabel;
+            }
+            if (i < sg.length - 1) curY += sv;
           }
-          _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
-          if (highlightCard != null && drawCard.id == highlightCard.id) {
-            labelPositions.add(Offset(cardX, curY));
-            pendingLabel = highlightLabel;
-          }
-          if (stack.length > 1) {
-            _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
-          }
-          if (i < sg.length - 1) {
-            curY += sv;
-          }
+          curX += cw + gap;
         }
-        curX += cw + gap;
-      }
-    } else {
-      double curX = edgeX;
-      for (final sg in sentenceGroups) {
-        double curY = startY;
-        for (int i = 0; i < sg.length; i++) {
-          final stack = sg[i];
-          final cardX = curX - cw;
-          Card drawCard = stack[0]!;
-          if (highlightCard != null) {
-            for (final c in stack) {
-              if (c.id == highlightCard.id) {
-                drawCard = c;
-                break;
+      } else {
+        double curX = edgeX;
+        for (final sg in sentenceGroups) {
+          double curY = startY;
+          for (int i = 0; i < sg.length; i++) {
+            final stack = sg[i];
+            final isHuCharStack =
+                huChar != null && stack.any((c) => c.character == huChar);
+            if (isHuCharStack != renderHuChar) {
+              if (i < sg.length - 1) curY += sv;
+              continue;
+            }
+            final cardX = curX - cw;
+            Card drawCard = stack[0]!;
+            if (highlightCard != null) {
+              for (final c in stack) {
+                if (c.id == highlightCard.id) {
+                  drawCard = c;
+                  break;
+                }
               }
             }
+            _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
+            if (stack.length > 1) {
+              _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
+            }
+            if (highlightCard != null && drawCard.id == highlightCard.id) {
+              labelPositions.add(Offset(cardX, curY));
+              pendingLabel = highlightLabel;
+            }
+            if (i < sg.length - 1) curY += sv;
           }
-          _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
-          if (highlightCard != null && drawCard.id == highlightCard.id) {
-            labelPositions.add(Offset(cardX, curY));
-            pendingLabel = highlightLabel;
-          }
-          if (stack.length > 1) {
-            _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
-          }
-          if (i < sg.length - 1) {
-            curY += sv;
-          }
+          curX -= cw + gap;
         }
-        curX -= cw + gap;
       }
-    }
 
-    if (pendingLabel != null) {
-      for (final pos in labelPositions) {
-        _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel);
+      if (pendingLabel != null) {
+        for (final pos in labelPositions) {
+          _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel);
+        }
       }
     }
   }
