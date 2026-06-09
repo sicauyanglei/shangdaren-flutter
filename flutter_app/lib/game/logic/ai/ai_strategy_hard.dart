@@ -335,7 +335,10 @@ class AIStrategyHard extends AIStrategy {
       hand: bestHand,
       melds: newMelds,
     );
-    benefit += _evaluateHuScore(bestPlayer) * 4;
+    benefit += _evaluateHuScore(bestPlayer) * 8;
+
+    // 精句额外加分
+    if (newMeld.isJing) benefit += 80;
 
     final totalUnknown = _totalUnknownCards(player, state);
     double chiAfterProb = 0;
@@ -404,12 +407,17 @@ class AIStrategyHard extends AIStrategy {
 
       final huScore = _evaluateHuScore(testPlayer);
 
-      // 优先选择听牌数多的，其次进张概率高的，再次胡数高的
-      if (tingCount > bestTingCount ||
+      // 优先选择听牌数多的，进张数相近(差距<=1)时优先高胡数路线
+      if (tingCount > bestTingCount + 1 ||
+          (tingCount > bestTingCount &&
+              bestTingCount > 0 &&
+              huScore <= bestHuScore) ||
           (tingCount == bestTingCount && tingProb > bestTingProb) ||
           (tingCount == bestTingCount &&
               tingProb == bestTingProb &&
-              huScore > bestHuScore)) {
+              huScore > bestHuScore) ||
+          (tingCount == bestTingCount + 1 && huScore > bestHuScore + 4) ||
+          (tingCount + 1 == bestTingCount && huScore > bestHuScore + 8)) {
         bestCard = card;
         bestTingCount = tingCount;
         bestTingProb = tingProb;
@@ -706,25 +714,47 @@ class AIStrategyHard extends AIStrategy {
     }
 
     if (_isEarlyGame(state)) {
-      final sameGroup = player.hand
-          .where((c) => c.sentence == cardToDiscard.sentence)
-          .toList();
-      final groupCharSet = sameGroup.map((c) => c.character).toSet();
-      if (groupCharSet.length >= 2) {
-        score -= 30;
-        if (groupCharSet.length >= 3) {
-          score -= 20;
+      // 早期组牌方向规划：明确走句路线还是十对路线
+      final pairCount = _countHandPairsWithMelds(player);
+      final isShiDuiRoute = pairCount >= 6;
+
+      if (isShiDuiRoute) {
+        // 十对路线：保留对子，打出孤张破坏对子组合的牌
+        final charCount = <String, int>{};
+        for (final c in player.hand) {
+          charCount[c.character] = (charCount[c.character] ?? 0) + 1;
         }
-      }
-      final otherChars = _groupChars[cardToDiscard.sentence - 1]
-          .where((ch) => ch != cardToDiscard.character)
-          .toList();
-      int partnerRem = 0;
-      for (final ch in otherChars) {
-        partnerRem += _remainingCount(ch, visibleCount);
-      }
-      if (partnerRem > 0) {
-        score -= partnerRem * 3;
+        final discardCharCount = charCount[cardToDiscard.character] ?? 0;
+        if (discardCharCount >= 2) {
+          // 打出有对子的牌在十对路线中惩罚更大
+          score -= 60;
+        }
+        if (discardCharCount == 1) {
+          // 孤张在十对路线中更应打出
+          score += 30;
+        }
+      } else {
+        // 句路线：保留同组搭子
+        final sameGroup = player.hand
+            .where((c) => c.sentence == cardToDiscard.sentence)
+            .toList();
+        final groupCharSet = sameGroup.map((c) => c.character).toSet();
+        if (groupCharSet.length >= 2) {
+          score -= 30;
+          if (groupCharSet.length >= 3) {
+            score -= 20;
+          }
+        }
+        final otherChars = _groupChars[cardToDiscard.sentence - 1]
+            .where((ch) => ch != cardToDiscard.character)
+            .toList();
+        int partnerRem = 0;
+        for (final ch in otherChars) {
+          partnerRem += _remainingCount(ch, visibleCount);
+        }
+        if (partnerRem > 0) {
+          score -= partnerRem * 3;
+        }
       }
       if (cardToDiscard.isJing) {
         score -= 20;
@@ -1038,6 +1068,43 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 喂牌意识：评估出的牌被下家吃的概率
+    // 下家是出牌者的逆时针下一位
+    final nextPlayerIndex = (player.id + 1) % state.players.length;
+    if (nextPlayerIndex != player.id) {
+      final nextPlayer = state.players[nextPlayerIndex];
+      final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
+      // 下家已碰/招了同组牌，出的牌容易被吃
+      final nextMeldChars = <String>{};
+      for (final meld in nextPlayer.melds) {
+        for (final c in meld.cards) {
+          nextMeldChars.add(c.character);
+        }
+      }
+      bool nextHasSameGroup = false;
+      for (final gc in sameGroupChars) {
+        if (nextMeldChars.contains(gc)) {
+          nextHasSameGroup = true;
+          break;
+        }
+      }
+      if (nextHasSameGroup) {
+        // 下家已有同组面子，出的牌可能被吃
+        danger += isLate ? 15 : 8;
+        // 如果自己距离听牌较远，更应避免喂牌
+        final feedMyDist =
+            myDist ??
+            _distanceToTing(List<Card>.from(player.hand), player.melds);
+        if (feedMyDist >= 5) {
+          danger += 10;
+        }
+      }
+      // 下家手牌多时更可能吃
+      if (nextPlayer.hand.length >= 16 && nextHasSameGroup) {
+        danger += 5;
+      }
+    }
+
     // 如果自己已经听牌，进攻优先，大幅减少防守惩罚
     if (player.isTing) {
       danger *= 0.1;
@@ -1050,6 +1117,8 @@ class AIStrategyHard extends AIStrategy {
       danger *= 0.15;
     } else if (actualMyDist <= 4) {
       danger *= 0.4;
+    } else if (actualMyDist <= 6) {
+      danger *= 0.6;
     }
 
     return danger;
@@ -1476,7 +1545,23 @@ class AIStrategyHard extends AIStrategy {
 
     if (player.isTing) return benefit >= 10000;
 
+    // 截胡策略：其他玩家快听牌时，更积极吃牌加速自己
+    if (_hasOpponentNearTing(state, player.id)) {
+      return benefit > -50; // 降低吃牌门槛
+    }
+
     return benefit > 0;
+  }
+
+  /// 检查是否有对手快听牌（距离<=2或已听牌）
+  bool _hasOpponentNearTing(GameState state, int myId) {
+    for (int i = 0; i < state.players.length; i++) {
+      if (i == myId) continue;
+      final other = state.players[i];
+      if (other.isTing) return true;
+      if (other.melds.length >= 3) return true;
+    }
+    return false;
   }
 
   /// 检查手牌中是否已有包含出牌的完整一句，且每个字都只有1张
@@ -1513,6 +1598,9 @@ class AIStrategyHard extends AIStrategy {
         .length;
 
     if (sameCharCount < 1) return false;
+
+    // 截胡策略：其他玩家快听牌时，更积极碰牌
+    final opponentNearTing = _hasOpponentNearTing(state, player.id);
 
     if (sameCharCount >= 2) {
       final testHand = List<Card>.from(hand);
@@ -1554,38 +1642,15 @@ class AIStrategyHard extends AIStrategy {
 
       if (distAfterDiscard < distBefore) return true;
 
-      // 距离不变时，评估碰牌后手牌质量和进张损失
+      // 距离不变时，比较碰牌前后胡数差值
+      final huScoreBefore = _evaluateHuScore(player);
       final huScoreAfter = _evaluateHuScore(testPlayer);
-      if (huScoreAfter > 0) return true;
+      if (huScoreAfter > huScoreBefore) return true;
 
-      // 评估碰牌前的进张（该字参与的其他组合价值）
-      final charInHand = hand
-          .where((c) => c.character == card.character)
-          .length;
-      if (charInHand >= 2) {
-        // 手牌有2张同字，碰掉后少了1张可用的牌
-        // 检查该字同组的其他字在手牌中是否有
-        final otherChars = _groupChars[card.sentence - 1]
-            .where((ch) => ch != card.character)
-            .toList();
-        bool hasPartner = false;
-        for (final ch in otherChars) {
-          if (hand.any((c) => c.character == ch)) {
-            hasPartner = true;
-            break;
-          }
-        }
-        // 有同组伙伴时，如果碰牌后胡数更高，仍然碰
-        if (hasPartner) {
-          final huScoreBefore = _evaluateHuScore(player);
-          if (huScoreAfter > huScoreBefore) return true;
-          // 否则保留灵活性，不碰
-          return false;
-        }
-      }
-
-      // 碰牌增加面子，更倾向碰
-      return testHand.length <= 10;
+      // 碰牌增加面子，倾向碰（放宽条件：手牌<=14即可）
+      // 截胡策略：对手快听牌时更积极碰
+      if (opponentNearTing) return true;
+      return testHand.length <= 14;
     }
 
     // sameCharCount == 1: 只有一张同字牌，碰需要用2张
@@ -1730,6 +1795,42 @@ class AIStrategyHard extends AIStrategy {
       if (huZhao >= huKan && distAfter <= distKan) return true;
       if (huZhao > huKan + 4) return true;
       if (distAfter < distKan) return true;
+
+      // 招牌后补摸一张牌的进张概率收益
+      // 招后手牌少4张补摸1张，相当于获得一次摸牌机会
+      final visibleCount =
+          _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+      final totalUnknown =
+          _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+      double drawImproveProb = 0;
+      final handGroups = <int>{};
+      for (final card in testHand) {
+        handGroups.add(card.sentence);
+      }
+      for (final ch in _allChars) {
+        final sentence = _charSentenceMap[ch];
+        if (sentence == null || !handGroups.contains(sentence)) continue;
+        final rem = _remainingCount(ch, visibleCount);
+        if (rem <= 0) continue;
+        final prob = rem / totalUnknown;
+        final position = _charPositionMap[ch] ?? -1;
+        if (position < 0) continue;
+        final simHand = List<Card>.from(testHand)
+          ..add(
+            Card(
+              id: -100,
+              character: ch,
+              sentence: sentence,
+              position: position,
+            ),
+          );
+        final simDist = _distanceToTing(simHand, [...player.melds, newMeld]);
+        if (simDist < distAfter) {
+          drawImproveProb += prob * (distAfter - simDist);
+        }
+      }
+      // 补摸改善概率较高时，更倾向招
+      if (drawImproveProb > 0.3) return true;
 
       return distAfter <= distBefore;
     }
