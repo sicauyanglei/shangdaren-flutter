@@ -1201,6 +1201,20 @@ class GameController {
     _audio.playLiuju();
 
     state.showLiujuResult = true;
+    // 清除上一局胡牌结果数据，防止流局时显示残留的"炮"/"自摸"标签
+    state.huResultWinnerName = null;
+    state.huResultWinnerIndex = null;
+    state.huResultMethod = null;
+    state.huResultHuType = null;
+    state.huResultHuCount = null;
+    state.huResultMultiplier = null;
+    state.huResultScore = null;
+    state.huResultDianpaoIndex = null;
+    state.huResultDianpaoName = null;
+    state.huResultDianpaoCard = null;
+    state.huResultZimoCard = null;
+    state.huResultScoreChanges = null;
+    state.huResultOldScores = null;
 
     for (final p in state.players) {
       p.huCount = HuCalculator.calculateTotalHu(p);

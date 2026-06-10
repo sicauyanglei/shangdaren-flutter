@@ -631,10 +631,36 @@ class GameBoard extends Component {
   void _layoutPlayer1Hand() {
     final sentenceGroups = _groupHandBySentence(_player1Hand);
 
+    // 胡牌时，将高亮卡牌所在stack排到句组最后（Y轴最下面）
+    Card? huCard;
+    if (showHuDisplay && huWinnerIndex == 1) {
+      if (huMethod == '点炮' && huDianpaoCard != null) {
+        huCard = huDianpaoCard;
+      } else if (huMethod == '自摸' && huZimoCard != null) {
+        huCard = huZimoCard;
+      }
+    }
+
     int maxPositions = 0;
+    final allStacks = <List<List<CardRender>>>[];
     for (final sg in sentenceGroups) {
-      final posCount = _groupStackByChar(sg).length;
-      if (posCount > maxPositions) maxPositions = posCount;
+      final stacks = _groupStackByChar(sg);
+      if (huCard != null) {
+        // 将高亮卡牌所在stack移到最后
+        int hlIdx = -1;
+        for (int i = 0; i < stacks.length; i++) {
+          if (stacks[i].any((cr) => cr.card?.id == huCard!.id)) {
+            hlIdx = i;
+            break;
+          }
+        }
+        if (hlIdx >= 0 && hlIdx < stacks.length - 1) {
+          final hlStack = stacks.removeAt(hlIdx);
+          stacks.add(hlStack);
+        }
+      }
+      if (stacks.length > maxPositions) maxPositions = stacks.length;
+      allStacks.add(stacks);
     }
 
     final totalW = sentenceGroups.isEmpty
@@ -649,8 +675,7 @@ class GameBoard extends Component {
     final startY = designHeight - totalH + 60;
 
     double curX = startX;
-    for (final sg in sentenceGroups) {
-      final stacks = _groupStackByChar(sg);
+    for (final stacks in allStacks) {
       double curY = startY;
       for (int i = 0; i < stacks.length; i++) {
         for (final cr in stacks[i]) {
@@ -1471,6 +1496,16 @@ class GameBoard extends Component {
         huCard = huZimoCard;
       }
       if (huCard != null) {
+        // 检查点炮/自摸卡牌是否在手牌中，如果不在则添加
+        final isInHand = _player1Hand.any(
+          (cr) => cr.card != null && cr.card!.id == huCard!.id,
+        );
+        if (!isInHand) {
+          final newCr = acquireCardRender(huCard, faceUp: true);
+          _player1Hand.add(newCr);
+          updateLayout();
+        }
+
         final huChar = huCard.character;
         final normalCards = <CardRender>[];
         final huCharCards = <CardRender>[];
@@ -1493,7 +1528,8 @@ class GameBoard extends Component {
           if (b.card!.id == huCard.id) return 1;
           return a.card!.position.compareTo(b.card!.position);
         });
-        renderOrder = [...huCharCards, ...normalCards];
+        // 胡牌字卡牌放最后绘制（Z轴最高，覆盖其他卡牌）
+        renderOrder = [...normalCards, ...huCharCards];
       }
     }
 
@@ -1700,7 +1736,6 @@ class GameBoard extends Component {
     final sentenceGroups = _groupHandBySentenceForAI(cards);
 
     // 将高亮卡牌所在的stack移到句组最后（Y位置最大，视觉上在最下面）
-    // 但渲染时先绘制高亮stack，再绘制其他stack覆盖它
     if (highlightCard != null) {
       for (final sg in sentenceGroups) {
         int highlightIdx = -1;
@@ -1717,91 +1752,114 @@ class GameBoard extends Component {
       }
     }
 
-    // Two-pass rendering: pass 0 renders highlight stack first (at bottom),
-    // pass 1 renders other stacks on top (covering highlight)
-    for (int pass = 0; pass < 2; pass++) {
-      final renderHighlight = pass == 0;
-      final labelPositions = <Offset>[];
-      String? pendingLabel;
-
-      if (leftToRight) {
-        double curX = edgeX;
-        for (final sg in sentenceGroups) {
-          double curY = startY;
+    // 渲染：先绘制非高亮stack，最后绘制高亮stack（z轴最高，覆盖其他stack）
+    Offset? highlightLabelPos;
+    if (leftToRight) {
+      double curX = edgeX;
+      for (final sg in sentenceGroups) {
+        double curY = startY;
+        // 先绘制非高亮stack
+        for (int i = 0; i < sg.length; i++) {
+          final stack = sg[i];
+          final isHighlightStack =
+              highlightCard != null &&
+              stack.any((c) => c.id == highlightCard!.id);
+          if (isHighlightStack) {
+            if (i < sg.length - 1) curY += sv;
+            continue;
+          }
+          final cardX = curX;
+          _drawHuAIHandCard(canvas, cardX, curY, stack[0]!, cw, ch);
+          if (stack.length > 1) {
+            _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
+          }
+          if (i < sg.length - 1) curY += sv;
+        }
+        // 最后绘制高亮stack
+        if (highlightCard != null) {
+          double hlY = startY;
           for (int i = 0; i < sg.length; i++) {
             final stack = sg[i];
-            final isHighlightStack =
-                highlightCard != null &&
-                stack.any((c) => c.id == highlightCard!.id);
-            if (isHighlightStack != renderHighlight) {
-              if (i < sg.length - 1) curY += sv;
-              continue;
-            }
-            final cardX = curX;
-            Card drawCard = stack[0]!;
-            if (highlightCard != null) {
+            if (stack.any((c) => c.id == highlightCard!.id)) {
+              final cardX = curX;
+              Card drawCard = stack[0]!;
               for (final c in stack) {
                 if (c.id == highlightCard.id) {
                   drawCard = c;
                   break;
                 }
               }
+              _drawHuAIHandCard(canvas, cardX, hlY, drawCard, cw, ch);
+              if (stack.length > 1) {
+                _drawHuAIHandOverlay(canvas, cardX, hlY, stack.length, cw, ch);
+              }
+              highlightLabelPos = Offset(cardX, hlY);
+              break;
             }
-            _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
-            if (stack.length > 1) {
-              _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
-            }
-            if (highlightCard != null && drawCard.id == highlightCard.id) {
-              labelPositions.add(Offset(cardX, curY));
-              pendingLabel = highlightLabel;
-            }
-            if (i < sg.length - 1) curY += sv;
+            hlY += sv;
           }
-          curX += cw + gap;
         }
-      } else {
-        double curX = edgeX;
-        for (final sg in sentenceGroups) {
-          double curY = startY;
+        curX += cw + gap;
+      }
+    } else {
+      double curX = edgeX;
+      for (final sg in sentenceGroups) {
+        double curY = startY;
+        // 先绘制非高亮stack
+        for (int i = 0; i < sg.length; i++) {
+          final stack = sg[i];
+          final isHighlightStack =
+              highlightCard != null &&
+              stack.any((c) => c.id == highlightCard!.id);
+          if (isHighlightStack) {
+            if (i < sg.length - 1) curY += sv;
+            continue;
+          }
+          final cardX = curX - cw;
+          _drawHuAIHandCard(canvas, cardX, curY, stack[0]!, cw, ch);
+          if (stack.length > 1) {
+            _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
+          }
+          if (i < sg.length - 1) curY += sv;
+        }
+        // 最后绘制高亮stack
+        if (highlightCard != null) {
+          double hlY = startY;
           for (int i = 0; i < sg.length; i++) {
             final stack = sg[i];
-            final isHighlightStack =
-                highlightCard != null &&
-                stack.any((c) => c.id == highlightCard!.id);
-            if (isHighlightStack != renderHighlight) {
-              if (i < sg.length - 1) curY += sv;
-              continue;
-            }
-            final cardX = curX - cw;
-            Card drawCard = stack[0]!;
-            if (highlightCard != null) {
+            if (stack.any((c) => c.id == highlightCard!.id)) {
+              final cardX = curX - cw;
+              Card drawCard = stack[0]!;
               for (final c in stack) {
                 if (c.id == highlightCard.id) {
                   drawCard = c;
                   break;
                 }
               }
+              _drawHuAIHandCard(canvas, cardX, hlY, drawCard, cw, ch);
+              if (stack.length > 1) {
+                _drawHuAIHandOverlay(canvas, cardX, hlY, stack.length, cw, ch);
+              }
+              highlightLabelPos = Offset(cardX, hlY);
+              break;
             }
-            _drawHuAIHandCard(canvas, cardX, curY, drawCard, cw, ch);
-            if (stack.length > 1) {
-              _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
-            }
-            if (highlightCard != null && drawCard.id == highlightCard.id) {
-              labelPositions.add(Offset(cardX, curY));
-              pendingLabel = highlightLabel;
-            }
-            if (i < sg.length - 1) curY += sv;
+            hlY += sv;
           }
-          curX -= cw + gap;
         }
+        curX -= cw + gap;
       }
+    }
 
-      // 标签绘制在所有卡牌之后，确保不被遮挡
-      if (pendingLabel != null) {
-        for (final pos in labelPositions) {
-          _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel);
-        }
-      }
+    // 标签在所有卡牌绘制完成后绘制
+    if (highlightLabelPos != null && highlightLabel != null) {
+      _drawHuCardLabel(
+        canvas,
+        highlightLabelPos!.dx,
+        highlightLabelPos!.dy,
+        cw,
+        ch,
+        highlightLabel!,
+      );
     }
   }
 

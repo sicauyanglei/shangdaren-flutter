@@ -354,9 +354,9 @@ const AIHandCardsHu: React.FC<{
           <View key={sg.sentence} style={{ position: 'absolute', left: px2vw(sgX), top: 0, width: px2vw(cw) }}>
             {sg.stacks.map((stack, stackIdx) => {
               const isHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
-              // 高亮stack用最低zIndex，其他stack用更高的zIndex覆盖它
-              const stackZIndex = isHighlight ? 1 : stackIdx + 2;
-              // 所有stack正常层叠（marginTop=sv-ch），高亮stack的zIndex最低被覆盖
+              // 高亮stack用最高zIndex，覆盖其他stack
+              const stackZIndex = isHighlight ? sg.stacks.length + 10 : stackIdx + 1;
+              // 所有stack正常层叠（marginTop=sv-ch），高亮stack的zIndex最高覆盖其他stack
               const marginTop = stackIdx === 0 ? 0 : px2vh(sv - ch);
 
               return (

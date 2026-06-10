@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>胡牌手牌层叠效果确认</title>
+<style>
+  body { background: #1a472a; color: #fff; font-family: sans-serif; padding: 20px; }
+  h2 { margin: 10px 0; font-size: 16px; }
+  .container { display: flex; gap: 50px; margin: 20px 0; flex-wrap: wrap; }
+  .scene { text-align: center; }
+  .hand-area { position: relative; }
+  
+  .card {
+    position: absolute;
+    left: 0;
+    width: 60px;
+    height: 100px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: bold;
+    border: 1px solid rgba(0,0,0,0.3);
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.4);
+  }
+  .card-red { color: #cc0000; background: linear-gradient(135deg, #fff8f0, #f5e6d0); }
+  .card-green { color: #006600; background: linear-gradient(135deg, #fff8f0, #f5e6d0); }
+  .card-black { color: #222; background: linear-gradient(135deg, #fff8f0, #f5e6d0); }
+  
+  .highlight {
+    background: linear-gradient(135deg, #fff8f0, #ffe0b0) !important;
+    border: 2px solid #ff6600 !important;
+  }
+  
+  .label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 8px #ff0000, 0 0 16px #ff0000;
+    white-space: pre-line;
+    text-align: center;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+
+  .desc { margin-top: 10px; font-size: 13px; color: #ccc; max-width: 220px; }
+  .yl { color: #4fc3f7; font-weight: bold; }
+  .zl { color: #ff6600; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>胡牌手牌层叠效果确认</h1>
+<p style="color:#aaa">Y轴：从上到下排列 | Z轴：后绘制的覆盖先绘制的</p>
+
+<div class="container">
+  <!-- 正常显示 -->
+  <div class="scene">
+    <h2>正常显示</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-red" style="top: 0; z-index: 1;">上</div>
+      <div class="card card-red" style="top: 40px; z-index: 2;">大</div>
+      <div class="card card-black" style="top: 80px; z-index: 3;">人</div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 上→大→人</span><br>
+      <span class="zl">Z轴: 上<大<人</span><br>
+      人覆盖大，大覆盖上
+    </div>
+  </div>
+
+  <!-- 胡牌"上" -->
+  <div class="scene">
+    <h2>胡牌"上"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <!-- 先绘制非高亮stack -->
+      <div class="card card-red" style="top: 0; z-index: 1;">大</div>
+      <div class="card card-black" style="top: 40px; z-index: 2;">人</div>
+      <!-- 最后绘制高亮stack -->
+      <div class="card card-red highlight" style="top: 80px; z-index: 10;">
+        上
+        <div class="label">炮</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 大→人→上</span><br>
+      <span class="zl">Z轴: 大<人<上</span><br>
+      上覆盖人和大的下部<br>"炮"标签在上的中间
+    </div>
+  </div>
+
+  <!-- 胡牌"大" -->
+  <div class="scene">
+    <h2>胡牌"大"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-red" style="top: 0; z-index: 1;">上</div>
+      <div class="card card-black" style="top: 40px; z-index: 2;">人</div>
+      <div class="card card-red highlight" style="top: 80px; z-index: 10;">
+        大
+        <div class="label">自<br>摸</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 上→人→大</span><br>
+      <span class="zl">Z轴: 上<人<大</span><br>
+      大覆盖人和上的下部<br>"自摸"标签在大的中间
+    </div>
+  </div>
+
+  <!-- 胡牌"人" -->
+  <div class="scene">
+    <h2>胡牌"人"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-red" style="top: 0; z-index: 1;">上</div>
+      <div class="card card-red" style="top: 40px; z-index: 2;">大</div>
+      <div class="card card-black highlight" style="top: 80px; z-index: 10;">
+        人
+        <div class="label">炮</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 上→大→人</span><br>
+      <span class="zl">Z轴: 上<大<人</span><br>
+      人覆盖大和上的下部<br>"炮"标签在人的中间
+    </div>
+  </div>
+</div>
+
+<hr style="margin: 30px 0; border-color: #3a6a4a;">
+
+<h2>更多示例</h2>
+<div class="container">
+  <!-- 八九子 胡八 -->
+  <div class="scene">
+    <h2>八九子 胡"八"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-black" style="top: 0; z-index: 1;">九</div>
+      <div class="card card-black" style="top: 40px; z-index: 2;">子</div>
+      <div class="card card-green highlight" style="top: 80px; z-index: 10;">
+        八
+        <div class="label">自<br>摸</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 九→子→八</span><br>
+      <span class="zl">Z轴: 九<子<八</span>
+    </div>
+  </div>
+
+  <!-- 佳作亡 胡作 -->
+  <div class="scene">
+    <h2>佳作亡 胡"作"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-green" style="top: 0; z-index: 1;">佳</div>
+      <div class="card card-black" style="top: 40px; z-index: 2;">亡</div>
+      <div class="card card-green highlight" style="top: 80px; z-index: 10;">
+        作
+        <div class="label">炮</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 佳→亡→作</span><br>
+      <span class="zl">Z轴: 佳<亡<作</span>
+    </div>
+  </div>
+
+  <!-- 七十土 胡十 -->
+  <div class="scene">
+    <h2>七十土 胡"十"</h2>
+    <div class="hand-area" style="height: 180px; width: 60px;">
+      <div class="card card-green" style="top: 0; z-index: 1;">七</div>
+      <div class="card card-black" style="top: 40px; z-index: 2;">土</div>
+      <div class="card card-black highlight" style="top: 80px; z-index: 10;">
+        十
+        <div class="label">炮</div>
+      </div>
+    </div>
+    <div class="desc">
+      <span class="yl">Y轴: 七→土→十</span><br>
+      <span class="zl">Z轴: 七<土<十</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
