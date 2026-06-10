@@ -1524,11 +1524,11 @@ class GameBoard extends Component {
           return a.card!.position.compareTo(b.card!.position);
         });
         huCharCards.sort((a, b) {
-          if (a.card!.id == huCard!.id) return -1;
-          if (b.card!.id == huCard.id) return 1;
+          if (a.card!.id == huCard!.id) return 1;
+          if (b.card!.id == huCard.id) return -1;
           return a.card!.position.compareTo(b.card!.position);
         });
-        // 胡牌字卡牌放最后绘制（Z轴最高，覆盖其他卡牌）
+        // 胡牌字卡牌放最后绘制（Z轴最高，覆盖其他卡牌），胡牌卡牌在同字牌中最后绘制
         renderOrder = [...normalCards, ...huCharCards];
       }
     }
