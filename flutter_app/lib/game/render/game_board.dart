@@ -1489,11 +1489,11 @@ class GameBoard extends Component {
           return a.card!.position.compareTo(b.card!.position);
         });
         huCharCards.sort((a, b) {
-          if (a.card!.id == huCard!.id) return 1;
-          if (b.card!.id == huCard.id) return -1;
+          if (a.card!.id == huCard!.id) return -1;
+          if (b.card!.id == huCard.id) return 1;
           return a.card!.position.compareTo(b.card!.position);
         });
-        renderOrder = [...normalCards, ...huCharCards];
+        renderOrder = [...huCharCards, ...normalCards];
       }
     }
 
@@ -1699,9 +1699,28 @@ class GameBoard extends Component {
 
     final sentenceGroups = _groupHandBySentenceForAI(cards);
 
-    // Two-pass rendering: pass 0 renders normal cards, pass 1 renders huChar cards on top
+    // 将高亮卡牌所在的stack移到句组最后（Y位置最大，视觉上在最下面）
+    // 但渲染时先绘制高亮stack，再绘制其他stack覆盖它
+    if (highlightCard != null) {
+      for (final sg in sentenceGroups) {
+        int highlightIdx = -1;
+        for (int i = 0; i < sg.length; i++) {
+          if (sg[i].any((c) => c.id == highlightCard!.id)) {
+            highlightIdx = i;
+            break;
+          }
+        }
+        if (highlightIdx >= 0 && highlightIdx < sg.length - 1) {
+          final highlightStack = sg.removeAt(highlightIdx);
+          sg.add(highlightStack);
+        }
+      }
+    }
+
+    // Two-pass rendering: pass 0 renders highlight stack first (at bottom),
+    // pass 1 renders other stacks on top (covering highlight)
     for (int pass = 0; pass < 2; pass++) {
-      final renderHuChar = pass == 1;
+      final renderHighlight = pass == 0;
       final labelPositions = <Offset>[];
       String? pendingLabel;
 
@@ -1711,9 +1730,10 @@ class GameBoard extends Component {
           double curY = startY;
           for (int i = 0; i < sg.length; i++) {
             final stack = sg[i];
-            final isHuCharStack =
-                huChar != null && stack.any((c) => c.character == huChar);
-            if (isHuCharStack != renderHuChar) {
+            final isHighlightStack =
+                highlightCard != null &&
+                stack.any((c) => c.id == highlightCard!.id);
+            if (isHighlightStack != renderHighlight) {
               if (i < sg.length - 1) curY += sv;
               continue;
             }
@@ -1745,9 +1765,10 @@ class GameBoard extends Component {
           double curY = startY;
           for (int i = 0; i < sg.length; i++) {
             final stack = sg[i];
-            final isHuCharStack =
-                huChar != null && stack.any((c) => c.character == huChar);
-            if (isHuCharStack != renderHuChar) {
+            final isHighlightStack =
+                highlightCard != null &&
+                stack.any((c) => c.id == highlightCard!.id);
+            if (isHighlightStack != renderHighlight) {
               if (i < sg.length - 1) curY += sv;
               continue;
             }
@@ -1775,6 +1796,7 @@ class GameBoard extends Component {
         }
       }
 
+      // 标签绘制在所有卡牌之后，确保不被遮挡
       if (pendingLabel != null) {
         for (final pos in labelPositions) {
           _drawHuCardLabel(canvas, pos.dx, pos.dy, cw, ch, pendingLabel);
@@ -2003,16 +2025,20 @@ class GameBoard extends Component {
   ) {
     canvas.save();
 
-    final fontSize = 16.0;
+    final fontSize = 20.0;
     final labelColor = const Color(0xFFFFFFFF);
+
+    // 纵向显示：每个字符换行
+    final displayText = label.split('').join('\n');
 
     final tp = TextPainter(
       text: TextSpan(
-        text: label,
+        text: displayText,
         style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           color: labelColor,
+          height: 1.1,
           shadows: const [
             Shadow(color: Color(0xFFFF0000), blurRadius: 10),
             Shadow(color: Color(0xFFFF0000), blurRadius: 20),

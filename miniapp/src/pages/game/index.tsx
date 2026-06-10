@@ -324,6 +324,18 @@ const AIHandCardsHu: React.FC<{
 
   // 按句分组 (匹配Flame _groupHandBySentenceForAI)
   const sentenceGroups = groupHandBySentence(cards);
+
+  // 将高亮卡牌所在的stack移到句组最后（Y位置最大，视觉上在最下面）
+  if (highlightCardId != null) {
+    for (const sg of sentenceGroups) {
+      const highlightIdx = sg.stacks.findIndex(s => s.cards.some(c => c.id === highlightCardId));
+      if (highlightIdx >= 0 && highlightIdx < sg.stacks.length - 1) {
+        const highlightStack = sg.stacks.splice(highlightIdx, 1)[0];
+        sg.stacks.push(highlightStack);
+      }
+    }
+  }
+
   const cw = HU_AI_HAND_CARD_W;
   const ch = HU_AI_HAND_CARD_H;
   const sv = HU_AI_HAND_STACK_VISIBLE;
@@ -342,11 +354,15 @@ const AIHandCardsHu: React.FC<{
           <View key={sg.sentence} style={{ position: 'absolute', left: px2vw(sgX), top: 0, width: px2vw(cw) }}>
             {sg.stacks.map((stack, stackIdx) => {
               const isHighlight = highlightCardId != null && stack.cards.some(c => c.id === highlightCardId);
+              // 高亮stack用最低zIndex，其他stack用更高的zIndex覆盖它
+              const stackZIndex = isHighlight ? 1 : stackIdx + 2;
+              // 所有stack正常层叠（marginTop=sv-ch），高亮stack的zIndex最低被覆盖
+              const marginTop = stackIdx === 0 ? 0 : px2vh(sv - ch);
 
               return (
                 <View
                   key={stack.char}
-                  style={{ position: 'relative', height: px2vh(ch), marginTop: stackIdx > 0 ? px2vh(sv - ch) : 0 }}
+                  style={{ position: 'relative', height: px2vh(ch), marginTop, zIndex: stackZIndex }}
                 >
                   {stack.cards.map((card, cardIdx) => {
                     const colorClass = getCharColorClass(card.char);
@@ -361,7 +377,7 @@ const AIHandCardsHu: React.FC<{
                           left: 0,
                           width: px2vw(cw),
                           height: px2vh(ch),
-                          zIndex: isCardHighlight ? 99 : cardIdx + 1,
+                          zIndex: cardIdx + 1,
                         }}
                       >
                         <Text className={`${styles.huAiHandCardChar} ${styles[`huAiHandCardChar${colorClass}`]}`}>
@@ -369,7 +385,7 @@ const AIHandCardsHu: React.FC<{
                         </Text>
                         {/* 点炮/自摸标签 */}
                         {isCardHighlight && highlightLabel && (
-                          <Text className={styles.huCardLabel}>
+                          <Text className={styles.huCardLabel} style={{ zIndex: 100 }}>
                             {highlightLabel.split('').join('\n')}
                           </Text>
                         )}
@@ -591,13 +607,15 @@ const HumanHandCards: React.FC<{
                 >
                   {stack.cards.map((card, cardIdx) => {
                     const isCardHighlight = card.id === highlightCardId;
+                    // 高亮卡牌zIndex最低，被其他同字牌覆盖
+                    const cardZIndex = isCardHighlight ? 0 : cardIdx + 1;
                     return (
                       <View
                         key={card.id}
                         className={`${styles.handCard} ${isSelected && card.id === selectedCardId ? styles.handCardSelected : ''}`}
                         style={{
                           top: px2vh(topOffset),
-                          zIndex: isCardHighlight ? 99 : cardIdx + 1,
+                          zIndex: cardZIndex,
                         }}
                       >
                         <Text className={`${styles.handCardChar} ${styles[`handCardChar${getCharColorClass(card.char)}`]}`}>
@@ -605,7 +623,7 @@ const HumanHandCards: React.FC<{
                         </Text>
                         {/* 点炮/自摸标签 */}
                         {isCardHighlight && highlightLabel && (
-                          <Text className={styles.huCardLabelHuman}>
+                          <Text className={styles.huCardLabelHuman} style={{ zIndex: 100 }}>
                             {highlightLabel.split('').join('\n')}
                           </Text>
                         )}

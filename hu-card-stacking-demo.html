@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>层叠效果 - 点炮/自摸卡牌在最下面</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+h1 { text-align: center; margin-bottom: 30px; font-size: 24px; color: #f0c040; }
+h2 { font-size: 16px; color: #8cf; margin-bottom: 8px; }
+.section { background: #252540; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+.section.current { border: 2px solid #f0c040; }
+.desc { font-size: 13px; color: #999; margin-bottom: 12px; line-height: 1.6; }
+.note { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; }
+.player-label { display: inline-block; background: #335; color: #8cf; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-bottom: 8px; }
+
+.card-base {
+  width: 43px; height: 179px; border-radius: 3px;
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(0,0,0,0.25);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+.card-char { font-size: 24px; font-weight: 900; line-height: 1; }
+.card-char.red { color: #e74c3c; text-shadow: 0 0 6px rgba(231,76,60,0.5); }
+.card-char.green { color: #27ae60; text-shadow: 0 0 6px rgba(39,174,96,0.5); }
+.card-char.black { color: #2c3e50; }
+
+.hu-label {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 16px; font-weight: bold; color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10; pointer-events: none;
+}
+
+.count-badge {
+  position: absolute; top: 2px; right: 2px; min-width: 20px; height: 20px;
+  border-radius: 50%; background: #ff4444;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: bold; color: #fff; z-index: 5;
+}
+
+.hand-container {
+  display: flex; align-items: flex-end; gap: 0; min-height: 220px; padding: 10px;
+  background: rgba(0,0,0,0.3); border-radius: 8px;
+}
+.sentence-group { position: relative; }
+
+/* 人类玩家 */
+.human-card-base {
+  width: 60px; height: 224px; border-radius: 4px;
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(0,0,0,0.25);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+.human-card-char { font-size: 36px; font-weight: 900; line-height: 1; }
+.human-sentence-group { position: relative; width: 60px; }
+.human-hand-container {
+  display: flex; align-items: flex-end; gap: 2px; min-height: 280px; padding: 10px;
+  background: rgba(0,0,0,0.3); border-radius: 8px;
+}
+.hu-label-human {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 16px; font-weight: bold; color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10; pointer-events: none;
+}
+.highlight-border {
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+</style>
+</head>
+<body>
+
+<h1>层叠效果 - 点炮/自摸卡牌在最下面</h1>
+
+<!-- ========== AI玩家 ========== -->
+
+<div class="section current">
+  <h2>当前效果: 高亮牌在索引0（最上面），z-index最低被遮挡</h2>
+  <div class="desc">
+    当前AI玩家：高亮牌移到sortedCards索引0，z-index=1（最低），被同组其他牌遮挡。
+  </div>
+  <span class="player-label">AI玩家 - 上大人组（大是炮牌）</span>
+  <div class="hand-container">
+    <div class="sentence-group" style="width:43px;">
+      <!-- 上(2张) -->
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <!-- 大(炮牌) z-index最低 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">大</span>
+          <span class="hu-label">炮</span>
+        </div>
+      </div>
+      <!-- 人 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>方案A: 高亮牌在最下面，z-index最高</h2>
+  <div class="desc">
+    高亮牌排到sortedCards最后（最下面），z-index最高，在层叠最前面显示。<br>
+    同字多张时，高亮牌在最下面位置，不被其他牌遮挡。
+  </div>
+  <span class="player-label">AI玩家 - 上大人组（大是炮牌）</span>
+  <div class="hand-container">
+    <div class="sentence-group" style="width:43px;">
+      <!-- 上(2张) -->
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <!-- 人 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+      <!-- 大(炮牌) 在最下面，z-index最高 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="card-char red">大</span>
+          <span class="hu-label">炮</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <span class="player-label" style="margin-top:12px;">AI玩家 - 福禄寿组（福3张，福是自摸牌）</span>
+  <div class="hand-container">
+    <div class="sentence-group" style="width:43px;">
+      <!-- 福(2张，非高亮) -->
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <!-- 禄 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">禄</span>
+        </div>
+      </div>
+      <!-- 寿 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">寿</span>
+        </div>
+      </div>
+      <!-- 福(自摸) 在最下面，z-index最高 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="card-char red">福</span>
+          <span class="hu-label">自摸</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">高亮牌在最下面位置，z-index最高，标签完全可见</div>
+</div>
+
+<div class="section">
+  <h2>方案B: 高亮牌在最下面 + 红色边框</h2>
+  <div class="desc">
+    同方案A，但高亮牌额外加红色发光边框，更醒目。
+  </div>
+  <span class="player-label">AI玩家 - 福禄寿组（福3张，福是自摸牌）</span>
+  <div class="hand-container">
+    <div class="sentence-group" style="width:43px;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">禄</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">寿</span>
+        </div>
+      </div>
+      <!-- 福(自摸) 最下面 + 红色边框 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base highlight-border" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="card-char red">福</span>
+          <span class="hu-label">自摸</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">红色边框使高亮牌更醒目</div>
+</div>
+
+<div class="section">
+  <h2>方案C: 高亮牌在最下面 + 下移露出</h2>
+  <div class="desc">
+    高亮牌在最下面位置，额外向下偏移一点，确保不被上方牌的层叠部分覆盖。
+  </div>
+  <span class="player-label">AI玩家 - 福禄寿组（福3张，福是自摸牌）</span>
+  <div class="hand-container">
+    <div class="sentence-group" style="width:43px;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">福</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">禄</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">寿</span>
+        </div>
+      </div>
+      <!-- 福(自摸) 最下面 + 下移20px露出 -->
+      <div style="position:relative; height:179px; margin-top:-124px;">
+        <div class="card-base highlight-border" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="card-char red">福</span>
+          <span class="hu-label">自摸</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">下移露出，完全不被遮挡，但会占用更多垂直空间</div>
+</div>
+
+<div style="height:1px; background:#444; margin:20px 0;"></div>
+
+<h2 style="color:#f0c040; margin-top:20px;">人类玩家手牌</h2>
+
+<div class="section current">
+  <h2>当前效果: 高亮牌在最后渲染（z-index最高）</h2>
+  <span class="player-label">人类玩家 - 上大人组（大是炮牌）</span>
+  <div class="human-hand-container">
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">上</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char red">大</span>
+          <span class="hu-label-human">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char red">人</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">人类玩家牌间距大(68px)，标签基本可见，但和字重叠</div>
+</div>
+
+<div class="section">
+  <h2>方案A: 高亮牌在最下面，z-index最高</h2>
+  <span class="player-label">人类玩家 - 上大人组（大是炮牌）</span>
+  <div class="human-hand-container">
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">上</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char red">人</span>
+        </div>
+      </div>
+      <!-- 大(炮牌) 在最下面 -->
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="human-card-char red">大</span>
+          <span class="hu-label-human">炮</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">高亮牌在最下面，z-index最高，标签可见</div>
+</div>
+
+<div class="section">
+  <h2>方案B: 高亮牌在最下面 + 红色边框</h2>
+  <span class="player-label">人类玩家 - 福禄寿组（福2张，福是自摸牌）</span>
+  <div class="human-hand-container">
+    <div class="human-sentence-group">
+      <!-- 福(1张，非高亮) -->
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">福</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char red">禄</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char red">寿</span>
+        </div>
+      </div>
+      <!-- 福(自摸) 最下面 + 红色边框 -->
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base highlight-border" style="position:absolute; top:0; left:0; z-index:99;">
+          <span class="human-card-char red">福</span>
+          <span class="hu-label-human">自摸</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">红色边框醒目，标签清晰可见</div>
+</div>
+
+</body>
+</html>

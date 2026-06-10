@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>胡牌手牌 - 点炮/自摸卡牌层叠显示效果对比</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+
+h1 { text-align: center; margin-bottom: 30px; font-size: 24px; color: #f0c040; }
+h2 { font-size: 18px; color: #8cf; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 6px; }
+h3 { font-size: 14px; color: #aaa; margin-bottom: 8px; }
+
+.section { background: #252540; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+.section.current { border: 2px solid #f0c040; }
+.section.current h2::before { content: '当前效果 '; color: #f0c040; }
+
+.desc { font-size: 13px; color: #999; margin-bottom: 12px; line-height: 1.6; }
+
+/* 牌的基础样式 */
+.card-base {
+  width: 43px;
+  height: 179px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+.card-char {
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+.card-char.red { color: #e74c3c; text-shadow: 0 0 6px rgba(231,76,60,0.5); }
+.card-char.green { color: #27ae60; text-shadow: 0 0 6px rgba(39,174,96,0.5); }
+.card-char.black { color: #2c3e50; }
+
+/* 当前效果：标签在卡牌正中央 */
+.hu-label-current {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 数量角标 */
+.count-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  z-index: 5;
+}
+
+/* 手牌容器 */
+.hand-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 200px;
+  padding: 10px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+}
+
+.sentence-group {
+  position: relative;
+  width: 43px;
+}
+
+/* 层叠：竖向偏移35px */
+.stack-offset { margin-top: -144px; }
+.stack-offset:first-child { margin-top: 0; }
+
+/* ============ 方案A: 标签在卡牌顶部 ============ */
+.hu-label-top {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ============ 方案B: 标签在卡牌底部 ============ */
+.hu-label-bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ============ 方案C: 高亮卡牌右偏移不层叠 + 标签居中 ============ */
+.hu-label-offset {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.card-highlight-offset {
+  margin-left: 20px;
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+/* ============ 方案D: 高亮卡牌上移 + 标签居中 ============ */
+.hu-label-up {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.card-highlight-up {
+  margin-top: -20px;
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+/* ============ 方案E: 高亮边框 + 角标标签 ============ */
+.card-highlight-border {
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+.hu-label-corner {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: rgba(255,0,0,0.85);
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 4px;
+  border-radius: 2px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 人类玩家手牌样式 */
+.human-hand-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-height: 260px;
+  padding: 10px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+}
+
+.human-card-base {
+  width: 60px;
+  height: 224px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #2a1a0a, #1a0a00);
+  border: 1px solid rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+.human-card-char {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.human-stack-offset { margin-top: -156px; }
+.human-stack-offset:first-child { margin-top: 0; }
+
+.human-sentence-group {
+  position: relative;
+  width: 60px;
+}
+
+/* 人类玩家标签 - 当前效果 */
+.hu-label-human-current {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 人类玩家标签 - 方案D: 上移 */
+.human-card-highlight-up {
+  margin-top: -28px;
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+.hu-label-human-up {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 人类玩家标签 - 方案E: 边框+角标 */
+.human-card-highlight-border {
+  border: 2px solid #ff4444;
+  box-shadow: 0 0 12px rgba(255,0,0,0.6), 2px 2px 4px rgba(0,0,0,0.4);
+}
+
+.hu-label-human-corner {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(255,0,0,0.85);
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 3px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.divider { height: 1px; background: #444; margin: 16px 0; }
+
+.player-label {
+  display: inline-block;
+  background: #335;
+  color: #8cf;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.note { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>胡牌手牌 - 点炮/自摸卡牌层叠显示效果对比</h1>
+
+<!-- ==================== AI玩家手牌 ==================== -->
+<div class="section current">
+  <h2>方案0（当前效果）: 标签在卡牌正中央，层叠覆盖</h2>
+  <div class="desc">
+    当前实现：AI玩家高亮卡牌移到组内索引0（最左边），同字牌竖向层叠（偏移35px），"炮"/"自摸"标签显示在卡牌正中央。<br>
+    问题：标签和字重叠，层叠时标签可能被其他牌遮挡。
+  </div>
+  <span class="player-label">AI玩家 (如玩家1)</span>
+  <div class="hand-container">
+    <!-- 句1: 上大人 - 上有2张，大1张(炮) -->
+    <div class="sentence-group">
+      <!-- 上(2张) - 层叠 -->
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <!-- 大(1张) - 炮牌，移到索引0 -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-current">炮</span>
+        </div>
+      </div>
+      <!-- 人(1张) -->
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <!-- 句2: 丘乙己 -->
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <!-- 句3: 化三千 - 化2张 -->
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">标签"炮"和卡牌字"大"重叠，层叠时可能被遮挡</div>
+</div>
+
+<!-- ==================== 方案A ==================== -->
+<div class="section">
+  <h2>方案A: 标签在卡牌顶部</h2>
+  <div class="desc">
+    "炮"/"自摸"标签移到卡牌顶部区域，避免和字重叠。高亮卡牌仍在层叠组内索引0位置。
+  </div>
+  <span class="player-label">AI玩家</span>
+  <div class="hand-container">
+    <div class="sentence-group">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-top">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">标签在顶部，不遮挡字，但层叠时上方牌可能遮挡标签</div>
+</div>
+
+<!-- ==================== 方案B ==================== -->
+<div class="section">
+  <h2>方案B: 标签在卡牌底部</h2>
+  <div class="desc">
+    "炮"/"自摸"标签移到卡牌底部区域。高亮卡牌仍在层叠组内索引0位置。
+  </div>
+  <span class="player-label">AI玩家</span>
+  <div class="hand-container">
+    <div class="sentence-group">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-bottom">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">标签在底部，不遮挡字，层叠时下方牌不会遮挡底部标签</div>
+</div>
+
+<!-- ==================== 方案C ==================== -->
+<div class="section">
+  <h2>方案C: 高亮卡牌右偏移 + 标签居中</h2>
+  <div class="desc">
+    高亮卡牌从层叠组中向右偏移出来，不再被其他牌遮挡，标签居中显示。红色边框高亮。
+  </div>
+  <span class="player-label">AI玩家</span>
+  <div class="hand-container">
+    <div class="sentence-group">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base card-highlight-offset" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-offset">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">高亮牌向右偏移，完全可见，但会占用更多水平空间</div>
+</div>
+
+<!-- ==================== 方案D ==================== -->
+<div class="section">
+  <h2>方案D: 高亮卡牌上移 + 标签居中</h2>
+  <div class="desc">
+    高亮卡牌向上偏移，从层叠中露出，标签居中显示。红色边框高亮。这是最直观的"突出显示"效果。
+  </div>
+  <span class="player-label">AI玩家</span>
+  <div class="hand-container">
+    <div class="sentence-group">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-164px;">
+        <div class="card-base card-highlight-up" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-up">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">高亮牌上移露出，标签和字都清晰可见，不增加水平空间</div>
+</div>
+
+<!-- ==================== 方案E ==================== -->
+<div class="section">
+  <h2>方案E: 红色边框高亮 + 左上角标签</h2>
+  <div class="desc">
+    高亮卡牌加红色发光边框，"炮"/"自摸"标签改为左上角小角标（类似数量角标风格）。高亮卡牌仍在层叠组内索引0位置。
+  </div>
+  <span class="player-label">AI玩家</span>
+  <div class="hand-container">
+    <div class="sentence-group">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char red">上</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base card-highlight-border" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">大</span>
+          <span class="hu-label-corner">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="sentence-group" style="margin-left:0;">
+      <div style="position:relative; height:179px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="card-base" style="position:absolute; top:35px; left:0; z-index:2;">
+          <span class="card-char green">化</span>
+        </div>
+        <div class="count-badge">2</div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:179px; margin-top:-144px;">
+        <div class="card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">红色边框醒目，角标不遮挡字，但角标较小可能不够醒目</div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ==================== 人类玩家手牌效果 ==================== -->
+<h2 style="color:#f0c040; margin-top:20px;">人类玩家手牌效果对比</h2>
+
+<div class="section current">
+  <h3>方案0（当前效果）: 标签在卡牌正中央</h3>
+  <span class="player-label">人类玩家</span>
+  <div class="human-hand-container">
+    <!-- 句1: 上大人 - 大是炮牌 -->
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">上</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char red">大</span>
+          <span class="hu-label-human-current">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <!-- 句2: 丘乙己 -->
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <!-- 句3: 化三千 -->
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char green">化</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">标签"炮"和卡牌字"大"重叠</div>
+</div>
+
+<div class="section">
+  <h3>方案D: 高亮卡牌上移 + 标签居中</h3>
+  <span class="player-label">人类玩家</span>
+  <div class="human-hand-container">
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">上</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-128px;">
+        <div class="human-card-base human-card-highlight-up" style="position:absolute; top:0; left:0; z-index:4;">
+          <span class="human-card-char red">大</span>
+          <span class="hu-label-human-up">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char green">化</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">高亮牌上移露出，标签和字都清晰可见</div>
+</div>
+
+<div class="section">
+  <h3>方案E: 红色边框高亮 + 左上角标签</h3>
+  <span class="player-label">人类玩家</span>
+  <div class="human-hand-container">
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char red">上</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base human-card-highlight-border" style="position:absolute; top:0; left:0; z-index:4;">
+          <span class="human-card-char red">大</span>
+          <span class="hu-label-human-corner">炮</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char red">人</span>
+        </div>
+      </div>
+    </div>
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char black">丘</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char black">乙</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char black">己</span>
+        </div>
+      </div>
+    </div>
+    <div class="human-sentence-group">
+      <div style="position:relative; height:224px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:1;">
+          <span class="human-card-char green">化</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:2;">
+          <span class="human-card-char green">三</span>
+        </div>
+      </div>
+      <div style="position:relative; height:224px; margin-top:-156px;">
+        <div class="human-card-base" style="position:absolute; top:0; left:0; z-index:3;">
+          <span class="human-card-char green">千</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">红色边框醒目，角标不遮挡字</div>
+</div>
+
+</body>
+</html>
