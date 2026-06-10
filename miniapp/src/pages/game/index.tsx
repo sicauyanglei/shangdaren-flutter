@@ -367,6 +367,8 @@ const AIHandCardsHu: React.FC<{
                   {stack.cards.map((card, cardIdx) => {
                     const colorClass = getCharColorClass(card.char);
                     const isCardHighlight = card.id === highlightCardId;
+                    // 高亮卡牌zIndex最高，确保"炮"/"自摸"标签显示在最上面
+                    const cardZIndex = isCardHighlight ? stack.cards.length + 1 : cardIdx + 1;
                     return (
                       <View
                         key={card.id}
@@ -377,7 +379,7 @@ const AIHandCardsHu: React.FC<{
                           left: 0,
                           width: px2vw(cw),
                           height: px2vh(ch),
-                          zIndex: cardIdx + 1,
+                          zIndex: cardZIndex,
                         }}
                       >
                         <Text className={`${styles.huAiHandCardChar} ${styles[`huAiHandCardChar${colorClass}`]}`}>
@@ -607,8 +609,8 @@ const HumanHandCards: React.FC<{
                 >
                   {stack.cards.map((card, cardIdx) => {
                     const isCardHighlight = card.id === highlightCardId;
-                    // 高亮卡牌zIndex最低，被其他同字牌覆盖
-                    const cardZIndex = isCardHighlight ? 0 : cardIdx + 1;
+                    // 高亮卡牌zIndex最高，确保"炮"/"自摸"标签显示在最上面
+                    const cardZIndex = isCardHighlight ? stack.cards.length + 1 : cardIdx + 1;
                     return (
                       <View
                         key={card.id}
