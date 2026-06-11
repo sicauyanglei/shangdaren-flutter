@@ -1528,7 +1528,7 @@ class GameBoard extends Component {
           if (b.card!.id == huCard.id) return -1;
           return a.card!.position.compareTo(b.card!.position);
         });
-        // 胡牌字卡牌放最后绘制（Z轴最高，覆盖其他卡牌），胡牌卡牌在同字牌中最后绘制
+        // 胡牌字卡牌放最后绘制（Z轴最高，覆盖其他卡牌）
         renderOrder = [...normalCards, ...huCharCards];
       }
     }
@@ -1769,7 +1769,7 @@ class GameBoard extends Component {
             continue;
           }
           final cardX = curX;
-          _drawHuAIHandCard(canvas, cardX, curY, stack[0]!, cw, ch);
+          _drawHuAIHandCard(canvas, cardX, curY, stack[0], cw, ch);
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
           }
@@ -1782,7 +1782,7 @@ class GameBoard extends Component {
             final stack = sg[i];
             if (stack.any((c) => c.id == highlightCard!.id)) {
               final cardX = curX;
-              Card drawCard = stack[0]!;
+              Card drawCard = stack[0];
               for (final c in stack) {
                 if (c.id == highlightCard.id) {
                   drawCard = c;
@@ -1816,7 +1816,7 @@ class GameBoard extends Component {
             continue;
           }
           final cardX = curX - cw;
-          _drawHuAIHandCard(canvas, cardX, curY, stack[0]!, cw, ch);
+          _drawHuAIHandCard(canvas, cardX, curY, stack[0], cw, ch);
           if (stack.length > 1) {
             _drawHuAIHandOverlay(canvas, cardX, curY, stack.length, cw, ch);
           }
@@ -1829,7 +1829,7 @@ class GameBoard extends Component {
             final stack = sg[i];
             if (stack.any((c) => c.id == highlightCard!.id)) {
               final cardX = curX - cw;
-              Card drawCard = stack[0]!;
+              Card drawCard = stack[0];
               for (final c in stack) {
                 if (c.id == highlightCard.id) {
                   drawCard = c;
@@ -1854,11 +1854,11 @@ class GameBoard extends Component {
     if (highlightLabelPos != null && highlightLabel != null) {
       _drawHuCardLabel(
         canvas,
-        highlightLabelPos!.dx,
-        highlightLabelPos!.dy,
+        highlightLabelPos.dx,
+        highlightLabelPos.dy,
         cw,
         ch,
-        highlightLabel!,
+        highlightLabel,
       );
     }
   }
@@ -2083,7 +2083,8 @@ class GameBoard extends Component {
   ) {
     canvas.save();
 
-    final fontSize = 20.0;
+    // 根据卡牌宽度动态计算字体大小（约50%）
+    final fontSize = cw * 0.5;
     final labelColor = const Color(0xFFFFFFFF);
 
     // 纵向显示：每个字符换行
