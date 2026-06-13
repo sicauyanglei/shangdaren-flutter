@@ -972,7 +972,7 @@ class _RoundInfoState extends State<_RoundInfo> {
     }
 
     return GestureDetector(
-      onTap: () {
+      onDoubleTap: () {
         if (widget.roundNumber >= 2 && widget.roundHistory.isNotEmpty) {
           _showRoundHistory(context);
         }

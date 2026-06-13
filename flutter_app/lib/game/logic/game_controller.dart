@@ -537,6 +537,7 @@ class GameController {
     Player player, {
     Card? drawnCard,
     bool skipZimoCheck = false,
+    bool skipZhaoCheck = false,
   }) {
     if (player.hand.isEmpty) {
       _nextTurn();
@@ -548,7 +549,7 @@ class GameController {
       return;
     }
 
-    if (!skipZimoCheck && _canZhaoAfterDraw(player)) {
+    if (!skipZhaoCheck && _canZhaoAfterDraw(player)) {
       final candidates = _getZhaoCandidates(player);
       bool shouldZhao = true;
       for (final ch in candidates) {
@@ -1090,6 +1091,14 @@ class GameController {
     if (state.waitingForResponse) {
       respondPass();
     } else if (state.isMyTurn) {
+      // 超时时先清除招等操作状态，再出牌
+      if (state.canZhao || state.canChi || state.canPeng || state.canHu) {
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+      }
+
       final player = state.players[1];
 
       if (_lastDrawnCard != null) {
@@ -1704,6 +1713,12 @@ class GameController {
       if (player.type == PlayerType.human) {
         state.isMyTurn = true;
         state.isDrawing = false;
+        if (_canZhaoAfterDraw(player)) {
+          state.canZhao = true;
+          final candidates = _getZhaoCandidates(player);
+          state.zhaoCandidates = candidates;
+          state.showZhaoSelection = candidates.length > 1;
+        }
         onStateChanged?.call();
         startCountdown();
       } else {
@@ -1717,7 +1732,11 @@ class GameController {
           if (_aiContinueVersion != version) return;
           _pendingAIContinue = false;
           _pendingAIContinuePlayerId = null;
-          _aiContinueAfterDraw(player, skipZimoCheck: true);
+          _aiContinueAfterDraw(
+            player,
+            skipZimoCheck: true,
+            skipZhaoCheck: false,
+          );
         });
       }
     };
@@ -1784,6 +1803,12 @@ class GameController {
       if (player.type == PlayerType.human) {
         state.isMyTurn = true;
         state.isDrawing = false;
+        if (_canZhaoAfterDraw(player)) {
+          state.canZhao = true;
+          final candidates = _getZhaoCandidates(player);
+          state.zhaoCandidates = candidates;
+          state.showZhaoSelection = candidates.length > 1;
+        }
         onStateChanged?.call();
         startCountdown();
       } else {
@@ -1797,7 +1822,11 @@ class GameController {
           if (_aiContinueVersion != version) return;
           _pendingAIContinue = false;
           _pendingAIContinuePlayerId = null;
-          _aiContinueAfterDraw(player, skipZimoCheck: true);
+          _aiContinueAfterDraw(
+            player,
+            skipZimoCheck: true,
+            skipZhaoCheck: false,
+          );
         });
       }
     };

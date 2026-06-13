@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/audio_manager.dart';
 
 class StartScreen extends StatefulWidget {
   final void Function(
@@ -19,7 +20,7 @@ class StartScreen extends StatefulWidget {
 class _StartScreenState extends State<StartScreen> {
   int _baseScore = 5;
   int _multiplierBase = 2;
-  String _difficulty = 'hard';
+  String _difficulty = AudioManager().difficulty;
   bool _piaoEnabled = false;
 
   static const _baseScoreOptions = [5, 10, 20];
@@ -128,7 +129,9 @@ class _StartScreenState extends State<StartScreen> {
                           width: logoSize,
                           height: logoSize,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(logoSize * 0.22),
+                            borderRadius: BorderRadius.circular(
+                              logoSize * 0.22,
+                            ),
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -151,8 +154,9 @@ class _StartScreenState extends State<StartScreen> {
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius:
-                                BorderRadius.circular(logoSize * 0.22),
+                            borderRadius: BorderRadius.circular(
+                              logoSize * 0.22,
+                            ),
                             child: Image.asset(
                               'assets/images/logo1024.png',
                               fit: BoxFit.cover,
@@ -169,8 +173,7 @@ class _StartScreenState extends State<StartScreen> {
                             color: const Color(0xFFFFD700),
                             shadows: [
                               Shadow(
-                                color:
-                                    const Color(0xFFFFD700).withOpacity(0.4),
+                                color: const Color(0xFFFFD700).withOpacity(0.4),
                                 blurRadius: 20,
                               ),
                               const Shadow(
@@ -235,12 +238,13 @@ class _StartScreenState extends State<StartScreen> {
                         _buildSegSetting(
                           '底分',
                           _baseScoreOptions
-                              .map((v) => _SegOption(
-                                    label: '$v分',
-                                    selected: _baseScore == v,
-                                    onTap: () =>
-                                        setState(() => _baseScore = v),
-                                  ))
+                              .map(
+                                (v) => _SegOption(
+                                  label: '$v分',
+                                  selected: _baseScore == v,
+                                  onTap: () => setState(() => _baseScore = v),
+                                ),
+                              )
                               .toList(),
                           labelFontSize,
                           segFontSize,
@@ -251,12 +255,14 @@ class _StartScreenState extends State<StartScreen> {
                         _buildSegSetting(
                           '倍数基数',
                           _multiplierBaseOptions
-                              .map((v) => _SegOption(
-                                    label: '$v分',
-                                    selected: _multiplierBase == v,
-                                    onTap: () => setState(
-                                        () => _multiplierBase = v),
-                                  ))
+                              .map(
+                                (v) => _SegOption(
+                                  label: '$v分',
+                                  selected: _multiplierBase == v,
+                                  onTap: () =>
+                                      setState(() => _multiplierBase = v),
+                                ),
+                              )
                               .toList(),
                           labelFontSize,
                           segFontSize,
@@ -267,12 +273,14 @@ class _StartScreenState extends State<StartScreen> {
                         _buildSegSetting(
                           '难度',
                           _difficultyOptions.entries
-                              .map((e) => _SegOption(
-                                    label: e.value,
-                                    selected: _difficulty == e.key,
-                                    onTap: () => setState(
-                                        () => _difficulty = e.key),
-                                  ))
+                              .map(
+                                (e) => _SegOption(
+                                  label: e.value,
+                                  selected: _difficulty == e.key,
+                                  onTap: () =>
+                                      setState(() => _difficulty = e.key),
+                                ),
+                              )
                               .toList(),
                           labelFontSize,
                           segFontSize,
@@ -286,14 +294,12 @@ class _StartScreenState extends State<StartScreen> {
                             _SegOption(
                               label: '关闭',
                               selected: !_piaoEnabled,
-                              onTap: () =>
-                                  setState(() => _piaoEnabled = false),
+                              onTap: () => setState(() => _piaoEnabled = false),
                             ),
                             _SegOption(
                               label: '打开',
                               selected: _piaoEnabled,
-                              onTap: () =>
-                                  setState(() => _piaoEnabled = true),
+                              onTap: () => setState(() => _piaoEnabled = true),
                             ),
                           ],
                           labelFontSize,
@@ -315,11 +321,14 @@ class _StartScreenState extends State<StartScreen> {
                                 end: Alignment(0.3, 1),
                                 colors: [Color(0xFFffd700), Color(0xFFff8c00)],
                               ),
-                              borderRadius: BorderRadius.circular(startBtnH * 0.35),
+                              borderRadius: BorderRadius.circular(
+                                startBtnH * 0.35,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color:
-                                      const Color(0xFFFFD700).withOpacity(0.3),
+                                  color: const Color(
+                                    0xFFFFD700,
+                                  ).withOpacity(0.3),
                                   blurRadius: 25,
                                 ),
                                 BoxShadow(
@@ -364,10 +373,7 @@ class _StartScreenState extends State<StartScreen> {
         color: isRed
             ? const Color(0xFFFF4444).withOpacity(0.08)
             : const Color(0xFF44FF44).withOpacity(0.08),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -420,10 +426,7 @@ class _StartScreenState extends State<StartScreen> {
                             ? const LinearGradient(
                                 begin: Alignment(-0.3, -1),
                                 end: Alignment(0.3, 1),
-                                colors: [
-                                  Color(0xFF4ecdc4),
-                                  Color(0xFF3db8b0)
-                                ],
+                                colors: [Color(0xFF4ecdc4), Color(0xFF3db8b0)],
                               )
                             : null,
                         color: opt.selected
@@ -439,8 +442,9 @@ class _StartScreenState extends State<StartScreen> {
                         boxShadow: opt.selected
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF4ecdc4)
-                                      .withOpacity(0.2),
+                                  color: const Color(
+                                    0xFF4ecdc4,
+                                  ).withOpacity(0.2),
                                   blurRadius: 12,
                                 ),
                               ]
@@ -449,7 +453,8 @@ class _StartScreenState extends State<StartScreen> {
                       alignment: Alignment.center,
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                            horizontal: segFontSize * 0.8),
+                          horizontal: segFontSize * 0.8,
+                        ),
                         child: Text(
                           opt.label,
                           style: TextStyle(

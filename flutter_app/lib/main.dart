@@ -13,6 +13,7 @@ import 'game/core/audio_manager.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GameLogger.init();
+  await AudioManager().loadSettings();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
@@ -361,10 +362,16 @@ class _GameHomePageState extends State<GameHomePage>
               if (_showSettings)
                 SettingsScreen(
                   initialVolume: (AudioManager().volume * 100).round(),
+                  initialTickEnabled: AudioManager().tickEnabled,
+                  initialDifficulty: AudioManager().difficulty,
                   onVolumeChanged: (v) {
                     AudioManager().setVolume(v / 100.0);
                   },
+                  onTickEnabledChanged: (enabled) {
+                    AudioManager().setTickEnabled(enabled);
+                  },
                   onDifficultyChanged: (d) {
+                    AudioManager().setDifficulty(d);
                     _game.gameState.difficulty = d;
                   },
                   onExitGame: () => SystemNavigator.pop(),

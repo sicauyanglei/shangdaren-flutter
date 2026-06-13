@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player.dart';
 
 class AudioManager {
@@ -11,6 +12,10 @@ class AudioManager {
   String _voiceType = 'male';
   double _volume = 1.0;
   double get volume => _volume;
+  bool _tickEnabled = true;
+  bool get tickEnabled => _tickEnabled;
+  String _difficulty = 'hard';
+  String get difficulty => _difficulty;
   bool _initialized = false;
 
   static const _audioFileMap = <String, String>{
@@ -103,6 +108,34 @@ class AudioManager {
 
   void setVolume(double volume) {
     _volume = volume.clamp(0.0, 1.0);
+    _saveSettings();
+  }
+
+  void setTickEnabled(bool enabled) {
+    _tickEnabled = enabled;
+    _saveSettings();
+  }
+
+  void setDifficulty(String difficulty) {
+    _difficulty = difficulty;
+    _saveSettings();
+  }
+
+  Future<void> loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _volume = prefs.getDouble('audio_volume') ?? 1.0;
+      _tickEnabled = prefs.getBool('tick_enabled') ?? true;
+      _difficulty = prefs.getString('difficulty') ?? 'hard';
+    } catch (_) {}
+  }
+
+  void _saveSettings() {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('audio_volume', _volume);
+      prefs.setBool('tick_enabled', _tickEnabled);
+      prefs.setString('difficulty', _difficulty);
+    });
   }
 
   Future<void> play(
@@ -183,6 +216,7 @@ class AudioManager {
   }
 
   Future<void> playTickSlow() async {
+    if (!_tickEnabled) return;
     final vol = _volume.clamp(0.0, 1.0);
     try {
       await _player2.stop();
@@ -192,6 +226,7 @@ class AudioManager {
   }
 
   Future<void> playTickMedium() async {
+    if (!_tickEnabled) return;
     final vol = _volume.clamp(0.0, 1.0);
     try {
       await _player2.stop();
@@ -201,6 +236,7 @@ class AudioManager {
   }
 
   Future<void> playTickFast() async {
+    if (!_tickEnabled) return;
     final vol = _volume.clamp(0.0, 1.0);
     try {
       await _player2.stop();
