@@ -3,10 +3,13 @@ import 'meld.dart';
 
 enum PlayerType { human, ai }
 
+enum Gender { male, female }
+
 class Player {
   final int id;
   final String name;
   final PlayerType type;
+  Gender gender;
   final List<Card> hand;
   final List<Meld> melds;
   final List<Card> discards;
@@ -21,6 +24,7 @@ class Player {
     required this.id,
     required this.name,
     required this.type,
+    this.gender = Gender.male,
     List<Card>? hand,
     List<Meld>? melds,
     List<Card>? discards,

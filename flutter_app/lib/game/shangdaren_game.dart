@@ -795,6 +795,15 @@ class ShangdarenGame extends FlameGame {
     final targetX = [avatar0ScoreX, avatar1ScoreX, avatar2ScoreX];
     final targetY = [avatar0ScoreY, avatar1ScoreY, avatar2ScoreY];
 
+    // 使用动态头像尺寸计算分数目标位置
+    final dynamicPositions = _gameBoard != null
+        ? [
+            _gameBoard!.getAvatarScorePosition(0),
+            _gameBoard!.getAvatarScorePosition(1),
+            _gameBoard!.getAvatarScorePosition(2),
+          ]
+        : null;
+
     final panelPositions = _gameBoard!.getHuPanelScorePositions(
       winnerIndex,
       scoreChangesMap,
@@ -814,7 +823,11 @@ class ShangdarenGame extends FlameGame {
       } else {
         fromPositions.add(Offset(huPanelScoreX, huPanelScoreY));
       }
-      targetPositions.add(Offset(targetX[i], targetY[i]));
+      targetPositions.add(
+        dynamicPositions != null
+            ? dynamicPositions[i]
+            : Offset(targetX[i], targetY[i]),
+      );
       playerIds.add(i);
       posIdx++;
     }
@@ -846,5 +859,17 @@ class ShangdarenGame extends FlameGame {
         _dragY,
       );
     }
+  }
+
+  void updateAvatarSize(double w, double h, int playerIndex) {
+    if (_gameBoard == null) return;
+    _gameBoard!.setAvatarSizes(
+      avatar0Width: playerIndex == 0 ? w : null,
+      avatar0Height: playerIndex == 0 ? h : null,
+      avatar1Width: playerIndex == 1 ? w : null,
+      avatar1Height: playerIndex == 1 ? h : null,
+      avatar2Width: playerIndex == 2 ? w : null,
+      avatar2Height: playerIndex == 2 ? h : null,
+    );
   }
 }

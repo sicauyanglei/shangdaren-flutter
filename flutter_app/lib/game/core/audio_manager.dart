@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+import '../models/player.dart';
 
 class AudioManager {
   static final AudioManager _instance = AudioManager._internal();
@@ -9,6 +10,7 @@ class AudioManager {
   final AudioPlayer _player2 = AudioPlayer();
   String _voiceType = 'male';
   double _volume = 1.0;
+  double get volume => _volume;
   bool _initialized = false;
 
   static const _audioFileMap = <String, String>{
@@ -95,6 +97,10 @@ class AudioManager {
     _voiceType = type;
   }
 
+  static String voiceTypeFromGender(Gender gender) {
+    return gender == Gender.female ? 'female' : 'male';
+  }
+
   void setVolume(double volume) {
     _volume = volume.clamp(0.0, 1.0);
   }
@@ -174,6 +180,33 @@ class AudioManager {
 
   Future<void> playHurry({String? voiceType}) async {
     await play('快点吧', voiceType: voiceType);
+  }
+
+  Future<void> playTickSlow() async {
+    final vol = _volume.clamp(0.0, 1.0);
+    try {
+      await _player2.stop();
+      await _player2.setVolume(vol * 0.5);
+      await _player2.play(AssetSource('audio/tick_slow.wav'));
+    } catch (_) {}
+  }
+
+  Future<void> playTickMedium() async {
+    final vol = _volume.clamp(0.0, 1.0);
+    try {
+      await _player2.stop();
+      await _player2.setVolume(vol * 0.7);
+      await _player2.play(AssetSource('audio/tick_medium.wav'));
+    } catch (_) {}
+  }
+
+  Future<void> playTickFast() async {
+    final vol = _volume.clamp(0.0, 1.0);
+    try {
+      await _player2.stop();
+      await _player2.setVolume(vol);
+      await _player2.play(AssetSource('audio/tick_fast.wav'));
+    } catch (_) {}
   }
 
   Future<void> playHuType(

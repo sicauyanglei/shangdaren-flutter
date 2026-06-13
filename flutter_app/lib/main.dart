@@ -8,6 +8,7 @@ import 'game/ui/settlement_screen.dart';
 import 'game/core/game_logger.dart';
 import 'game/ui/settings_screen.dart';
 import 'game/ui/game_overlay.dart';
+import 'game/core/audio_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -334,6 +335,7 @@ class _GameHomePageState extends State<GameHomePage>
                                   onNextRound: _triggerNextOrSettlement,
                                   onShowSettlementFromButton:
                                       _triggerNextOrSettlement,
+                                  onAvatarSizeChanged: g.updateAvatarSize,
                                 ),
                               ),
                             ),
@@ -358,8 +360,13 @@ class _GameHomePageState extends State<GameHomePage>
 
               if (_showSettings)
                 SettingsScreen(
-                  onVolumeChanged: (_) {},
-                  onDifficultyChanged: (_) {},
+                  initialVolume: (AudioManager().volume * 100).round(),
+                  onVolumeChanged: (v) {
+                    AudioManager().setVolume(v / 100.0);
+                  },
+                  onDifficultyChanged: (d) {
+                    _game.gameState.difficulty = d;
+                  },
                   onExitGame: () => SystemNavigator.pop(),
                   onClose: () => setState(() => _showSettings = false),
                 ),

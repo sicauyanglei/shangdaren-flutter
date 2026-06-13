@@ -78,6 +78,12 @@ class GameController {
   Card? _pendingCheckResponseCard;
   int? _pendingCheckResponsePlayerId;
 
+  bool _pendingAITurn = false;
+  int? _pendingAITurnPlayerId;
+  bool _pendingAIContinue = false;
+  int? _pendingAIContinuePlayerId;
+  bool _pendingAIContinueSkipZimo = false;
+
   int _drawVersion = 0;
   int _discardVersion = 0;
   int _drawAfterZhaoVersion = 0;
@@ -100,9 +106,24 @@ class GameController {
       aiController = AIController();
     }
     state.players.addAll([
-      Player(id: 0, name: '玩家1', type: PlayerType.ai),
-      Player(id: 1, name: '我', type: PlayerType.human),
-      Player(id: 2, name: '玩家2', type: PlayerType.ai),
+      Player(
+        id: 0,
+        name: '玩家1',
+        type: PlayerType.ai,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
+      Player(
+        id: 1,
+        name: '我',
+        type: PlayerType.human,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
+      Player(
+        id: 2,
+        name: '玩家2',
+        type: PlayerType.ai,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
     ]);
     state.dealerIndex = Random().nextInt(3);
     state.roundNumber = 0;
@@ -151,6 +172,11 @@ class GameController {
     _pendingCheckResponse = false;
     _pendingCheckResponseCard = null;
     _pendingCheckResponsePlayerId = null;
+    _pendingAITurn = false;
+    _pendingAITurnPlayerId = null;
+    _pendingAIContinue = false;
+    _pendingAIContinuePlayerId = null;
+    _pendingAIContinueSkipZimo = false;
     _clearPendingAIResponses();
 
     _drawVersion++;
@@ -293,7 +319,11 @@ class GameController {
         }
         onStateChanged?.call();
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (_isPaused || !state.gameStarted) return;
+          if (!state.gameStarted) return;
+          if (_isPaused) {
+            // paused时先不启动回合，resumeGame会处理
+            return;
+          }
           _isStartingRound = false;
           _startTurn();
         });
@@ -331,11 +361,15 @@ class GameController {
       state.isMyTurn = false;
       startCountdown();
       final version = ++_aiTurnVersion;
+      _pendingAITurn = true;
+      _pendingAITurnPlayerId = player.id;
       final delay = 800 + _rng.nextInt(500);
       Future.delayed(Duration(milliseconds: delay), () {
         if (_isPaused || !state.gameStarted) return;
         if (_aiTurnVersion != version) return;
         if (state.showHuResult || state.showLiujuResult) return;
+        _pendingAITurn = false;
+        _pendingAITurnPlayerId = null;
         _processAITurn(player);
       });
     } else {
@@ -563,7 +597,10 @@ class GameController {
     _skipDraw = false;
     stopCountdown();
     onCardAnimation?.call(discardCard, player.id, 'discard');
-    _audio.playDiscard(discardCard.character);
+    _audio.playDiscard(
+      discardCard.character,
+      voiceType: AudioManager.voiceTypeFromGender(player.gender),
+    );
 
     _pendingDiscardCard = discardCard;
     _pendingDiscardPlayerId = player.id;
@@ -919,7 +956,9 @@ class GameController {
     state.canZhao = false;
     state.canHu = false;
     state.waitingForResponse = false;
-    _audio.playGuo();
+    _audio.playGuo(
+      voiceType: AudioManager.voiceTypeFromGender(state.players[1].gender),
+    );
     stopCountdown();
 
     if (wasWaitingForResponse) {
@@ -1015,9 +1054,19 @@ class GameController {
       final shouldPlaySound = state.isMyTurn || state.waitingForResponse;
       if (shouldPlaySound) {
         if (state.countdown == 10) {
-          _audio.playHurry();
-        } else if (state.countdown <= 5 && state.countdown > 0) {
-          _audio.play('出牌', volumeMultiplier: 0.3);
+          _audio.playHurry(
+            voiceType: AudioManager.voiceTypeFromGender(
+              state.players[1].gender,
+            ),
+          );
+        }
+        // 跑秒音效：3级频率
+        if (state.countdown <= 5 && state.countdown > 0) {
+          _audio.playTickFast();
+        } else if (state.countdown <= 10 && state.countdown > 5) {
+          _audio.playTickMedium();
+        } else if (state.countdown <= 20 && state.countdown > 10) {
+          _audio.playTickSlow();
         }
       }
 
@@ -1106,15 +1155,25 @@ class GameController {
     );
 
     if (isZimo) {
-      _audio.playZimo();
+      _audio.playZimo(
+        voiceType: AudioManager.voiceTypeFromGender(winner.gender),
+      );
     } else {
-      _audio.playHu();
+      _audio.playHu(voiceType: AudioManager.voiceTypeFromGender(winner.gender));
     }
 
     if (winner.type == PlayerType.ai) {
-      _audio.playHuType(huTypeResult.name, delayMs: 1000);
+      _audio.playHuType(
+        huTypeResult.name,
+        voiceType: AudioManager.voiceTypeFromGender(winner.gender),
+        delayMs: 1000,
+      );
     } else {
-      _audio.playHuType(huTypeResult.name, delayMs: 800);
+      _audio.playHuType(
+        huTypeResult.name,
+        voiceType: AudioManager.voiceTypeFromGender(winner.gender),
+        delayMs: 800,
+      );
     }
 
     final scores = ScoreCalculator.calculateScores(
@@ -1160,10 +1219,14 @@ class GameController {
       'scoreChanges': scoreChanges,
       'huCount': totalHu,
       'dianpaoIndex': dianpaoIndex,
+      'dealerIndex': state.dealerIndex,
     });
 
+    // 庄家轮转延迟到胡牌面板关闭后执行，这里先记录下一局庄家
     if (winnerIndex != state.dealerIndex) {
-      state.dealerIndex = (state.dealerIndex + 1) % 3;
+      state.nextDealerIndex = (state.dealerIndex + 1) % 3;
+    } else {
+      state.nextDealerIndex = state.dealerIndex;
     }
 
     state.isHandlingHu = false;
@@ -1198,7 +1261,11 @@ class GameController {
   void _handleLiuju() {
     if (state.showLiujuResult) return;
     stopCountdown();
-    _audio.playLiuju();
+    _audio.playLiuju(
+      voiceType: AudioManager.voiceTypeFromGender(
+        state.players[(state.lastDiscardPlayerIndex! + 1) % 3].gender,
+      ),
+    );
 
     state.showLiujuResult = true;
     // 清除上一局胡牌结果数据，防止流局时显示残留的"炮"/"自摸"标签
@@ -1216,6 +1283,9 @@ class GameController {
     state.huResultScoreChanges = null;
     state.huResultOldScores = null;
 
+    // 流局庄家不变
+    state.nextDealerIndex = state.dealerIndex;
+
     for (final p in state.players) {
       p.huCount = HuCalculator.calculateTotalHu(p);
     }
@@ -1231,6 +1301,7 @@ class GameController {
       'piaoScores': state.players.map((p) => p.piao).toList(),
       'isLiuJu': true,
       'scoreChanges': List.filled(state.players.length, 0),
+      'dealerIndex': state.dealerIndex,
     });
 
     onLiuju?.call();
@@ -1238,6 +1309,11 @@ class GameController {
   }
 
   void handleLiujuClose() {
+    // 庄家轮转在面板关闭后执行
+    if (state.nextDealerIndex != null) {
+      state.dealerIndex = state.nextDealerIndex!;
+      state.nextDealerIndex = null;
+    }
     if (state.roundNumber >= 8) {
       onShowSettlement?.call();
     } else {
@@ -1247,6 +1323,11 @@ class GameController {
   }
 
   void handleHuClose() {
+    // 庄家轮转在面板关闭后执行
+    if (state.nextDealerIndex != null) {
+      state.dealerIndex = state.nextDealerIndex!;
+      state.nextDealerIndex = null;
+    }
     if (state.roundNumber >= 8) {
       onShowSettlement?.call();
     } else {
@@ -1265,6 +1346,14 @@ class GameController {
     if (!state.gameStarted) return;
     if (state.showHuResult || state.showLiujuResult) return;
     if (state.isHandlingHu) return;
+
+    // 发牌动画完成但_startTurn被paused跳过的情况
+    if (_isStartingRound && !_isDealing && state.isDealingComplete) {
+      _isStartingRound = false;
+      _startTurn();
+      return;
+    }
+
     if (_isDealing || _isStartingRound) return;
 
     if (state.waitingForResponse) {
@@ -1332,6 +1421,28 @@ class GameController {
       return;
     }
 
+    // AI回合被paused跳过的情况
+    if (_pendingAITurn && _pendingAITurnPlayerId != null) {
+      _aiTurnVersion++;
+      _pendingAITurn = false;
+      final player = state.players[_pendingAITurnPlayerId!];
+      _pendingAITurnPlayerId = null;
+      _processAITurn(player);
+      return;
+    }
+
+    // AI碰/吃/招后继续被paused跳过的情况
+    if (_pendingAIContinue && _pendingAIContinuePlayerId != null) {
+      _aiContinueVersion++;
+      _pendingAIContinue = false;
+      final player = state.players[_pendingAIContinuePlayerId!];
+      _pendingAIContinuePlayerId = null;
+      final skipZimo = _pendingAIContinueSkipZimo;
+      _pendingAIContinueSkipZimo = false;
+      _aiContinueAfterDraw(player, skipZimoCheck: skipZimo);
+      return;
+    }
+
     if (state.isMyTurn) {
       _checkMyActionsAfterDraw();
       onStateChanged?.call();
@@ -1377,7 +1488,7 @@ class GameController {
     final zhaoCards = byChar[targetChar]!.sublist(0, 4);
 
     onMeldAnimation?.call(zhaoCards, player.id, 'zhao');
-    _audio.playZhao();
+    _audio.playZhao(voiceType: AudioManager.voiceTypeFromGender(player.gender));
 
     final meldVersion = ++_meldActionVersion;
     _pendingMeldAction = () {
@@ -1442,10 +1553,15 @@ class GameController {
       player.huCount = HuCalculator.calculateTotalHu(player);
 
       final version = ++_aiContinueVersion;
+      _pendingAIContinue = true;
+      _pendingAIContinuePlayerId = player.id;
+      _pendingAIContinueSkipZimo = false;
       final delay = 800 + _rng.nextInt(500);
       Future.delayed(Duration(milliseconds: delay), () {
         if (_isPaused || !state.gameStarted) return;
         if (_aiContinueVersion != version) return;
+        _pendingAIContinue = false;
+        _pendingAIContinuePlayerId = null;
         _aiContinueAfterDraw(player);
       });
     }
@@ -1483,7 +1599,7 @@ class GameController {
     }
 
     onMeldAnimation?.call(zhaoCards, playerIndex, 'zhao');
-    _audio.playZhao();
+    _audio.playZhao(voiceType: AudioManager.voiceTypeFromGender(player.gender));
 
     final meldVersion = ++_meldActionVersion;
     _pendingMeldAction = () {
@@ -1554,7 +1670,7 @@ class GameController {
     final pengCards = [card, matching[0], matching[1]];
 
     onMeldAnimation?.call(pengCards, playerIndex, 'peng');
-    _audio.playPeng();
+    _audio.playPeng(voiceType: AudioManager.voiceTypeFromGender(player.gender));
 
     final meldVersion = ++_meldActionVersion;
     _pendingMeldAction = () {
@@ -1592,10 +1708,15 @@ class GameController {
         startCountdown();
       } else {
         final version = ++_aiContinueVersion;
+        _pendingAIContinue = true;
+        _pendingAIContinuePlayerId = player.id;
+        _pendingAIContinueSkipZimo = true;
         final delay = 800 + _rng.nextInt(500);
         Future.delayed(Duration(milliseconds: delay), () {
           if (_isPaused || !state.gameStarted) return;
           if (_aiContinueVersion != version) return;
+          _pendingAIContinue = false;
+          _pendingAIContinuePlayerId = null;
           _aiContinueAfterDraw(player, skipZimoCheck: true);
         });
       }
@@ -1625,7 +1746,7 @@ class GameController {
     final meldCards = [card, chiCards[0], chiCards[1]];
 
     onMeldAnimation?.call(meldCards, playerIndex, 'chi');
-    _audio.playChi();
+    _audio.playChi(voiceType: AudioManager.voiceTypeFromGender(player.gender));
 
     final meldVersion = ++_meldActionVersion;
     _pendingMeldAction = () {
@@ -1667,10 +1788,15 @@ class GameController {
         startCountdown();
       } else {
         final version = ++_aiContinueVersion;
+        _pendingAIContinue = true;
+        _pendingAIContinuePlayerId = player.id;
+        _pendingAIContinueSkipZimo = true;
         final delay = 800 + _rng.nextInt(500);
         Future.delayed(Duration(milliseconds: delay), () {
           if (_isPaused || !state.gameStarted) return;
           if (_aiContinueVersion != version) return;
+          _pendingAIContinue = false;
+          _pendingAIContinuePlayerId = null;
           _aiContinueAfterDraw(player, skipZimoCheck: true);
         });
       }

@@ -5,6 +5,7 @@ class GameState {
   List<Player> players;
   int currentPlayerIndex;
   int dealerIndex;
+  int? nextDealerIndex;
   int roundNumber;
   List<Card> deck;
   Card? lastDiscardedCard;
@@ -102,6 +103,7 @@ class GameState {
     List<Player>? players,
     this.currentPlayerIndex = 0,
     this.dealerIndex = 0,
+    this.nextDealerIndex,
     this.roundNumber = 1,
     List<Card>? deck,
     this.lastDiscardedCard,
@@ -157,6 +159,7 @@ class GameState {
     players = [];
     currentPlayerIndex = 0;
     dealerIndex = 0;
+    nextDealerIndex = null;
     roundNumber = 1;
     deck = [];
     lastDiscardedCard = null;

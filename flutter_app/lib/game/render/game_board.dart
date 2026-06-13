@@ -129,6 +129,55 @@ class GameBoard extends Component {
   Rect _huPanelCloseBtnRect = Rect.zero;
   Rect _huPanelRect = Rect.zero;
 
+  // 动态头像区域尺寸，由GameOverlay测量后传入
+  // 初始值按"牌20 分-99"场景计算：padding(40) + avatar(80) + gap(12) + statsRow(128) = 260
+  double _avatar0Width = 260.0;
+  double _avatar0Height = 108.0;
+  double _avatar1Width = 260.0;
+  double _avatar1Height = 108.0;
+  double _avatar2Width = 260.0;
+  double _avatar2Height = 108.0;
+
+  void setAvatarSizes({
+    double? avatar0Width,
+    double? avatar0Height,
+    double? avatar1Width,
+    double? avatar1Height,
+    double? avatar2Width,
+    double? avatar2Height,
+  }) {
+    if (avatar0Width != null) _avatar0Width = avatar0Width;
+    if (avatar0Height != null) _avatar0Height = avatar0Height;
+    if (avatar1Width != null) _avatar1Width = avatar1Width;
+    if (avatar1Height != null) _avatar1Height = avatar1Height;
+    if (avatar2Width != null) _avatar2Width = avatar2Width;
+    if (avatar2Height != null) _avatar2Height = avatar2Height;
+  }
+
+  Offset getAvatarScorePosition(int playerIndex) {
+    const double aiAvatarLeft = 9.6;
+    const double aiAvatarTop = 4.8;
+    const double myAvatarLeft = 10.0;
+    const double myAvatarBottom = 5.0;
+    // 分数目标位置：头像区域内右侧，偏上位置
+    if (playerIndex == 0) {
+      return Offset(
+        aiAvatarLeft + _avatar0Width - 60,
+        aiAvatarTop + 14 + 24 + 4,
+      );
+    } else if (playerIndex == 1) {
+      return Offset(
+        myAvatarLeft + _avatar1Width - 60,
+        designHeight - myAvatarBottom - 14 - 24 - 4 - 20,
+      );
+    } else {
+      return Offset(
+        designWidth - 9.6 - _avatar2Width + 20,
+        aiAvatarTop + 14 + 24 + 4,
+      );
+    }
+  }
+
   void setHuResult({
     required bool show,
     String winnerName = '',
@@ -378,9 +427,17 @@ class GameBoard extends Component {
         final cardY = cr.position.y;
 
         if (x >= cardX && x <= cardX + handCardW) {
-          final totalH = (stack.length - 1) * handStackVisible + handCardH;
-          if (y >= cardY && y <= cardY + totalH) {
-            return stack.last.card;
+          // A+E: 按Y坐标精确匹配可见条带
+          // 每张牌的可见条带: 第i张牌从 cardY + i*handStackVisible 到 cardY + (i+1)*handStackVisible
+          // 最后一张牌的条带延伸到牌底部
+          for (int i = 0; i < stack.length; i++) {
+            final stripTop = cardY + i * handStackVisible;
+            final stripBottom = (i < stack.length - 1)
+                ? cardY + (i + 1) * handStackVisible
+                : cardY + (stack.length - 1) * handStackVisible + handCardH;
+            if (y >= stripTop && y <= stripBottom) {
+              return stack[i].card;
+            }
           }
         }
       }
@@ -3304,21 +3361,23 @@ class GameBoard extends Component {
     double startY;
     const double aiAvatarLeft = 9.6;
     const double aiAvatarTop = 4.8;
-    const double aiAvatarH = 108.0;
     const double myAvatarLeft = 10.0;
     const double myAvatarBottom = 5.0;
-    const double avatarW = 250.0;
     const double badgeGapFromAvatar = 10.0;
     if (playerIndex == 0) {
-      startX = aiAvatarLeft + avatarW + badgeGapFromAvatar;
-      startY = aiAvatarTop + aiAvatarH - badgeH;
+      startX = aiAvatarLeft + _avatar0Width + badgeGapFromAvatar;
+      startY = aiAvatarTop + _avatar0Height - badgeH;
     } else if (playerIndex == 1) {
-      startX = myAvatarLeft + avatarW + badgeGapFromAvatar;
-      startY = designHeight - myAvatarBottom - aiAvatarH;
+      startX = myAvatarLeft + _avatar1Width + badgeGapFromAvatar;
+      startY = designHeight - myAvatarBottom - _avatar1Height;
     } else {
       startX =
-          designWidth - aiAvatarLeft - avatarW - totalW - badgeGapFromAvatar;
-      startY = aiAvatarTop + aiAvatarH - badgeH;
+          designWidth -
+          aiAvatarLeft -
+          _avatar2Width -
+          totalW -
+          badgeGapFromAvatar;
+      startY = aiAvatarTop + _avatar2Height - badgeH;
     }
 
     double curX = startX;
