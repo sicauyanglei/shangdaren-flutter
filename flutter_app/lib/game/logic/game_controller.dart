@@ -201,6 +201,7 @@ class GameController {
       player.discards.clear();
       player.isTing = false;
       player.tingCards.clear();
+      player.tingType = TingType.none;
       player.piao = 0;
       player.huCount = 0;
       player.meldHuCount = 0;
@@ -290,6 +291,7 @@ class GameController {
       player.discards.clear();
       player.isTing = false;
       player.tingCards.clear();
+      player.tingType = TingType.none;
       // piao不重置，保留飘分设置
     }
 
@@ -437,6 +439,7 @@ class GameController {
     final tingResult = TingChecker.checkTing(player);
     player.isTing = tingResult.isTing;
     player.tingCards = tingResult.tingCards;
+    player.tingType = tingResult.tingType;
     player.huCount = HuCalculator.calculateTotalHu(player);
 
     state.isDrawing = false;
@@ -508,6 +511,7 @@ class GameController {
     final tingResult = TingChecker.checkTing(player);
     player.isTing = tingResult.isTing;
     player.tingCards = tingResult.tingCards;
+    player.tingType = tingResult.tingType;
     player.huCount = HuCalculator.calculateTotalHu(player);
 
     _aiContinueAfterDraw(player, drawnCard: card);
@@ -523,6 +527,7 @@ class GameController {
     final tingResult = TingChecker.checkTing(player);
     player.isTing = tingResult.isTing;
     player.tingCards = tingResult.tingCards;
+    player.tingType = tingResult.tingType;
     player.huCount = HuCalculator.calculateTotalHu(player);
 
     state.isMyTurn = true;
@@ -629,6 +634,7 @@ class GameController {
     final tingResult = TingChecker.checkTing(player);
     player.isTing = tingResult.isTing;
     player.tingCards = tingResult.tingCards;
+    player.tingType = tingResult.tingType;
     player.huCount = HuCalculator.calculateTotalHu(player);
 
     if (player.type == PlayerType.human) {
@@ -1863,6 +1869,15 @@ class GameController {
 
   bool _canHuWith(Player player, Card card) {
     if (_getTotalCardCount(player) >= 20) return false;
+    // 单钓听限制：不能胡单钓的这张字
+    if (player.tingType == TingType.singleWait) {
+      final singleCard = player.tingCards.isNotEmpty
+          ? player.tingCards.first
+          : null;
+      if (singleCard != null && card.character == singleCard.character) {
+        return false;
+      }
+    }
     final testHand = List<Card>.from(player.hand)..add(card);
     return HuCalculator.canHu(testHand, player.melds, paoCard: card);
   }

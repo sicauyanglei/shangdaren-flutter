@@ -3,10 +3,17 @@ import '../models/meld.dart';
 import '../models/player.dart';
 import 'hu_calculator.dart';
 
+enum TingType { none, ninePairs, singleWait, pairWait }
+
 class TingResult {
   final bool isTing;
   final List<Card> tingCards;
-  TingResult({required this.isTing, required this.tingCards});
+  final TingType tingType;
+  TingResult({
+    required this.isTing,
+    required this.tingCards,
+    this.tingType = TingType.none,
+  });
 }
 
 class TingChecker {
@@ -15,14 +22,33 @@ class TingChecker {
     final melds = player.melds;
 
     if (hand.length + melds.length * 3 >= 20) {
-      return TingResult(isTing: false, tingCards: []);
+      return TingResult(isTing: false, tingCards: [], tingType: TingType.none);
     }
 
     final basicResult = _checkBasicTing(hand);
-    if (!basicResult.met) return TingResult(isTing: false, tingCards: []);
+    if (!basicResult.met)
+      return TingResult(isTing: false, tingCards: [], tingType: TingType.none);
 
     final tingCards = _checkHuTypeTing(hand, melds, basicResult);
-    return TingResult(isTing: tingCards.isNotEmpty, tingCards: tingCards);
+    TingType tingType;
+    switch (basicResult.type) {
+      case _BasicTingType.ninePairs:
+        tingType = TingType.ninePairs;
+        break;
+      case _BasicTingType.singleWait:
+        tingType = TingType.singleWait;
+        break;
+      case _BasicTingType.pairWait:
+        tingType = TingType.pairWait;
+        break;
+      default:
+        tingType = TingType.none;
+    }
+    return TingResult(
+      isTing: tingCards.isNotEmpty,
+      tingCards: tingCards,
+      tingType: tingType,
+    );
   }
 
   static _BasicTingResult _checkBasicTing(List<Card> hand) {

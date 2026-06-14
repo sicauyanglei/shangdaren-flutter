@@ -1,5 +1,6 @@
 import 'card.dart';
 import 'meld.dart';
+import '../logic/ting_checker.dart';
 
 enum PlayerType { human, ai }
 
@@ -17,6 +18,7 @@ class Player {
   int piao;
   bool isTing;
   List<Card> tingCards;
+  TingType tingType;
   int huCount;
   int meldHuCount;
 
@@ -32,6 +34,7 @@ class Player {
     this.piao = 0,
     this.isTing = false,
     List<Card>? tingCards,
+    this.tingType = TingType.none,
     this.huCount = 0,
     this.meldHuCount = 0,
   }) : hand = hand ?? [],
