@@ -1698,6 +1698,7 @@ class AIStrategyHard extends AIStrategy {
         hand: testHand,
         melds: [...player.melds, newMeld],
       );
+      HuCalculator.updateMeldHuCache(testPlayer);
 
       final tingAfter = _checkTingCached(testPlayer);
       if (tingAfter.isTing) return true;
@@ -1756,11 +1757,40 @@ class AIStrategyHard extends AIStrategy {
         hand: testHand,
         melds: [...player.melds, newMeld],
       );
+      HuCalculator.updateMeldHuCache(testPlayer);
 
       final tingAfter = _checkTingCached(testPlayer);
 
       if (tingAfter.isTing) return true;
       if (player.isTing && !tingAfter.isTing) return false;
+
+      // 招后补摸一张牌可能自摸，优先招
+      final totalCardsAfterZhao = testHand.length + ([...player.melds, newMeld]).length * 3;
+      if (totalCardsAfterZhao == 19) {
+        // 招后19张，补摸1张变20张，检查补摸后能否自摸
+        final visibleCount =
+            _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+        final totalUnknown =
+            _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+        for (final ch in _allChars) {
+          final sentence = _charSentenceMap[ch];
+          if (sentence == null) continue;
+          final position = _charPositionMap[ch] ?? -1;
+          if (position < 0) continue;
+          final rem = _remainingCount(ch, visibleCount);
+          if (rem <= 0) continue;
+          final simCard = Card(
+            id: -100,
+            character: ch,
+            sentence: sentence,
+            position: position,
+          );
+          final simHand = List<Card>.from(testHand)..add(simCard);
+          if (HuCalculator.canHu(simHand, [...player.melds, newMeld])) {
+            return true;
+          }
+        }
+      }
 
       final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
       final distAfter = _distanceToTing(testHand, [...player.melds, newMeld]);
@@ -1787,6 +1817,7 @@ class AIStrategyHard extends AIStrategy {
         hand: kanHand,
         melds: [...player.melds, kanMeld],
       );
+      HuCalculator.updateMeldHuCache(kanPlayer);
 
       final huZhao = _evaluateHuScore(testPlayer);
       final huKan = _evaluateHuScore(kanPlayer);
