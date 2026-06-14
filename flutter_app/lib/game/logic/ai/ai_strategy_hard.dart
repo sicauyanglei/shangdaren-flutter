@@ -1603,6 +1603,53 @@ class AIStrategyHard extends AIStrategy {
     final opponentNearTing = _hasOpponentNearTing(state, player.id);
 
     if (sameCharCount >= 2) {
+      // 检查碰牌是否会破坏手牌中已有的句/靠组合
+      final remaining = List<Card>.from(hand);
+      final aSet = <Meld>[];
+      final bSet = <Meld>[];
+      final cSet = <Meld>[];
+      final dSet = <Meld>[];
+      HuCalculator.extractJu(remaining, aSet);
+      HuCalculator.extractZhao(remaining, bSet);
+      HuCalculator.extractKan(remaining, cSet);
+      HuCalculator.extractDuiAndKao(remaining, dSet);
+
+      // 如果该字参与了句，碰掉2张会破坏句
+      final inJu = aSet.any(
+        (m) => m.cards.any((c) => c.character == card.character),
+      );
+      // 如果该字参与了靠，碰掉2张会破坏靠
+      final inKao = dSet.any(
+        (m) =>
+            m.type == MeldType.kao &&
+            m.cards.any((c) => c.character == card.character),
+      );
+      // 碰牌破坏句/靠时，只有碰后能听牌才碰
+      if (inJu || inKao) {
+        final testHandCheck = List<Card>.from(hand);
+        final matchingCheck = testHandCheck
+            .where((c) => c.character == card.character)
+            .take(2)
+            .toList();
+        for (final m in matchingCheck) {
+          testHandCheck.remove(m);
+        }
+        final newMeldCheck = Meld(
+          cards: [card, ...matchingCheck],
+          type: MeldType.kan,
+          isJing: card.isJing,
+        );
+        final testPlayerCheck = Player(
+          id: player.id,
+          name: player.name,
+          type: player.type,
+          hand: testHandCheck,
+          melds: [...player.melds, newMeldCheck],
+        );
+        final tingCheck = _checkTingCached(testPlayerCheck);
+        if (!tingCheck.isTing) return false;
+      }
+
       final testHand = List<Card>.from(hand);
       final matching = testHand
           .where((c) => c.character == card.character)
