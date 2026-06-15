@@ -1981,7 +1981,37 @@ class AIStrategyHard extends AIStrategy {
       // 补摸改善概率较高时，更倾向招
       if (drawImproveProb > 0.3) return true;
 
-      return distAfter <= distBefore;
+      // distAfter <= distBefore 时，需要综合判断
+      // 比较招后vs不招（出牌后）的手牌质量
+      if (distAfter <= distBefore) {
+        // 检查招的牌是否参与了手牌中的句组合
+        // 如果4张同字中有牌参与了句，招会破坏句结构
+        final handRemaining = List<Card>.from(hand);
+        final handASet = <Meld>[];
+        final handBSet = <Meld>[];
+        final handCSet = <Meld>[];
+        final handDSet = <Meld>[];
+        HuCalculator.extractJu(handRemaining, handASet);
+        HuCalculator.extractZhao(handRemaining, handBSet);
+        HuCalculator.extractKan(handRemaining, handCSet);
+        HuCalculator.extractDuiAndKao(handRemaining, handDSet);
+
+        final inJu = handASet.any(
+          (m) => m.cards.any((c) => c.character == character),
+        );
+        // 招的牌参与了句，招后句被破坏
+        if (inJu) {
+          // 比较招后vs坎后的手牌质量
+          // 坎只取3张，保留1张可以继续参与句
+          if (distKan < distAfter) return false;
+          if (distKan == distAfter && huKan >= huZhao) return false;
+          // 坎更差时才考虑招
+          return huZhao > huKan;
+        }
+
+        return true;
+      }
+      return false;
     }
 
     return true;
