@@ -2,6 +2,70 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/player.dart';
 
+/// 手牌计数器，用Map<String, int>代替List<Card>，避免O(n)的remove操作
+class HandCounter {
+  /// 每种字的计数 {character: count}
+  final Map<String, int> _counts;
+
+  /// 每种字的Card引用池（用于生成Meld时取出Card对象）
+  final Map<String, List<Card>> _cardPool;
+
+  HandCounter._(this._counts, this._cardPool);
+
+  /// 从手牌列表构建计数器
+  factory HandCounter.fromHand(List<Card> hand) {
+    final counts = <String, int>{};
+    final pool = <String, List<Card>>{};
+    for (final card in hand) {
+      counts[card.character] = (counts[card.character] ?? 0) + 1;
+      pool.putIfAbsent(card.character, () => []).add(card);
+    }
+    return HandCounter._(counts, pool);
+  }
+
+  /// 拷贝
+  HandCounter copy() {
+    return HandCounter._(
+      Map<String, int>.from(_counts),
+      _cardPool.map((k, v) => MapEntry(k, List<Card>.from(v))),
+    );
+  }
+
+  /// 获取某字的计数
+  int count(String ch) => _counts[ch] ?? 0;
+
+  /// 减少某字的计数（提取时使用）
+  void dec(String ch, [int n = 1]) {
+    final c = (_counts[ch] ?? 0) - n;
+    if (c <= 0) {
+      _counts.remove(ch);
+    } else {
+      _counts[ch] = c;
+    }
+  }
+
+  /// 取出n张Card对象（用于生成Meld）
+  List<Card> takeCards(String ch, int n) {
+    final pool = _cardPool[ch];
+    if (pool == null || pool.length < n) return [];
+    final taken = pool.sublist(pool.length - n);
+    _cardPool[ch] = pool.sublist(0, pool.length - n);
+    return taken;
+  }
+
+  /// 获取所有仍有计数的字
+  Iterable<String> get chars => _counts.keys;
+
+  /// 获取某字的计数
+  int operator [](String ch) => _counts[ch] ?? 0;
+
+  /// 总牌数
+  int get total => _counts.values.fold(0, (a, b) => a + b);
+
+  /// 是否为空
+  bool get isEmpty => _counts.isEmpty;
+}
+
 class HuCalculator {
   static const _yinChars = ['大', '人', '禄', '寿'];
 
@@ -1008,6 +1072,359 @@ class HuCalculator {
       '寿': 2,
     };
     return map[ch] ?? -1;
+  }
+
+  // ============================================================
+  // 基于 HandCounter 的优化提取方法（迭代+计数，避免List.remove）
+  // ============================================================
+
+  static const _allChars = [
+    '上',
+    '大',
+    '人',
+    '丘',
+    '乙',
+    '己',
+    '化',
+    '三',
+    '千',
+    '七',
+    '十',
+    '土',
+    '尔',
+    '小',
+    '生',
+    '八',
+    '九',
+    '子',
+    '佳',
+    '作',
+    '亡',
+    '福',
+    '禄',
+    '寿',
+  ];
+
+  static const _sentenceChars = [
+    ['上', '大', '人'],
+    ['丘', '乙', '己'],
+    ['化', '三', '千'],
+    ['七', '十', '土'],
+    ['尔', '小', '生'],
+    ['八', '九', '子'],
+    ['佳', '作', '亡'],
+    ['福', '禄', '寿'],
+  ];
+
+  /// 基于计数的句提取（迭代）
+  static void extractJuCounted(HandCounter counter, List<Meld> out) {
+    bool found = true;
+    while (found) {
+      found = false;
+      for (var s = 0; s < _sentenceChars.length; s++) {
+        final chars = _sentenceChars[s];
+        bool hasAll = true;
+        for (final ch in chars) {
+          if (counter[ch] <= 0) {
+            hasAll = false;
+            break;
+          }
+        }
+        if (hasAll) {
+          final cards = <Card>[];
+          for (final ch in chars) {
+            final taken = counter.takeCards(ch, 1);
+            cards.addAll(taken);
+            counter.dec(ch, 1);
+          }
+          final hasJing = cards.any((c) => c.isJing);
+          out.add(Meld(cards: cards, type: MeldType.ju, isJing: hasJing));
+          found = true;
+          break; // 重新从组1开始检查
+        }
+      }
+    }
+  }
+
+  /// 基于计数的招提取（迭代）
+  static void extractZhaoCounted(HandCounter counter, List<Meld> out) {
+    bool found = true;
+    while (found) {
+      found = false;
+      for (final ch in _allChars) {
+        if (counter[ch] >= 4) {
+          final cards = counter.takeCards(ch, 4);
+          counter.dec(ch, 4);
+          out.add(
+            Meld(cards: cards, type: MeldType.zhao, isJing: cards.first.isJing),
+          );
+          found = true;
+          break;
+        }
+      }
+    }
+  }
+
+  /// 基于计数的坎提取（迭代）
+  static void extractKanCounted(HandCounter counter, List<Meld> out) {
+    bool found = true;
+    while (found) {
+      found = false;
+      for (final ch in _allChars) {
+        if (counter[ch] >= 3) {
+          final cards = counter.takeCards(ch, 3);
+          counter.dec(ch, 3);
+          out.add(
+            Meld(cards: cards, type: MeldType.kan, isJing: cards.first.isJing),
+          );
+          found = true;
+          break;
+        }
+      }
+    }
+  }
+
+  /// 基于计数的对/靠提取（迭代，先对后靠）
+  static void extractDuiAndKaoCounted(HandCounter counter, List<Meld> out) {
+    // 先提取对
+    bool found = true;
+    while (found) {
+      found = false;
+      for (final ch in _allChars) {
+        if (counter[ch] >= 2) {
+          final cards = counter.takeCards(ch, 2);
+          counter.dec(ch, 2);
+          out.add(
+            Meld(cards: cards, type: MeldType.dui, isJing: cards.first.isJing),
+          );
+          found = true;
+          break;
+        }
+      }
+    }
+
+    // 再提取靠（同组不同2张）
+    found = true;
+    while (found) {
+      found = false;
+      for (var s = 0; s < _sentenceChars.length; s++) {
+        final chars = _sentenceChars[s];
+        // 收集本组中仍有计数的字的position
+        final available = <int, String>{};
+        for (final ch in chars) {
+          if (counter[ch] > 0) {
+            final pos = _charToPosition(ch);
+            available[pos] = ch;
+          }
+        }
+        final positions = available.keys.toList()..sort();
+        if (positions.length >= 2) {
+          // 取position不同的前两个
+          for (var i = 0; i < positions.length - 1 && !found; i++) {
+            for (var j = i + 1; j < positions.length && !found; j++) {
+              if (positions[i] == positions[j]) continue;
+              final ch1 = available[positions[i]]!;
+              final ch2 = available[positions[j]]!;
+              final c1 = counter.takeCards(ch1, 1);
+              final c2 = counter.takeCards(ch2, 1);
+              counter.dec(ch1, 1);
+              counter.dec(ch2, 1);
+              final hasJing = c1.first.isJing || c2.first.isJing;
+              out.add(
+                Meld(
+                  cards: [...c1, ...c2],
+                  type: MeldType.kao,
+                  isJing: hasJing,
+                ),
+              );
+              found = true;
+            }
+          }
+        }
+        if (found) break; // 重新开始搜索
+      }
+    }
+  }
+
+  /// 基于计数的靠优先提取（迭代，先靠后对）
+  static void extractKaoFirstCounted(HandCounter counter, List<Meld> out) {
+    // 先提取靠
+    bool found = true;
+    while (found) {
+      found = false;
+      for (var s = 0; s < _sentenceChars.length; s++) {
+        final chars = _sentenceChars[s];
+        final available = <int, String>{};
+        for (final ch in chars) {
+          if (counter[ch] > 0) {
+            final pos = _charToPosition(ch);
+            available[pos] = ch;
+          }
+        }
+        final positions = available.keys.toList()..sort();
+        if (positions.length >= 2) {
+          for (var i = 0; i < positions.length - 1 && !found; i++) {
+            for (var j = i + 1; j < positions.length && !found; j++) {
+              if (positions[i] == positions[j]) continue;
+              final ch1 = available[positions[i]]!;
+              final ch2 = available[positions[j]]!;
+              final c1 = counter.takeCards(ch1, 1);
+              final c2 = counter.takeCards(ch2, 1);
+              counter.dec(ch1, 1);
+              counter.dec(ch2, 1);
+              final hasJing = c1.first.isJing || c2.first.isJing;
+              out.add(
+                Meld(
+                  cards: [...c1, ...c2],
+                  type: MeldType.kao,
+                  isJing: hasJing,
+                ),
+              );
+              found = true;
+            }
+          }
+        }
+        if (found) break;
+      }
+    }
+
+    // 再提取对
+    found = true;
+    while (found) {
+      found = false;
+      for (final ch in _allChars) {
+        if (counter[ch] >= 2) {
+          final cards = counter.takeCards(ch, 2);
+          counter.dec(ch, 2);
+          out.add(
+            Meld(cards: cards, type: MeldType.dui, isJing: cards.first.isJing),
+          );
+          found = true;
+          break;
+        }
+      }
+    }
+  }
+
+  /// 获取计数器中剩余的单牌
+  static List<Card> remainingSingles(HandCounter counter) {
+    final result = <Card>[];
+    for (final ch in _allChars) {
+      final count = counter[ch];
+      for (var i = 0; i < count; i++) {
+        final cards = counter.takeCards(ch, 1);
+        result.addAll(cards);
+      }
+    }
+    return result;
+  }
+
+  /// 优化的canHu：使用HandCounter避免重复List拷贝和remove
+  static bool canHuOptimized(
+    List<Card> hand,
+    List<Meld> melds, {
+    Card? paoCard,
+  }) {
+    if (!_checkStructuralCounted(hand)) return false;
+
+    final meldHu = calculateMeldHu(melds);
+    final handHu = calculateHandHuOptimized(hand, melds, paoCard: paoCard);
+    final totalHu = meldHu + handHu;
+
+    if (totalHu >= 11) return true;
+
+    final hasZhao = melds.any((m) => m.type == MeldType.zhao);
+    final effectiveHasZhao = hasZhao && !_isZhaoUsedInSentence(hand, melds);
+
+    if (_checkShiDui(hand, melds)) return true;
+    if (_checkHeiYuan(hand, melds, effectiveHasZhao)) return true;
+    if (_checkHongYuan(hand, melds, effectiveHasZhao) > 0) return true;
+    if (_checkKuHu(hand, melds, effectiveHasZhao)) return true;
+    if (_checkQingKuHu(hand, melds, effectiveHasZhao)) return true;
+    if (_checkQingKuChongTai(hand, melds) != null) return true;
+
+    return false;
+  }
+
+  /// 优化的结构检查：使用计数而非List操作
+  static bool _checkStructuralCounted(List<Card> hand) {
+    final counter = HandCounter.fromHand(hand);
+
+    // 提取句
+    final aSet = <Meld>[];
+    extractJuCounted(counter, aSet);
+
+    // 提取坎
+    final bSet = <Meld>[];
+    extractKanCounted(counter, bSet);
+
+    // 提取对/靠
+    final cSet = <Meld>[];
+    extractDuiAndKaoCounted(counter, cSet);
+
+    // 剩余单牌
+    final dCount = counter.total;
+
+    if (cSet.length == 1 && dCount == 0) return true;
+
+    // 十对检查
+    final pairCounter = HandCounter.fromHand(hand);
+    int pairCount = 0;
+    for (final ch in _allChars) {
+      pairCount += pairCounter[ch] ~/ 2;
+    }
+    if (pairCount >= 10) return true;
+
+    return false;
+  }
+
+  /// 优化的手牌胡数计算：使用HandCounter
+  static int calculateHandHuOptimized(
+    List<Card> hand,
+    List<Meld> melds, {
+    Card? paoCard,
+  }) {
+    if (hand.isEmpty) return 0;
+
+    final counter = HandCounter.fromHand(hand);
+
+    final aSet = <Meld>[];
+    final bSet = <Meld>[];
+    final cSet = <Meld>[];
+    final dSet = <Meld>[];
+
+    extractJuCounted(counter, aSet);
+    extractZhaoCounted(counter, bSet);
+    extractKanCounted(counter, cSet);
+    extractDuiAndKaoCounted(counter, dSet);
+    final eSet = remainingSingles(counter);
+
+    int hu = 0;
+    for (final m in aSet) {
+      hu += m.getHuCount(isHand: true);
+    }
+    for (final m in bSet) {
+      hu += m.getHuCount(isHand: true);
+    }
+    for (final m in cSet) {
+      if (paoCard != null &&
+          !m.isJing &&
+          m.cards.any((c) => c.id == paoCard.id)) {
+        hu += 2;
+      } else {
+        hu += m.getHuCount(isHand: true);
+      }
+    }
+    for (final m in dSet) {
+      hu += m.getHuCount(isHand: true);
+    }
+    for (final card in eSet) {
+      hu += _singleHu(card);
+    }
+
+    hu += _calculateBonus(aSet, dSet, eSet);
+
+    return hu;
   }
 }
 

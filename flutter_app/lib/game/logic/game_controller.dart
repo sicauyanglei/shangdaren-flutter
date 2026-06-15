@@ -69,6 +69,7 @@ class GameController {
   int? _pendingDiscardPlayerId;
 
   VoidCallback? _pendingMeldAction;
+  bool get hasPendingMeldAction => _pendingMeldAction != null;
 
   Map<int, List<String>>? _pendingAIResponses;
   Card? _pendingResponseCard;
@@ -135,6 +136,9 @@ class GameController {
 
   void startRound() {
     print('=== startRound called, _isStartingRound=$_isStartingRound ===');
+    for (final p in state.players) {
+      GameLogger.i('SCORE', 'startRound ENTER: player${p.id} score=${p.score}');
+    }
     if (_isStartingRound) return;
     _isStartingRound = true;
 
@@ -1347,7 +1351,19 @@ class GameController {
       onShowSettlement?.call();
     } else {
       if (!state.gameStarted) return;
+      for (final p in state.players) {
+        GameLogger.i(
+          'SCORE',
+          'handleHuClose BEFORE startRound: player${p.id} score=${p.score}',
+        );
+      }
       startRound();
+      for (final p in state.players) {
+        GameLogger.i(
+          'SCORE',
+          'handleHuClose AFTER startRound: player${p.id} score=${p.score}',
+        );
+      }
     }
   }
 
@@ -1847,7 +1863,7 @@ class GameController {
 
   bool _canZimo(Player player) {
     if (player.hand.isEmpty) return false;
-    return HuCalculator.canHu(player.hand, player.melds);
+    return HuCalculator.canHuOptimized(player.hand, player.melds);
   }
 
   bool _canZhaoAfterDraw(Player player) {
@@ -1879,7 +1895,7 @@ class GameController {
       }
     }
     final testHand = List<Card>.from(player.hand)..add(card);
-    return HuCalculator.canHu(testHand, player.melds, paoCard: card);
+    return HuCalculator.canHuOptimized(testHand, player.melds, paoCard: card);
   }
 
   bool _canPengWith(Player player, Card card) {

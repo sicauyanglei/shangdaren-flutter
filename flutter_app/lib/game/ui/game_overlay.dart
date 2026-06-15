@@ -468,37 +468,6 @@ class _AIPlayerInfo extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: Text('🃏', style: TextStyle(fontSize: 20)),
-                          ),
-                        ),
-                        Text(
-                          '${player!.hand.length}',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            color: Color(0xFFffd700),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 2),
                   Builder(
                     builder: (context) {
                       final scoreVal = animatingScore ?? player!.score;

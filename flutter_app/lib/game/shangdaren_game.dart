@@ -624,6 +624,7 @@ class ShangdarenGame extends FlameGame {
     if (_animationSystem == null || _gameBoard == null) return;
 
     _gameBoard!.meldAnimInProgress = true;
+    _lastPlayedCard = null;
 
     if (playerId == 1) {
       _gameBoard!.setTingBadge(1, false);
@@ -632,8 +633,8 @@ class ShangdarenGame extends FlameGame {
     final centerX = designWidth / 2;
     final centerY = designHeight / 2;
 
-    double discardX = centerX - 15;
-    double discardY = 5.0;
+    double discardX = centerX - GameBoard.hCardW / 2;
+    double discardY = 55.0;
     double playerHandX = centerX;
     double playerHandY = designHeight - 178;
 
@@ -706,7 +707,9 @@ class ShangdarenGame extends FlameGame {
       onComplete: () {
         _gameBoard?.meldAnimInProgress = false;
         if (_gameController != null && _gameBoard != null) {
-          _syncBoard();
+          if (!_gameController!.hasPendingMeldAction) {
+            _syncBoard();
+          }
         }
       },
     );

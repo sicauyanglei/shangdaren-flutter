@@ -215,6 +215,13 @@ class _GameHomePageState extends State<GameHomePage>
     final state = _game.gameState;
     state.showHuResult = false;
     state.showLiujuResult = false;
+    // 清除分数动画状态，防止_displayScores残留旧值0导致下一局显示分数为0
+    for (final t in _scoreAnimTimers.values) {
+      t.cancel();
+    }
+    _scoreAnimTimers.clear();
+    _displayScores.clear();
+    _targetScores.clear();
     if (state.roundNumber >= 8) {
       setState(() {
         _showSettlement = true;

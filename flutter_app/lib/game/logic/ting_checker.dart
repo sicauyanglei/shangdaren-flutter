@@ -284,26 +284,8 @@ class TingChecker {
   }
 
   static bool _canHu(List<Card> hand, List<Meld> melds) {
-    final remaining = List<Card>.from(hand);
-    final aSet = <Meld>[];
-    final bSet = <Meld>[];
-    final cSet = <Meld>[];
-    final dSet = <Card>[];
-
-    HuCalculator.extractJu(remaining, aSet);
-    HuCalculator.extractKan(remaining, bSet);
-    HuCalculator.extractDuiAndKao(remaining, cSet);
-    dSet.addAll(remaining);
-
-    bool structuralOk = false;
-    if (cSet.length == 1 && dSet.isEmpty) structuralOk = true;
-
-    final pairCount = _countPairs(hand);
-    if (pairCount >= 10) structuralOk = true;
-
-    if (!structuralOk) return false;
-
-    return HuCalculator.canHu(hand, melds);
+    // 合并结构检查和胡数检查，避免重复提取
+    return HuCalculator.canHuOptimized(hand, melds);
   }
 
   static List<String> _getKaoPartners(Card card) {
