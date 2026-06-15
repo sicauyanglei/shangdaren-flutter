@@ -761,6 +761,77 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 组进张效率比较：优先拆进张少的组，保留进张多的组
+    // 计算出牌所在组的进张数，与其他组的进张数比较
+    final discardGroup = cardToDiscard.sentence;
+    final discardGroupCards = player.hand
+        .where((c) => c.sentence == discardGroup)
+        .toList();
+    final discardGroupCharSet = discardGroupCards.map((c) => c.character).toSet();
+
+    // 只在手牌中该组有搭子潜力时才比较（2种以上不同字，或有对子）
+    final discardGroupHasPair = discardGroupCharSet.any(
+      (ch) => discardGroupCards.where((c) => c.character == ch).length >= 2,
+    );
+    if (discardGroupCharSet.length >= 2 || discardGroupHasPair) {
+      // 计算出牌所在组的进张数
+      int discardGroupRem = 0;
+      for (final ch in _groupChars[discardGroup - 1]) {
+        if (!discardGroupCharSet.contains(ch)) {
+          discardGroupRem += _remainingCount(ch, visibleCount);
+        }
+      }
+      // 加上同组已有字的剩余数（对子变坎的进张）
+      for (final ch in discardGroupCharSet) {
+        final count = discardGroupCards.where((c) => c.character == ch).length;
+        if (count >= 2) {
+          discardGroupRem += _remainingCount(ch, visibleCount);
+        }
+      }
+
+      // 计算其他组的进张数
+      final otherGroups = <int>{};
+      for (final c in player.hand) {
+        if (c.sentence != discardGroup) {
+          otherGroups.add(c.sentence);
+        }
+      }
+
+      for (final g in otherGroups) {
+        final gCards = player.hand.where((c) => c.sentence == g).toList();
+        final gCharSet = gCards.map((c) => c.character).toSet();
+        // 组内有2种以上不同字，或者有对子（对子有变坎潜力）
+        final hasPair = gCharSet.any(
+          (ch) => gCards.where((c) => c.character == ch).length >= 2,
+        );
+        if (gCharSet.length < 2 && !hasPair) continue; // 孤张组不比较
+
+        int gRem = 0;
+        for (final ch in _groupChars[g - 1]) {
+          if (!gCharSet.contains(ch)) {
+            gRem += _remainingCount(ch, visibleCount);
+          }
+        }
+        for (final ch in gCharSet) {
+          final count = gCards.where((c) => c.character == ch).length;
+          if (count >= 2) {
+            gRem += _remainingCount(ch, visibleCount);
+          }
+        }
+
+        // 如果出牌所在组进张比其他组少，加分（鼓励拆弱组）
+        // 如果出牌所在组进张比其他组多，减分（不拆强组）
+        final diff = gRem - discardGroupRem;
+        if (diff > 0) {
+          // 其他组进张更多，出当前组的牌（拆弱组）是好的
+          score += diff * 5;
+        } else if (diff < 0) {
+          // 当前组进张更多，出当前组的牌（拆强组）是不好的
+          score += diff * 5;
+        }
+      }
+    }
+
     score -= _evaluateDanger(
       player,
       cardToDiscard,
