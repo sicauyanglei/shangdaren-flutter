@@ -5,6 +5,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../models/game_recording.dart';
 import '../core/audio_manager.dart';
 import 'hu_calculator.dart';
 import 'ting_checker.dart';
@@ -93,9 +94,245 @@ class GameController {
   int _checkResponseVersion = 0;
   int _meldActionVersion = 0;
 
+  // ========== 录制相关 ==========
+  bool _isRecording = false;
+  bool get isRecording => _isRecording;
+  Stopwatch? _recordingStopwatch;
+  List<RecordedAction> _recordedActions = [];
+  List<int> _recordedDeckOrder = [];
+  int _recordedDealerIndex = 0;
+  List<int> _recordedPlayerGenders = [];
+  int _recordedBaseScore = 5;
+  int _recordedMultiplierBase = 2;
+  String _recordedDifficulty = 'hard';
+  bool _recordedPiaoEnabled = false;
+
+  // ========== 回放相关 ==========
+  bool _isReplayMode = false;
+  bool get isReplayMode => _isReplayMode;
+  List<RecordedAction> _replayActions = [];
+  int _replayActionIndex = 0;
+  double _replaySpeed = 1.0;
+  double get replaySpeed => _replaySpeed;
+  bool _replayPaused = false;
+  bool get replayPaused => _replayPaused;
+  Timer? _replayTimer;
+  VoidCallback? onReplayStateChanged;
+
   GameController({GameState? gameState, AIController? aiCtrl})
     : state = gameState ?? GameState(),
       aiController = aiCtrl ?? AIController();
+
+  /// 开始录制
+  void startRecording() {
+    _isRecording = true;
+    _recordingStopwatch = Stopwatch()..start();
+    _recordedActions = [];
+  }
+
+  /// 停止录制并返回录制数据
+  GameRecording? stopRecording() {
+    if (!_isRecording) return null;
+    _isRecording = false;
+    _recordingStopwatch?.stop();
+    _recordingStopwatch = null;
+
+    if (_recordedDeckOrder.isEmpty) return null;
+
+    final recording = GameRecording(
+      id: 'rec_${DateTime.now().millisecondsSinceEpoch}',
+      createdAt: DateTime.now(),
+      baseScore: _recordedBaseScore,
+      multiplierBase: _recordedMultiplierBase,
+      difficulty: _recordedDifficulty,
+      piaoEnabled: _recordedPiaoEnabled,
+      dealerIndex: _recordedDealerIndex,
+      playerGenders: _recordedPlayerGenders,
+      deckOrder: _recordedDeckOrder,
+      actions: List.from(_recordedActions),
+      resultSummary: _buildResultSummary(),
+    );
+    _recordedActions = [];
+    return recording;
+  }
+
+  /// 记录一个动作
+  void _recordAction(RecordedActionType type, int playerIndex, Map<String, dynamic> data) {
+    if (!_isRecording || _recordingStopwatch == null) return;
+    _recordedActions.add(RecordedAction(
+      type: type,
+      playerIndex: playerIndex,
+      data: data,
+      elapsedMs: _recordingStopwatch!.elapsedMilliseconds,
+    ));
+  }
+
+  String? _buildResultSummary() {
+    if (state.players.isEmpty) return null;
+    final scores = state.players.map((p) => '${p.name}:${p.score}').join(' ');
+    return scores;
+  }
+
+  /// 开始回放模式
+  void startReplay(GameRecording recording) {
+    _isReplayMode = true;
+    _replayActions = List.from(recording.actions);
+    _replayActionIndex = 0;
+    _replaySpeed = 1.0;
+    _replayPaused = false;
+
+    // 使用录制的设置初始化游戏
+    state.baseScore = recording.baseScore;
+    state.multiplierBase = recording.multiplierBase;
+    state.difficulty = recording.difficulty;
+    state.piaoEnabled = recording.piaoEnabled;
+
+    // 使用录制的牌堆顺序创建牌堆
+    _customDeckOrder = recording.deckOrder;
+    _customDealerIndex = recording.dealerIndex;
+    _customPlayerGenders = recording.playerGenders;
+
+    // 开始游戏
+    startGame();
+
+    // 启动回放驱动
+    _startReplayDriver();
+  }
+
+  /// 退出回放模式
+  void exitReplay() {
+    _isReplayMode = false;
+    _replayTimer?.cancel();
+    _replayTimer = null;
+    _replayActions = [];
+    _replayActionIndex = 0;
+    _replayPaused = false;
+    onReplayStateChanged?.call();
+  }
+
+  /// 回放暂停/继续
+  void toggleReplayPause() {
+    _replayPaused = !_replayPaused;
+    onReplayStateChanged?.call();
+    if (!_replayPaused) {
+      _feedNextReplayAction();
+    }
+  }
+
+  /// 设置回放速度
+  void setReplaySpeed(double speed) {
+    _replaySpeed = speed;
+    onReplayStateChanged?.call();
+  }
+
+  /// 回放单步前进
+  void replayStepForward() {
+    if (_replayActionIndex >= _replayActions.length) return;
+    _replayPaused = true;
+    _executeReplayAction(_replayActions[_replayActionIndex]);
+    _replayActionIndex++;
+    onReplayStateChanged?.call();
+  }
+
+  /// 获取回放进度 (0.0 ~ 1.0)
+  double get replayProgress {
+    if (_replayActions.isEmpty) return 0;
+    return _replayActionIndex / _replayActions.length;
+  }
+
+  /// 获取当前回放动作索引
+  int get replayCurrentIndex => _replayActionIndex;
+
+  /// 获取回放动作总数
+  int get replayTotalActions => _replayActions.length;
+
+  List<int>? _customDeckOrder;
+  int? _customDealerIndex;
+  List<int>? _customPlayerGenders;
+
+  void _startReplayDriver() {
+    _replayTimer?.cancel();
+    // 等待发牌完成后开始喂入动作
+    _replayTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      if (!_isReplayMode) {
+        timer.cancel();
+        return;
+      }
+      if (_replayPaused) return;
+      if (!state.isDealingComplete) return;
+      if (state.showHuResult || state.showLiujuResult) return;
+      if (_isStartingRound || _isDealing) return;
+
+      _feedNextReplayAction();
+    });
+  }
+
+  void _feedNextReplayAction() {
+    if (_replayActionIndex >= _replayActions.length) return;
+
+    // 检查游戏是否在等待输入
+    final waitingForInput = state.isMyTurn || state.waitingForResponse || state.isPiaoPhase;
+    if (!waitingForInput) return;
+
+    final action = _replayActions[_replayActionIndex];
+    _executeReplayAction(action);
+    _replayActionIndex++;
+    onReplayStateChanged?.call();
+  }
+
+  void _executeReplayAction(RecordedAction action) {
+    switch (action.type) {
+      case RecordedActionType.piao:
+        setPiao(action.data['value'] as int? ?? 0);
+        break;
+      case RecordedActionType.discard:
+        final cardId = action.data['cardId'] as int?;
+        if (cardId != null) {
+          final player = state.players[action.playerIndex];
+          final cardIndex = player.hand.indexWhere((c) => c.id == cardId);
+          if (cardIndex >= 0) {
+            discardCard(cardIndex);
+          }
+        }
+        break;
+      case RecordedActionType.hu:
+        respondHu();
+        break;
+      case RecordedActionType.zimo:
+        respondHu(); // 自摸也通过respondHu处理
+        break;
+      case RecordedActionType.zhao:
+        respondZhao();
+        break;
+      case RecordedActionType.zhaoFromHand:
+        final character = action.data['character'] as String?;
+        if (character != null) {
+          selectZhaoCharacter(character);
+        } else {
+          respondZhao();
+        }
+        break;
+      case RecordedActionType.selectZhao:
+        final ch = action.data['character'] as String?;
+        if (ch != null) {
+          selectZhaoCharacter(ch);
+        }
+        break;
+      case RecordedActionType.peng:
+        respondPeng();
+        break;
+      case RecordedActionType.chi:
+        respondChi();
+        break;
+      case RecordedActionType.pass:
+        respondPass();
+        break;
+      case RecordedActionType.liuju:
+      case RecordedActionType.roundEnd:
+        // 这些是标记性动作，不需要执行
+        break;
+    }
+  }
 
   void startGame() {
     print('=== GameController.startGame called ===');
@@ -106,29 +343,55 @@ class GameController {
     } else {
       aiController = AIController();
     }
+
+    // 使用自定义性别或随机性别
+    final genders = _customPlayerGenders;
     state.players.addAll([
       Player(
         id: 0,
         name: '玩家1',
         type: PlayerType.ai,
-        gender: _rng.nextBool() ? Gender.male : Gender.female,
+        gender: genders != null && genders.length > 0
+            ? (genders[0] == 0 ? Gender.male : Gender.female)
+            : (_rng.nextBool() ? Gender.male : Gender.female),
       ),
       Player(
         id: 1,
         name: '我',
         type: PlayerType.human,
-        gender: _rng.nextBool() ? Gender.male : Gender.female,
+        gender: genders != null && genders.length > 1
+            ? (genders[1] == 0 ? Gender.male : Gender.female)
+            : (_rng.nextBool() ? Gender.male : Gender.female),
       ),
       Player(
         id: 2,
         name: '玩家2',
         type: PlayerType.ai,
-        gender: _rng.nextBool() ? Gender.male : Gender.female,
+        gender: genders != null && genders.length > 2
+            ? (genders[2] == 0 ? Gender.male : Gender.female)
+            : (_rng.nextBool() ? Gender.male : Gender.female),
       ),
     ]);
-    state.dealerIndex = Random().nextInt(3);
+
+    // 使用自定义庄家或随机庄家
+    state.dealerIndex = _customDealerIndex ?? Random().nextInt(3);
     state.roundNumber = 0;
     state.gameStarted = true;
+
+    // 录制初始状态
+    if (_isRecording) {
+      _recordedDealerIndex = state.dealerIndex;
+      _recordedPlayerGenders = state.players.map((p) => p.gender == Gender.male ? 0 : 1).toList();
+      _recordedBaseScore = state.baseScore;
+      _recordedMultiplierBase = state.multiplierBase;
+      _recordedDifficulty = state.difficulty;
+      _recordedPiaoEnabled = state.piaoEnabled;
+    }
+
+    // 清除自定义设置
+    _customDealerIndex = null;
+    _customPlayerGenders = null;
+
     print('=== calling startRound ===');
     startRound();
     print('=== startRound done ===');
@@ -193,7 +456,24 @@ class GameController {
     stopCountdown();
 
     state.deck = Card.createDeck();
-    state.deck.shuffle();
+    // 使用自定义牌堆顺序或随机洗牌
+    if (_customDeckOrder != null && _customDeckOrder!.isNotEmpty) {
+      // 根据录制的牌堆ID顺序重建牌堆
+      final allCards = Card.createDeck(); // 创建一个完整的牌堆用于查找
+      final cardMap = <int, Card>{for (final c in allCards) c.id: c};
+      state.deck = _customDeckOrder!
+          .map((id) => cardMap[id])
+          .whereType<Card>()
+          .toList();
+      _customDeckOrder = null;
+    } else {
+      state.deck.shuffle();
+    }
+
+    // 录制牌堆顺序
+    if (_isRecording && state.roundNumber <= 1) {
+      _recordedDeckOrder = state.deck.map((c) => c.id).toList();
+    }
 
     for (final player in state.players) {
       GameLogger.i(
@@ -246,7 +526,9 @@ class GameController {
         // AI随机选择飘分
         final piaoOptions = [0, 5, 10, 20];
         final randomIndex = Random().nextInt(piaoOptions.length);
-        player.piao = piaoOptions[randomIndex];
+        final piaoValue = piaoOptions[randomIndex];
+        player.piao = piaoValue;
+        _recordAction(RecordedActionType.piao, state.piaoCurrentPlayerIndex, {'value': piaoValue});
         state.piaoSetCount++;
         state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
       } else {
@@ -269,8 +551,9 @@ class GameController {
     if (!state.isPiaoPhase) return;
 
     final player = state.players[state.piaoCurrentPlayerIndex];
-    if (player.type != PlayerType.human) return;
+    if (player.type != PlayerType.human && !_isReplayMode) return;
 
+    _recordAction(RecordedActionType.piao, state.piaoCurrentPlayerIndex, {'value': piaoValue});
     player.piao = piaoValue;
     state.piaoSetCount++;
     state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
@@ -586,6 +869,7 @@ class GameController {
     if (state.canChi || state.canPeng || state.canZhao || state.canHu) return;
 
     final card = player.hand[cardIndex];
+    _recordAction(RecordedActionType.discard, player.id, {'cardId': card.id});
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -846,6 +1130,11 @@ class GameController {
     if (humanIndex < 0) return;
     stopCountdown();
     final isZimo = !state.waitingForResponse;
+    _recordAction(
+      isZimo ? RecordedActionType.zimo : RecordedActionType.hu,
+      humanIndex,
+      {'isZimo': isZimo},
+    );
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -867,6 +1156,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    _recordAction(RecordedActionType.zhao, humanIndex, {});
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -909,6 +1199,7 @@ class GameController {
       (p) => p.type == PlayerType.human,
     );
     if (humanIndex < 0) return;
+    _recordAction(RecordedActionType.selectZhao, humanIndex, {'character': character});
     state.showZhaoSelection = false;
     state.zhaoCandidates.clear();
     _handleZhaoFromHand(state.players[humanIndex], character: character);
@@ -920,6 +1211,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    _recordAction(RecordedActionType.peng, humanIndex, {});
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -943,6 +1235,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    _recordAction(RecordedActionType.chi, humanIndex, {});
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -962,6 +1255,10 @@ class GameController {
 
   void respondPass() {
     final wasWaitingForResponse = state.waitingForResponse;
+    final humanIndex = state.players.indexWhere(
+      (p) => p.type == PlayerType.human,
+    );
+    _recordAction(RecordedActionType.pass, humanIndex >= 0 ? humanIndex : 1, {});
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
