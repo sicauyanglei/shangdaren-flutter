@@ -248,7 +248,9 @@ class AIStrategyHard extends AIStrategy {
       if (dist < bestDist) {
         bestDist = dist;
         bestHand = testHand;
-      } else if (dist == bestDist && visibleCount != null && totalUnknown != null) {
+      } else if (dist == bestDist &&
+          visibleCount != null &&
+          totalUnknown != null) {
         // 距离相同时，优先出进张少的牌（保留进张多的牌）
         final discardGroup = card.sentence;
         int discardRem = 0;
@@ -258,7 +260,10 @@ class AIStrategyHard extends AIStrategy {
           }
         }
         final bestCard = bestHand.isNotEmpty
-            ? hand.firstWhere((c) => !bestHand.contains(c), orElse: () => hand.first)
+            ? hand.firstWhere(
+                (c) => !bestHand.contains(c),
+                orElse: () => hand.first,
+              )
             : hand.first;
         final bestGroup = bestCard.sentence;
         int bestRem = 0;
@@ -294,7 +299,10 @@ class AIStrategyHard extends AIStrategy {
 
   /// 评估吃牌后的手牌质量（指定消耗的字）
   double _evaluateChiBenefitWithChars(
-    Player player, Card card, List<String> neededChars, GameState state,
+    Player player,
+    Card card,
+    List<String> neededChars,
+    GameState state,
   ) {
     final hand = player.hand;
     final hasAll = neededChars.every(
@@ -312,9 +320,7 @@ class AIStrategyHard extends AIStrategy {
       final handRemaining = List<Card>.from(hand);
       final handASet = <Meld>[];
       HuCalculator.extractJu(handRemaining, handASet);
-      final inJu = handASet.any(
-        (m) => m.cards.any((c) => c.character == ch),
-      );
+      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         consumptionCost += 80;
       }
@@ -372,8 +378,10 @@ class AIStrategyHard extends AIStrategy {
 
     final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
     final newMelds = [...player.melds, newMeld];
+    final totalUnknown = _totalUnknownCards(player, state);
     final (bestHand, distAfterDiscard) = _findBestDiscardAfterMeld(
-      testHand, newMelds,
+      testHand,
+      newMelds,
       visibleCount: visibleCount,
       totalUnknown: totalUnknown,
     );
@@ -395,7 +403,6 @@ class AIStrategyHard extends AIStrategy {
     benefit += _evaluateHuScore(bestPlayer) * 8;
     if (newMeld.isJing) benefit += 80;
 
-    final totalUnknown = _totalUnknownCards(player, state);
     double chiAfterProb = 0;
     for (final c in bestHand) {
       final rem = _remainingCount(c.character, visibleCount);
@@ -434,9 +441,7 @@ class AIStrategyHard extends AIStrategy {
       final handRemaining = List<Card>.from(hand);
       final handASet = <Meld>[];
       HuCalculator.extractJu(handRemaining, handASet);
-      final inJu = handASet.any(
-        (m) => m.cards.any((c) => c.character == ch),
-      );
+      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         // 吃牌破坏了已有的句，代价很高
         consumptionCost += 80;
@@ -500,6 +505,7 @@ class AIStrategyHard extends AIStrategy {
     final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
 
     final newMelds = [...player.melds, newMeld];
+    final totalUnknown = _totalUnknownCards(player, state);
     final (bestHand, distAfterDiscard) = _findBestDiscardAfterMeld(
       testHand,
       newMelds,
@@ -531,7 +537,6 @@ class AIStrategyHard extends AIStrategy {
     // 精句额外加分
     if (newMeld.isJing) benefit += 80;
 
-    final totalUnknown = _totalUnknownCards(player, state);
     double chiAfterProb = 0;
     for (final c in bestHand) {
       final rem = _remainingCount(c.character, visibleCount);
@@ -601,8 +606,10 @@ class AIStrategyHard extends AIStrategy {
       // 检查特殊胡型潜力（高胡数路线给予额外加分）
       final totalHu = HuCalculator.calculateTotalHu(testPlayer);
       double specialHuBonus = 0;
-      if (totalHu >= 20) specialHuBonus += 150;
-      else if (totalHu >= 15) specialHuBonus += 80;
+      if (totalHu >= 20)
+        specialHuBonus += 150;
+      else if (totalHu >= 15)
+        specialHuBonus += 80;
 
       // 优先选择听牌数多的，进张数相近(差距<=1)时优先高胡数路线
       if (tingCount > bestTingCount + 1 ||
@@ -613,8 +620,10 @@ class AIStrategyHard extends AIStrategy {
           (tingCount == bestTingCount &&
               tingProb == bestTingProb &&
               huScore + specialHuBonus > bestHuScore) ||
-          (tingCount == bestTingCount + 1 && huScore + specialHuBonus > bestHuScore + 4) ||
-          (tingCount + 1 == bestTingCount && huScore + specialHuBonus > bestHuScore + 8)) {
+          (tingCount == bestTingCount + 1 &&
+              huScore + specialHuBonus > bestHuScore + 4) ||
+          (tingCount + 1 == bestTingCount &&
+              huScore + specialHuBonus > bestHuScore + 8)) {
         bestCard = card;
         bestTingCount = tingCount;
         bestTingProb = tingProb;
@@ -987,7 +996,9 @@ class AIStrategyHard extends AIStrategy {
     final discardGroupCards = player.hand
         .where((c) => c.sentence == discardGroup)
         .toList();
-    final discardGroupCharSet = discardGroupCards.map((c) => c.character).toSet();
+    final discardGroupCharSet = discardGroupCards
+        .map((c) => c.character)
+        .toSet();
 
     // 只在手牌中该组有搭子潜力时才比较（2种以上不同字，或有对子）
     final discardGroupHasPair = discardGroupCharSet.any(
@@ -1276,7 +1287,8 @@ class AIStrategyHard extends AIStrategy {
   }) {
     double danger = 0;
     final isMidGame = state.deck.length >= 20 && state.deck.length <= 50;
-    final myVisibleCount = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+    final myVisibleCount =
+        _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
 
     // 检查其他玩家的弃牌和面子，推测他们可能听什么
     for (int i = 0; i < state.players.length; i++) {
@@ -1321,7 +1333,10 @@ class AIStrategyHard extends AIStrategy {
 
         // 剩余张数越少，出这张牌越危险（对手可能在等这张）
         // 使用对手视角的剩余张数更精确
-        final otherChRem = _remainingCount(ch, otherVisibleCount);
+        final otherChRem = _remainingCount(
+          cardToDiscard.character,
+          otherVisibleCount,
+        );
         if (otherChRem == 1) {
           // 对手视角只剩1张（就是我出的这张），极危险
           danger += isLate ? 50 : 30;
@@ -1409,7 +1424,9 @@ class AIStrategyHard extends AIStrategy {
 
       // 结合剩余张数推断对手需求
       // 对手组合牌区有同组牌，且该组剩余张数少，对手更可能需要
-      if (otherMeldChars.any((mc) => _charSentenceMap[mc] == cardToDiscard.sentence)) {
+      if (otherMeldChars.any(
+        (mc) => _charSentenceMap[mc] == cardToDiscard.sentence,
+      )) {
         int groupRem = 0;
         for (final gc in sameGroupChars) {
           groupRem += _remainingCount(gc, myVisibleCount);
@@ -1464,7 +1481,8 @@ class AIStrategyHard extends AIStrategy {
       if (nextDiscardSameGroupCount >= 2) {
         danger -= isLate ? 8 : 4;
       }
-      if (!nextDiscardGroups.contains(cardToDiscard.sentence) && nextPlayer.melds.isNotEmpty) {
+      if (!nextDiscardGroups.contains(cardToDiscard.sentence) &&
+          nextPlayer.melds.isNotEmpty) {
         danger += isLate ? 12 : 6;
       }
       if (nextPlayer.hand.length >= 16 && nextHasSameGroup) {
@@ -1920,9 +1938,9 @@ class AIStrategyHard extends AIStrategy {
 
     // 尝试所有可能的吃法，选最优
     final otherChars = _getOtherCharsInGroup(card);
-    final availableChars = otherChars.where(
-      (ch) => player.hand.any((c) => c.character == ch),
-    ).toList();
+    final availableChars = otherChars
+        .where((ch) => player.hand.any((c) => c.character == ch))
+        .toList();
 
     if (availableChars.length < 2) return false;
 
@@ -1934,9 +1952,10 @@ class AIStrategyHard extends AIStrategy {
       // 3种字都有，比较2种吃法
       for (int i = 0; i < availableChars.length; i++) {
         for (int j = i + 1; j < availableChars.length; j++) {
-          final benefit = _evaluateChiBenefitWithChars(
-            player, card, [availableChars[i], availableChars[j]], state,
-          );
+          final benefit = _evaluateChiBenefitWithChars(player, card, [
+            availableChars[i],
+            availableChars[j],
+          ], state);
           if (benefit > bestBenefit) bestBenefit = benefit;
         }
       }
@@ -2089,8 +2108,14 @@ class AIStrategyHard extends AIStrategy {
         } else if (missingRem <= 2) {
           // 缺失字少，重组困难，碰后需接近听牌
           if (!tingCheck.isTing) {
-            final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
-            final distAfter = _distanceToTing(testHandCheck, [...player.melds, newMeldCheck]);
+            final distBefore = _distanceToTing(
+              List<Card>.from(hand),
+              player.melds,
+            );
+            final distAfter = _distanceToTing(testHandCheck, [
+              ...player.melds,
+              newMeldCheck,
+            ]);
             if (distAfter > distBefore) return false;
           }
         }
@@ -2130,7 +2155,8 @@ class AIStrategyHard extends AIStrategy {
       final (_, distAfterDiscard) = _findBestDiscardAfterMeld(
         testHand,
         newMelds,
-        visibleCount: _cachedVisibleCount ?? _buildVisibleCharCount(player, state),
+        visibleCount:
+            _cachedVisibleCount ?? _buildVisibleCharCount(player, state),
         totalUnknown: _cachedTotalUnknown ?? _totalUnknownCards(player, state),
       );
 
@@ -2147,7 +2173,8 @@ class AIStrategyHard extends AIStrategy {
       final vc = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
       final tu = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
       final (bestHandAfterPeng, _) = _findBestDiscardAfterMeld(
-        testHand, newMelds,
+        testHand,
+        newMelds,
         visibleCount: vc,
         totalUnknown: tu,
       );
@@ -2288,7 +2315,8 @@ class AIStrategyHard extends AIStrategy {
       if (player.isTing && !tingAfter.isTing) return false;
 
       // 招后补摸一张牌可能自摸，优先招
-      final totalCardsAfterZhao = testHand.length + ([...player.melds, newMeld]).length * 3;
+      final totalCardsAfterZhao =
+          testHand.length + ([...player.melds, newMeld]).length * 3;
       if (totalCardsAfterZhao == 19) {
         // 招后19张，补摸1张变20张，检查补摸后能否自摸
         final visibleCount =
@@ -2320,7 +2348,10 @@ class AIStrategyHard extends AIStrategy {
         // 对手快听牌但自己招后没听牌，招牌可能加速对手
         // 降低招的意愿
         final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
-        final distAfterZhao = _distanceToTing(testHand, [...player.melds, newMeld]);
+        final distAfterZhao = _distanceToTing(testHand, [
+          ...player.melds,
+          newMeld,
+        ]);
         if (distAfterZhao >= distBefore) return false;
       }
 
@@ -2416,7 +2447,8 @@ class AIStrategyHard extends AIStrategy {
         // 招的牌参与了句，招后句被破坏
         if (inJu) {
           // 计算被破坏句中其他字的剩余张数
-          final vc = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+          final vc =
+              _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
           int juMissingRem = 0;
           for (final m in handASet) {
             if (m.cards.any((c) => c.character == character)) {
