@@ -232,8 +232,10 @@ class AIStrategyHard extends AIStrategy {
 
   (List<Card> bestHand, int bestDist) _findBestDiscardAfterMeld(
     List<Card> hand,
-    List<Meld> melds,
-  ) {
+    List<Meld> melds, {
+    Map<String, int>? visibleCount,
+    int? totalUnknown,
+  }) {
     if (hand.isEmpty) return (hand, _distanceToTing(hand, melds));
 
     int bestDist = 99;
@@ -246,6 +248,30 @@ class AIStrategyHard extends AIStrategy {
       if (dist < bestDist) {
         bestDist = dist;
         bestHand = testHand;
+      } else if (dist == bestDist && visibleCount != null && totalUnknown != null) {
+        // 距离相同时，优先出进张少的牌（保留进张多的牌）
+        final discardGroup = card.sentence;
+        int discardRem = 0;
+        for (final ch in _groupChars[discardGroup - 1]) {
+          if (!testHand.any((c) => c.character == ch)) {
+            discardRem += _remainingCount(ch, visibleCount);
+          }
+        }
+        final bestCard = bestHand.isNotEmpty
+            ? hand.firstWhere((c) => !bestHand.contains(c), orElse: () => hand.first)
+            : hand.first;
+        final bestGroup = bestCard.sentence;
+        int bestRem = 0;
+        for (final ch in _groupChars[bestGroup - 1]) {
+          if (!bestHand.any((c) => c.character == ch)) {
+            bestRem += _remainingCount(ch, visibleCount);
+          }
+        }
+        // 出进张少的牌，保留进张多的
+        if (discardRem < bestRem) {
+          bestDist = dist;
+          bestHand = testHand;
+        }
       }
     }
 
@@ -309,6 +335,14 @@ class AIStrategyHard extends AIStrategy {
       if (chCount >= 2) {
         consumptionCost -= 20;
       }
+
+      // 剩余张数越少，吃掉该牌的代价越高（稀缺牌价值更大）
+      final chRem = _remainingCount(ch, visibleCount);
+      if (chRem == 0) {
+        consumptionCost += 30; // 绝版牌，吃掉后无法再获得
+      } else if (chRem <= 1) {
+        consumptionCost += 15;
+      }
     }
 
     final testHand = List<Card>.from(hand);
@@ -340,6 +374,8 @@ class AIStrategyHard extends AIStrategy {
     final newMelds = [...player.melds, newMeld];
     final (bestHand, distAfterDiscard) = _findBestDiscardAfterMeld(
       testHand, newMelds,
+      visibleCount: visibleCount,
+      totalUnknown: totalUnknown,
     );
 
     if (distAfterDiscard > distBefore) return -1;
@@ -425,6 +461,14 @@ class AIStrategyHard extends AIStrategy {
       if (chCount >= 2) {
         consumptionCost -= 20;
       }
+
+      // 剩余张数越少，吃掉该牌的代价越高（稀缺牌价值更大）
+      final chRem = _remainingCount(ch, visibleCount);
+      if (chRem == 0) {
+        consumptionCost += 30; // 绝版牌，吃掉后无法再获得
+      } else if (chRem <= 1) {
+        consumptionCost += 15;
+      }
     }
 
     final testHand = List<Card>.from(hand);
@@ -459,6 +503,8 @@ class AIStrategyHard extends AIStrategy {
     final (bestHand, distAfterDiscard) = _findBestDiscardAfterMeld(
       testHand,
       newMelds,
+      visibleCount: visibleCount,
+      totalUnknown: totalUnknown,
     );
 
     if (distAfterDiscard > distBefore) return -1;
@@ -758,6 +804,15 @@ class AIStrategyHard extends AIStrategy {
 
       final prob = rem / totalUnknown;
 
+      // 剩余张数越少，摸到后的价值越高（稀缺性加成）
+      // rem=1时加成1.5倍，rem=2时加成1.2倍，rem>=3时无加成
+      double scarcityBonus = 1.0;
+      if (rem == 1) {
+        scarcityBonus = 1.5;
+      } else if (rem == 2) {
+        scarcityBonus = 1.2;
+      }
+
       if (!handGroups.contains(sentence)) {
         if (prob < 0.03) continue;
 
@@ -771,7 +826,7 @@ class AIStrategyHard extends AIStrategy {
         final dist = _distanceToTing(simHand, melds);
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 60;
+          totalScore += prob * improvement * 60 * scarcityBonus;
         }
         continue;
       }
@@ -788,11 +843,11 @@ class AIStrategyHard extends AIStrategy {
       final dist = _distanceToTing(simHand, melds);
 
       if (dist <= 0) {
-        totalScore += prob * 1000;
+        totalScore += prob * 1000 * scarcityBonus;
       } else {
         final improvement = distBefore - dist;
         if (improvement > 0) {
-          totalScore += prob * improvement * 100;
+          totalScore += prob * improvement * 100 * scarcityBonus;
         }
       }
     }
@@ -1220,13 +1275,16 @@ class AIStrategyHard extends AIStrategy {
     int? myDist,
   }) {
     double danger = 0;
-    final ch = cardToDiscard.character;
     final isMidGame = state.deck.length >= 20 && state.deck.length <= 50;
+    final myVisibleCount = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
 
     // 检查其他玩家的弃牌和面子，推测他们可能听什么
     for (int i = 0; i < state.players.length; i++) {
       if (i == player.id) continue;
       final other = state.players[i];
+
+      // 构建对手的可见牌统计（对手能看到自己的手牌）
+      final otherVisibleCount = _buildVisibleCharCount(other, state);
 
       // 如果对方已经听牌，出牌更危险
       if (other.isTing) {
@@ -1262,11 +1320,13 @@ class AIStrategyHard extends AIStrategy {
         danger += isLate ? 25 : 12;
 
         // 剩余张数越少，出这张牌越危险（对手可能在等这张）
-        final rem = 4 - (state.buildVisibleCount(other)[cardToDiscard.character] ?? 0);
-        if (rem == 1) {
-          danger += isLate ? 40 : 25;
-        } else if (rem == 2) {
-          danger += isLate ? 20 : 12;
+        // 使用对手视角的剩余张数更精确
+        final otherChRem = _remainingCount(ch, otherVisibleCount);
+        if (otherChRem == 1) {
+          // 对手视角只剩1张（就是我出的这张），极危险
+          danger += isLate ? 50 : 30;
+        } else if (otherChRem == 2) {
+          danger += isLate ? 25 : 15;
         }
 
         // 通过对方面子推断可能听的牌
@@ -1277,6 +1337,19 @@ class AIStrategyHard extends AIStrategy {
             // 出的牌和对方面子同组，极危险
             danger += isLate ? 50 : 30;
           }
+        }
+
+        // 对方听牌时，结合同组字的可见性评估
+        // 同组字在对手视角剩余越少，对手越可能在等这张
+        int groupRemFromOtherView = 0;
+        for (final gc in sameGroupChars) {
+          groupRemFromOtherView += _remainingCount(gc, otherVisibleCount);
+        }
+        // 同组剩余张数少，对手更可能需要这张
+        if (groupRemFromOtherView <= 2) {
+          danger += isLate ? 30 : 18;
+        } else if (groupRemFromOtherView <= 4) {
+          danger += isLate ? 15 : 8;
         }
       }
 
@@ -1300,16 +1373,24 @@ class AIStrategyHard extends AIStrategy {
         }
       }
 
+      // 对手弃牌中同组字的统计：弃了越多同组字，越不要该组
       final otherDiscardChars = <String>{};
+      int otherDiscardSameGroupCount = 0;
       for (final dc in other.discards) {
         otherDiscardChars.add(dc.character);
+        if (dc.sentence == cardToDiscard.sentence) {
+          otherDiscardSameGroupCount++;
+        }
       }
       final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
-      int discardedByOther = 0;
-      for (final gc in sameGroupChars) {
-        if (otherDiscardChars.contains(gc)) discardedByOther++;
+
+      // 对手弃了同组2种以上字，不太可能要该组，降低危险
+      if (otherDiscardSameGroupCount >= 2) {
+        danger -= isLate ? 10 : 6;
       }
-      if (discardedByOther == 0 && other.melds.isNotEmpty) {
+
+      // 对手没有弃过同组字且有面子，可能需要该组
+      if (otherDiscardSameGroupCount == 0 && other.melds.isNotEmpty) {
         danger += isLate ? 15 : 8;
       }
 
@@ -1325,15 +1406,28 @@ class AIStrategyHard extends AIStrategy {
           break;
         }
       }
+
+      // 结合剩余张数推断对手需求
+      // 对手组合牌区有同组牌，且该组剩余张数少，对手更可能需要
+      if (otherMeldChars.any((mc) => _charSentenceMap[mc] == cardToDiscard.sentence)) {
+        int groupRem = 0;
+        for (final gc in sameGroupChars) {
+          groupRem += _remainingCount(gc, myVisibleCount);
+        }
+        // 同组剩余少，对手更迫切需要
+        if (groupRem <= 2) {
+          danger += isLate ? 20 : 12;
+        } else if (groupRem <= 4) {
+          danger += isLate ? 10 : 5;
+        }
+      }
     }
 
     // 喂牌意识：评估出的牌被下家吃的概率
-    // 下家是出牌者的逆时针下一位
     final nextPlayerIndex = (player.id + 1) % state.players.length;
     if (nextPlayerIndex != player.id) {
       final nextPlayer = state.players[nextPlayerIndex];
       final sameGroupChars = _groupChars[cardToDiscard.sentence - 1];
-      // 下家已碰/招了同组牌，出的牌容易被吃
       final nextMeldChars = <String>{};
       for (final meld in nextPlayer.melds) {
         for (final c in meld.cards) {
@@ -1348,9 +1442,7 @@ class AIStrategyHard extends AIStrategy {
         }
       }
       if (nextHasSameGroup) {
-        // 下家已有同组面子，出的牌可能被吃
         danger += isLate ? 15 : 8;
-        // 如果自己距离听牌较远，更应避免喂牌
         final feedMyDist =
             myDist ??
             _distanceToTing(List<Card>.from(player.hand), player.melds);
@@ -1358,17 +1450,37 @@ class AIStrategyHard extends AIStrategy {
           danger += 10;
         }
       }
-      // 检查下家弃牌中是否有该组的牌，如果没有说明下家可能在收集该组
+
+      // 下家弃牌中同组字的统计
+      int nextDiscardSameGroupCount = 0;
       final nextDiscardGroups = <int>{};
       for (final dc in nextPlayer.discards) {
         nextDiscardGroups.add(dc.sentence);
+        if (dc.sentence == cardToDiscard.sentence) {
+          nextDiscardSameGroupCount++;
+        }
+      }
+      // 下家弃了同组字越多，越不要该组，喂牌风险越低
+      if (nextDiscardSameGroupCount >= 2) {
+        danger -= isLate ? 8 : 4;
       }
       if (!nextDiscardGroups.contains(cardToDiscard.sentence) && nextPlayer.melds.isNotEmpty) {
         danger += isLate ? 12 : 6;
       }
-      // 下家手牌多时更可能吃
       if (nextPlayer.hand.length >= 16 && nextHasSameGroup) {
         danger += 5;
+      }
+
+      // 结合剩余张数评估喂牌风险
+      // 如果同组字剩余很少，下家即使想要也难以凑齐，风险降低
+      if (nextHasSameGroup) {
+        int groupRem = 0;
+        for (final gc in sameGroupChars) {
+          groupRem += _remainingCount(gc, myVisibleCount);
+        }
+        if (groupRem <= 1) {
+          danger -= isLate ? 10 : 5;
+        }
       }
     }
 
@@ -1546,8 +1658,7 @@ class AIStrategyHard extends AIStrategy {
         // 孤张进张概率低，更积极打出
         score -= 20;
         score += partnerProb * 8 + partnerRem * 1;
-
-        // 同组其他牌已被出完的孤张价值极低，更积极打出
+        // 同组其他字剩余为0时，孤张几乎无价值，更积极打出
         if (partnerRem == 0) {
           score -= 50;
         }
@@ -1914,8 +2025,42 @@ class AIStrategyHard extends AIStrategy {
             m.type == MeldType.kao &&
             m.cards.any((c) => c.character == card.character),
       );
-      // 碰牌破坏句/靠时，只有碰后能听牌才碰
+      // 碰牌破坏句/靠时，结合剩余张数评估损失
       if (inJu || inKao) {
+        final visibleCount = _buildVisibleCharCount(player, state);
+
+        // 计算被破坏的句/靠中缺失字的剩余张数
+        int missingRem = 0;
+        if (inJu) {
+          // 找到包含该字的句，计算句中其他字的剩余张数
+          for (final m in aSet) {
+            if (m.cards.any((c) => c.character == card.character)) {
+              for (final mc in m.cards) {
+                if (mc.character != card.character) {
+                  missingRem += _remainingCount(mc.character, visibleCount);
+                }
+              }
+              break;
+            }
+          }
+        }
+        if (inKao) {
+          for (final m in dSet) {
+            if (m.type == MeldType.kao &&
+                m.cards.any((c) => c.character == card.character)) {
+              for (final mc in m.cards) {
+                if (mc.character != card.character) {
+                  missingRem += _remainingCount(mc.character, visibleCount);
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // 剩余张数为0：无法重组，碰牌损失极大，严格限制
+        // 剩余张数少：重组困难，碰牌需谨慎
+        // 剩余张数多：重组容易，碰牌可接受
         final testHandCheck = List<Card>.from(hand);
         final matchingCheck = testHandCheck
             .where((c) => c.character == card.character)
@@ -1937,7 +2082,19 @@ class AIStrategyHard extends AIStrategy {
           melds: [...player.melds, newMeldCheck],
         );
         final tingCheck = _checkTingCached(testPlayerCheck);
-        if (!tingCheck.isTing) return false;
+
+        if (missingRem == 0) {
+          // 缺失字已出完，无法重组，必须碰后听牌才碰
+          if (!tingCheck.isTing) return false;
+        } else if (missingRem <= 2) {
+          // 缺失字少，重组困难，碰后需接近听牌
+          if (!tingCheck.isTing) {
+            final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
+            final distAfter = _distanceToTing(testHandCheck, [...player.melds, newMeldCheck]);
+            if (distAfter > distBefore) return false;
+          }
+        }
+        // 缺失字多(>2)，重组容易，按正常逻辑判断
       }
 
       final testHand = List<Card>.from(hand);
@@ -1973,6 +2130,8 @@ class AIStrategyHard extends AIStrategy {
       final (_, distAfterDiscard) = _findBestDiscardAfterMeld(
         testHand,
         newMelds,
+        visibleCount: _cachedVisibleCount ?? _buildVisibleCharCount(player, state),
+        totalUnknown: _cachedTotalUnknown ?? _totalUnknownCards(player, state),
       );
 
       if (distAfterDiscard > distBefore) return false;
@@ -1987,7 +2146,11 @@ class AIStrategyHard extends AIStrategy {
       // 距离和胡数都不变时，比较碰牌前后的进张数
       final vc = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
       final tu = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
-      final (bestHandAfterPeng, _) = _findBestDiscardAfterMeld(testHand, newMelds);
+      final (bestHandAfterPeng, _) = _findBestDiscardAfterMeld(
+        testHand, newMelds,
+        visibleCount: vc,
+        totalUnknown: tu,
+      );
       double entryAfterPeng = 0;
       for (final ch in _allChars) {
         final sentence = _charSentenceMap[ch];
@@ -2252,11 +2415,34 @@ class AIStrategyHard extends AIStrategy {
         );
         // 招的牌参与了句，招后句被破坏
         if (inJu) {
-          // 比较招后vs坎后的手牌质量
-          // 坎只取3张，保留1张可以继续参与句
+          // 计算被破坏句中其他字的剩余张数
+          final vc = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+          int juMissingRem = 0;
+          for (final m in handASet) {
+            if (m.cards.any((c) => c.character == character)) {
+              for (final mc in m.cards) {
+                if (mc.character != character) {
+                  juMissingRem += _remainingCount(mc.character, vc);
+                }
+              }
+              break;
+            }
+          }
+          // 剩余张数为0：句无法重组，招牌损失极大
+          if (juMissingRem == 0) {
+            // 坎保留1张可以继续参与句，招把4张全部移走
+            if (distKan <= distAfter) return false;
+            return huZhao > huKan + 4;
+          }
+          // 剩余张数少：重组困难，倾向坎而非招
+          if (juMissingRem <= 2) {
+            if (distKan < distAfter) return false;
+            if (distKan == distAfter && huKan >= huZhao) return false;
+            return huZhao > huKan;
+          }
+          // 剩余张数多：重组容易，按正常逻辑
           if (distKan < distAfter) return false;
           if (distKan == distAfter && huKan >= huZhao) return false;
-          // 坎更差时才考虑招
           return huZhao > huKan;
         }
 
