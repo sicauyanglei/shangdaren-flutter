@@ -5,12 +5,14 @@ class SettlementScreen extends StatefulWidget {
   final List<Player> players;
   final List<Map<String, dynamic>> roundResults;
   final VoidCallback? onClose;
+  final void Function(int roundNumber)? onReplay;
 
   const SettlementScreen({
     super.key,
     required this.players,
     required this.roundResults,
     this.onClose,
+    this.onReplay,
   });
 
   @override
@@ -29,6 +31,35 @@ class _SettlementScreenState extends State<SettlementScreen> {
   }
 
   String _fmtScore(int v) => v > 0 ? '+$v' : '$v';
+
+  Widget _buildReplayButton(int roundNumber) {
+    return GestureDetector(
+      onTap: () => widget.onReplay?.call(roundNumber),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4ecdc4).withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF4ecdc4).withOpacity(0.4)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.replay, size: 14, color: Color(0xFF4ecdc4)),
+            SizedBox(width: 4),
+            Text(
+              '回放',
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFF4ecdc4),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildAvatar(Player player, double size, {bool isDealer = false}) {
     final isFemale = player.gender == Gender.female;
@@ -331,15 +362,22 @@ class _SettlementScreenState extends State<SettlementScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Center(
-            child: Text(
-              '第${round['roundNumber']}局  流局',
-              style: const TextStyle(
-                fontSize: 16,
-                color: Color(0xFF888888),
-                fontWeight: FontWeight.bold,
+          child: Row(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '第${round['roundNumber']}局  流局',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF888888),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              _buildReplayButton(round['roundNumber'] as int),
+            ],
           ),
         ),
       ],
@@ -388,7 +426,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // header: winner avatar + hu type + method
+            // header: winner avatar + hu type + method + replay
             Row(
               children: [
                 _buildAvatar(winner, 32, isDealer: winnerIndex == dealerIndex),
@@ -415,6 +453,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
                     ],
                   ),
                 ),
+                _buildReplayButton(round['roundNumber'] as int),
               ],
             ),
             const SizedBox(height: 8),

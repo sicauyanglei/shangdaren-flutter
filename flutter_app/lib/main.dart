@@ -370,12 +370,16 @@ class _GameHomePageState extends State<GameHomePage>
                 SettingsScreen(
                   initialVolume: (AudioManager().volume * 100).round(),
                   initialTickEnabled: AudioManager().tickEnabled,
+                  initialRecordingEnabled: AudioManager().recordingEnabled,
                   initialDifficulty: AudioManager().difficulty,
                   onVolumeChanged: (v) {
                     AudioManager().setVolume(v / 100.0);
                   },
                   onTickEnabledChanged: (enabled) {
                     AudioManager().setTickEnabled(enabled);
+                  },
+                  onRecordingEnabledChanged: (enabled) {
+                    AudioManager().setRecordingEnabled(enabled);
                   },
                   onDifficultyChanged: (d) {
                     AudioManager().setDifficulty(d);

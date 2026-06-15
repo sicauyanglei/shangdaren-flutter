@@ -16,6 +16,8 @@ class AudioManager {
   bool get tickEnabled => _tickEnabled;
   String _difficulty = 'hard';
   String get difficulty => _difficulty;
+  bool _recordingEnabled = false;
+  bool get recordingEnabled => _recordingEnabled;
   bool _initialized = false;
 
   static const _audioFileMap = <String, String>{
@@ -121,12 +123,18 @@ class AudioManager {
     _saveSettings();
   }
 
+  void setRecordingEnabled(bool enabled) {
+    _recordingEnabled = enabled;
+    _saveSettings();
+  }
+
   Future<void> loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _volume = prefs.getDouble('audio_volume') ?? 1.0;
       _tickEnabled = prefs.getBool('tick_enabled') ?? true;
       _difficulty = prefs.getString('difficulty') ?? 'hard';
+      _recordingEnabled = prefs.getBool('recording_enabled') ?? false;
     } catch (_) {}
   }
 
@@ -135,6 +143,7 @@ class AudioManager {
       prefs.setDouble('audio_volume', _volume);
       prefs.setBool('tick_enabled', _tickEnabled);
       prefs.setString('difficulty', _difficulty);
+      prefs.setBool('recording_enabled', _recordingEnabled);
     });
   }
 
