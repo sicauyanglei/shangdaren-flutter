@@ -8,7 +8,10 @@ import 'game/ui/settlement_screen.dart';
 import 'game/core/game_logger.dart';
 import 'game/ui/settings_screen.dart';
 import 'game/ui/game_overlay.dart';
+import 'game/ui/replay_controls.dart';
 import 'game/core/audio_manager.dart';
+import 'game/models/game_recording.dart';
+import 'game/logic/recording_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +64,9 @@ class _GameHomePageState extends State<GameHomePage>
   bool _showStartScreen = true;
   bool _showSettlement = false;
   bool _showSettings = false;
+  bool _isRecordingEnabled = false;
+  bool _isReplayMode = false;
+  GameRecording? _currentRecording;
   final Map<int, int> _displayScores = {};
   final Map<int, int> _targetScores = {};
   final Map<int, Timer> _scoreAnimTimers = {};
@@ -191,6 +197,12 @@ class _GameHomePageState extends State<GameHomePage>
     if (!_game.gameLoaded) return;
     setState(() => _showStartScreen = false);
     _game.overlays.add('gameOverlay');
+
+    // 开始录制
+    if (_isRecordingEnabled) {
+      _game.gameController?.startRecording();
+    }
+
     _game.startGame(
       baseScore: baseScore,
       multiplierBase: multiplierBase,
@@ -200,6 +212,15 @@ class _GameHomePageState extends State<GameHomePage>
   }
 
   void _onCloseSettlement() {
+    // 停止录制并保存
+    if (_isRecordingEnabled && _game.gameController?.isRecording == true) {
+      final recording = _game.gameController?.stopRecording();
+      if (recording != null) {
+        RecordingManager().saveRecording(recording);
+        GameLogger.i('RECORDING', 'Saved recording: ${recording.id}, rounds: ${recording.rounds.length}');
+      }
+      _currentRecording = null;
+    }
     setState(() {
       _showSettlement = false;
       _showStartScreen = true;
@@ -209,6 +230,31 @@ class _GameHomePageState extends State<GameHomePage>
   void _onCloseHuOverlay() {
     _game.gameState.showHuResult = false;
     _game.handleHuClose();
+  }
+
+  void _onReplayRound(RoundRecording roundRecording) {
+    setState(() {
+      _showSettlement = false;
+      _isReplayMode = true;
+    });
+    _game.overlays.add('gameOverlay');
+
+    // 启动回放
+    _game.gameController?.startRoundReplay(roundRecording);
+
+    // 设置回放状态变化回调
+    _game.gameController?.onReplayStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  void _onExitReplay() {
+    _game.gameController?.onReplayStateChanged = null;
+    _game.gameController?.exitReplay();
+    setState(() {
+      _isReplayMode = false;
+      _showSettlement = true;
+    });
   }
 
   void _triggerNextOrSettlement() {
@@ -223,6 +269,15 @@ class _GameHomePageState extends State<GameHomePage>
     _displayScores.clear();
     _targetScores.clear();
     if (state.roundNumber >= 8) {
+      // 游戏结束，停止录制并保存
+      if (_isRecordingEnabled && _game.gameController?.isRecording == true) {
+        final recording = _game.gameController?.stopRecording();
+        if (recording != null) {
+          RecordingManager().saveRecording(recording);
+          _currentRecording = recording;
+          GameLogger.i('RECORDING', 'Saved recording at game end: ${recording.id}, rounds: ${recording.rounds.length}');
+        }
+      }
       setState(() {
         _showSettlement = true;
       });
@@ -331,6 +386,7 @@ class _GameHomePageState extends State<GameHomePage>
                                 child: GameOverlay(
                                   gameState: g.gameState,
                                   displayScores: _displayScores,
+                                  isReplayMode: _isReplayMode,
                                   onChi: g.respondChi,
                                   onPeng: g.respondPeng,
                                   onZhao: g.respondZhao,
@@ -363,6 +419,8 @@ class _GameHomePageState extends State<GameHomePage>
                 SettlementScreen(
                   players: _game.gameState.players,
                   roundResults: _game.gameState.roundHistory,
+                  recording: _currentRecording,
+                  onReplayRound: _onReplayRound,
                   onClose: _onCloseSettlement,
                 ),
 
@@ -371,6 +429,7 @@ class _GameHomePageState extends State<GameHomePage>
                   initialVolume: (AudioManager().volume * 100).round(),
                   initialTickEnabled: AudioManager().tickEnabled,
                   initialDifficulty: AudioManager().difficulty,
+                  initialRecordingEnabled: _isRecordingEnabled,
                   onVolumeChanged: (v) {
                     AudioManager().setVolume(v / 100.0);
                   },
@@ -381,8 +440,39 @@ class _GameHomePageState extends State<GameHomePage>
                     AudioManager().setDifficulty(d);
                     _game.gameState.difficulty = d;
                   },
+                  onRecordingEnabledChanged: (enabled) {
+                    setState(() => _isRecordingEnabled = enabled);
+                  },
                   onExitGame: () => SystemNavigator.pop(),
                   onClose: () => setState(() => _showSettings = false),
+                ),
+
+              // 回放控制覆盖层
+              if (_isReplayMode)
+                Positioned.fill(
+                  child: FittedBox(
+                    fit: BoxFit.fill,
+                    child: SizedBox(
+                      width: ShangdarenGame.designWidth,
+                      height: ShangdarenGame.designHeight,
+                      child: ReplayControls(
+                        isPaused: _game.gameController?.replayPaused ?? true,
+                        speed: _game.gameController?.replaySpeed ?? 1.0,
+                        progress: _game.gameController?.replayProgress ?? 0.0,
+                        currentIndex: _game.gameController?.replayCurrentIndex ?? 0,
+                        totalActions: _game.gameController?.replayTotalActions ?? 0,
+                        viewingPlayer: _game.gameController?.replayViewingPlayer ?? 1,
+                        playerDelays: _game.gameController?.replayPlayerDelays ?? [1000, 1000, 1000],
+                        onTogglePause: () => _game.gameController?.toggleReplayPause(),
+                        onStepForward: () => _game.gameController?.replayStepForward(),
+                        onSpeedChanged: (s) => _game.gameController?.setReplaySpeed(s),
+                        onViewingPlayerChanged: (p) => _game.gameController?.setReplayViewingPlayer(p),
+                        onPlayerDelayChanged: (playerIndex, delayMs) =>
+                            _game.gameController?.setReplayPlayerDelay(playerIndex, delayMs),
+                        onExit: _onExitReplay,
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),

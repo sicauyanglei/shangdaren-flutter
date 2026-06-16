@@ -727,6 +727,7 @@ class ShangdarenGame extends FlameGame {
         : null;
 
     _gameBoard!.showHuDisplay = state.showHuResult || state.showLiujuResult;
+    _gameBoard!.replayMode = _gameController!.isReplayMode;
 
     _gameBoard!.setHuResult(
       show: state.showHuResult,

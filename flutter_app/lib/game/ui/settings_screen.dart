@@ -5,9 +5,11 @@ class SettingsScreen extends StatefulWidget {
   final int initialVolume;
   final String initialDifficulty;
   final bool initialTickEnabled;
+  final bool initialRecordingEnabled;
   final ValueChanged<int>? onVolumeChanged;
   final ValueChanged<String>? onDifficultyChanged;
   final ValueChanged<bool>? onTickEnabledChanged;
+  final ValueChanged<bool>? onRecordingEnabledChanged;
   final VoidCallback? onExitGame;
   final VoidCallback? onClose;
 
@@ -16,9 +18,11 @@ class SettingsScreen extends StatefulWidget {
     this.initialVolume = 100,
     this.initialDifficulty = 'hard',
     this.initialTickEnabled = true,
+    this.initialRecordingEnabled = false,
     this.onVolumeChanged,
     this.onDifficultyChanged,
     this.onTickEnabledChanged,
+    this.onRecordingEnabledChanged,
     this.onExitGame,
     this.onClose,
   });
@@ -31,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late int _volume;
   late String _difficulty;
   late bool _tickEnabled;
+  late bool _recordingEnabled;
 
   @override
   void initState() {
@@ -38,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _volume = widget.initialVolume;
     _difficulty = widget.initialDifficulty;
     _tickEnabled = widget.initialTickEnabled;
+    _recordingEnabled = widget.initialRecordingEnabled;
   }
 
   @override
@@ -423,6 +429,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 },
                               ),
                             ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Recording Toggle
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.fromLTRB(
+                        24,
+                        compact ? 10 : 16,
+                        24,
+                        compact ? 10 : 16,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color: Colors.white.withOpacity(0.04),
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            _recordingEnabled ? '🎬' : '📵',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '牌局录制',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white.withOpacity(0.5),
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _recordingEnabled ? '录制游戏过程，可在结算页回放' : '录制已关闭',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() => _recordingEnabled = !_recordingEnabled);
+                              widget.onRecordingEnabledChanged?.call(_recordingEnabled);
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: 48,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(13),
+                                color: _recordingEnabled
+                                    ? const Color(0xFFffd700)
+                                    : Colors.white.withOpacity(0.15),
+                                boxShadow: _recordingEnabled
+                                    ? [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFFffd700,
+                                          ).withOpacity(0.3),
+                                          blurRadius: 10,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: AnimatedAlign(
+                                duration: const Duration(milliseconds: 300),
+                                alignment: _recordingEnabled
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.2),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),

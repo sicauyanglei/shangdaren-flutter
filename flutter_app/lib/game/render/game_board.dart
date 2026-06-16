@@ -109,6 +109,7 @@ class GameBoard extends Component {
   int deckCount = 0;
   bool dealingComplete = false;
   bool showHuDisplay = false;
+  bool replayMode = false; // 回放模式：显示所有玩家手牌
 
   bool showHuResult = false;
   String huWinnerName = '';
@@ -1700,7 +1701,8 @@ class GameBoard extends Component {
 
   void _renderAIHandCards(Canvas canvas) {
     if (_atlasImage == null || _atlasLoader == null) return;
-    if (showHuDisplay) {
+    // 回放模式或胡牌显示时，显示AI手牌正面
+    if (showHuDisplay || replayMode) {
       _renderAIHand(
         canvas,
         _player0Hand,

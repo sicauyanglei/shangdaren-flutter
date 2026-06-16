@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'models/game_recording.dart';
+import '../models/game_recording.dart';
 
 /// 录制管理器 - 负责录制的存储、加载、删除
 class RecordingManager {

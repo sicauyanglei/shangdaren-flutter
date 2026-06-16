@@ -21,7 +21,7 @@ class RecordedAction {
   final RecordedActionType type;
   final int playerIndex;
   final Map<String, dynamic> data;
-  final int elapsedMs; // 距游戏开始的毫秒数
+  final int elapsedMs; // 距本局开始的毫秒数
 
   RecordedAction({
     required this.type,
@@ -54,48 +54,89 @@ class RecordedAction {
       'RecordedAction(${type.name}, p=$playerIndex, data=$data, t=${elapsedMs}ms)';
 }
 
-/// 游戏录制记录
-class GameRecording {
-  final String id;
-  final DateTime createdAt;
+/// 单局录制数据
+class RoundRecording {
+  final int roundNumber;
+  final int dealerIndex;
+  final List<int> deckOrder; // 牌堆中卡牌ID的顺序（最后一个先被摸）
+  final List<int> playerGenders; // 0=male, 1=female
+  final List<int> playerScores; // 本局开始时的分数
+  final List<int> playerPiao; // 飘分值
   final int baseScore;
   final int multiplierBase;
   final String difficulty;
   final bool piaoEnabled;
-  final int dealerIndex;
-  final List<int> playerGenders; // 0=male, 1=female
-  final List<int> deckOrder; // 牌堆中卡牌ID的顺序（最后一个先被摸）
   final List<RecordedAction> actions;
+  // 本局结果
+  final Map<String, dynamic>? roundResult;
 
-  /// 录制结果摘要（最后一局的结果）
-  String? resultSummary;
-
-  GameRecording({
-    required this.id,
-    required this.createdAt,
+  RoundRecording({
+    required this.roundNumber,
+    required this.dealerIndex,
+    required this.deckOrder,
+    required this.playerGenders,
+    required this.playerScores,
+    required this.playerPiao,
     required this.baseScore,
     required this.multiplierBase,
     required this.difficulty,
     required this.piaoEnabled,
-    required this.dealerIndex,
-    required this.playerGenders,
-    required this.deckOrder,
     required this.actions,
-    this.resultSummary,
+    this.roundResult,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'roundNumber': roundNumber,
+    'dealerIndex': dealerIndex,
+    'deckOrder': deckOrder,
+    'playerGenders': playerGenders,
+    'playerScores': playerScores,
+    'playerPiao': playerPiao,
+    'baseScore': baseScore,
+    'multiplierBase': multiplierBase,
+    'difficulty': difficulty,
+    'piaoEnabled': piaoEnabled,
+    'actions': actions.map((a) => a.toJson()).toList(),
+    'roundResult': roundResult,
+  };
+
+  factory RoundRecording.fromJson(Map<String, dynamic> json) {
+    return RoundRecording(
+      roundNumber: json['roundNumber'] as int? ?? 1,
+      dealerIndex: json['dealerIndex'] as int? ?? 0,
+      deckOrder: List<int>.from(json['deckOrder'] as List? ?? []),
+      playerGenders: List<int>.from(json['playerGenders'] as List? ?? [0, 0, 0]),
+      playerScores: List<int>.from(json['playerScores'] as List? ?? [0, 0, 0]),
+      playerPiao: List<int>.from(json['playerPiao'] as List? ?? [0, 0, 0]),
+      baseScore: json['baseScore'] as int? ?? 5,
+      multiplierBase: json['multiplierBase'] as int? ?? 2,
+      difficulty: json['difficulty'] as String? ?? 'hard',
+      piaoEnabled: json['piaoEnabled'] as bool? ?? false,
+      actions: (json['actions'] as List?)
+              ?.map((a) => RecordedAction.fromJson(a as Map<String, dynamic>))
+              .toList() ??
+          [],
+      roundResult: json['roundResult'] as Map<String, dynamic>?,
+    );
+  }
+}
+
+/// 整场游戏录制（包含多局）
+class GameRecording {
+  final String id;
+  final DateTime createdAt;
+  final List<RoundRecording> rounds;
+
+  GameRecording({
+    required this.id,
+    required this.createdAt,
+    required this.rounds,
   });
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'createdAt': createdAt.toIso8601String(),
-    'baseScore': baseScore,
-    'multiplierBase': multiplierBase,
-    'difficulty': difficulty,
-    'piaoEnabled': piaoEnabled,
-    'dealerIndex': dealerIndex,
-    'playerGenders': playerGenders,
-    'deckOrder': deckOrder,
-    'actions': actions.map((a) => a.toJson()).toList(),
-    'resultSummary': resultSummary,
+    'rounds': rounds.map((r) => r.toJson()).toList(),
   };
 
   factory GameRecording.fromJson(Map<String, dynamic> json) {
@@ -104,18 +145,10 @@ class GameRecording {
       createdAt: DateTime.parse(
         json['createdAt'] as String? ?? DateTime.now().toIso8601String(),
       ),
-      baseScore: json['baseScore'] as int? ?? 5,
-      multiplierBase: json['multiplierBase'] as int? ?? 2,
-      difficulty: json['difficulty'] as String? ?? 'hard',
-      piaoEnabled: json['piaoEnabled'] as bool? ?? false,
-      dealerIndex: json['dealerIndex'] as int? ?? 0,
-      playerGenders: List<int>.from(json['playerGenders'] as List? ?? [0, 0, 0]),
-      deckOrder: List<int>.from(json['deckOrder'] as List? ?? []),
-      actions: (json['actions'] as List?)
-              ?.map((a) => RecordedAction.fromJson(a as Map<String, dynamic>))
+      rounds: (json['rounds'] as List?)
+              ?.map((r) => RoundRecording.fromJson(r as Map<String, dynamic>))
               .toList() ??
           [],
-      resultSummary: json['resultSummary'] as String?,
     );
   }
 
@@ -136,10 +169,16 @@ class GameRecording {
     return '$m-$d $h:$min';
   }
 
-  /// 获取游戏时长（秒）
+  /// 获取游戏总时长（秒）
   int get durationSeconds {
-    if (actions.isEmpty) return 0;
-    return actions.last.elapsedMs ~/ 1000;
+    if (rounds.isEmpty) return 0;
+    int total = 0;
+    for (final r in rounds) {
+      if (r.actions.isNotEmpty) {
+        total += r.actions.last.elapsedMs;
+      }
+    }
+    return total ~/ 1000;
   }
 
   /// 获取格式化的时长

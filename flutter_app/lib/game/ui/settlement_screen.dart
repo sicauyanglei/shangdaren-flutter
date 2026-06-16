@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/player.dart';
+import '../models/game_recording.dart';
 
 class SettlementScreen extends StatefulWidget {
   final List<Player> players;
   final List<Map<String, dynamic>> roundResults;
+  final GameRecording? recording; // 录制数据
+  final void Function(RoundRecording)? onReplayRound; // 回放回调
   final VoidCallback? onClose;
 
   const SettlementScreen({
     super.key,
     required this.players,
     required this.roundResults,
+    this.recording,
+    this.onReplayRound,
     this.onClose,
   });
 
@@ -292,8 +297,15 @@ class _SettlementScreenState extends State<SettlementScreen> {
 
   Widget _buildRoundResults() {
     return Column(
-      children: widget.roundResults.map((round) {
+      children: widget.roundResults.asMap().entries.map((entry) {
+        final index = entry.key;
+        final round = entry.value;
         final isLiuJu = round['isLiuJu'] == true;
+        // 获取对应的录制数据
+        final roundRecording = widget.recording != null &&
+                index < widget.recording!.rounds.length
+            ? widget.recording!.rounds[index]
+            : null;
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -307,13 +319,15 @@ class _SettlementScreenState extends State<SettlementScreen> {
                   : const Color(0xFFffd700).withOpacity(0.2),
             ),
           ),
-          child: isLiuJu ? _buildLiuJuRound(round) : _buildHuRound(round),
+          child: isLiuJu
+              ? _buildLiuJuRound(round, roundRecording)
+              : _buildHuRound(round, roundRecording),
         );
       }).toList(),
     );
   }
 
-  Widget _buildLiuJuRound(Map<String, dynamic> round) {
+  Widget _buildLiuJuRound(Map<String, dynamic> round, [RoundRecording? roundRecording]) {
     return Stack(
       children: [
         // round number watermark
@@ -331,22 +345,30 @@ class _SettlementScreenState extends State<SettlementScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Center(
-            child: Text(
-              '第${round['roundNumber']}局  流局',
-              style: const TextStyle(
-                fontSize: 16,
-                color: Color(0xFF888888),
-                fontWeight: FontWeight.bold,
+          child: Row(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '第${round['roundNumber']}局  流局',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF888888),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              if (roundRecording != null)
+                _buildReplayButton(roundRecording),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildHuRound(Map<String, dynamic> round) {
+  Widget _buildHuRound(Map<String, dynamic> round, [RoundRecording? roundRecording]) {
     final winnerIndex = round['winnerIndex'] as int;
     final winner = widget.players[winnerIndex];
     final scoreChanges = round['scoreChanges'] as List<dynamic>;
@@ -415,6 +437,8 @@ class _SettlementScreenState extends State<SettlementScreen> {
                     ],
                   ),
                 ),
+                if (roundRecording != null)
+                  _buildReplayButton(roundRecording),
               ],
             ),
             const SizedBox(height: 8),
@@ -506,6 +530,44 @@ class _SettlementScreenState extends State<SettlementScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildReplayButton(RoundRecording roundRecording) {
+    return GestureDetector(
+      onTap: () => widget.onReplayRound?.call(roundRecording),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4ecdc4), Color(0xFF3db8b0)],
+            begin: Alignment(-0.7, -0.7),
+            end: Alignment(0.7, 0.7),
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4ecdc4).withOpacity(0.3),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.play_circle_outline, size: 16, color: Colors.white),
+            SizedBox(width: 4),
+            Text(
+              '回放',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

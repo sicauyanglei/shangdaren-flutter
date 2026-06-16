@@ -36,6 +36,7 @@ double _handTopY(List<Card> hand) {
 class GameOverlay extends StatelessWidget {
   final GameState gameState;
   final Map<int, int> displayScores;
+  final bool isReplayMode;
   final VoidCallback? onChi;
   final VoidCallback? onPeng;
   final VoidCallback? onZhao;
@@ -52,6 +53,7 @@ class GameOverlay extends StatelessWidget {
     super.key,
     required this.gameState,
     this.displayScores = const {},
+    this.isReplayMode = false,
     this.onChi,
     this.onPeng,
     this.onZhao,
@@ -96,6 +98,7 @@ class GameOverlay extends StatelessWidget {
                   ? gameState.countdown
                   : 0,
               animatingScore: displayScores[0],
+              isReplayMode: isReplayMode,
             ),
           ),
         ),
@@ -117,6 +120,7 @@ class GameOverlay extends StatelessWidget {
                   ? gameState.countdown
                   : 0,
               animatingScore: displayScores[2],
+              isReplayMode: isReplayMode,
             ),
           ),
         ),
@@ -136,12 +140,14 @@ class GameOverlay extends StatelessWidget {
                   gameState: gameState,
                   onAvatarTap: onSettings,
                   animatingScore: displayScores[1],
+                  isReplayMode: isReplayMode,
                 ),
               ),
               if (player1?.isTing == true &&
                   !gameState.hideTingBadge &&
                   !gameState.showHuResult &&
-                  !gameState.showLiujuResult)
+                  !gameState.showLiujuResult &&
+                  !isReplayMode)
                 Transform.translate(
                   offset: const Offset(4, -4),
                   child: GameArtButton(
@@ -153,6 +159,7 @@ class GameOverlay extends StatelessWidget {
             ],
           ),
         ),
+        if (!isReplayMode)
         Positioned(
           bottom: _designHeight - _handTopY(player1?.hand ?? []) + 2,
           left: 0,
@@ -215,14 +222,14 @@ class GameOverlay extends StatelessWidget {
             players: gameState.players,
           ),
         ),
-        if (gameState.isPiaoPhase &&
+        if (!isReplayMode && gameState.isPiaoPhase &&
             gameState.piaoCurrentPlayerIndex < gameState.players.length &&
             gameState.players[gameState.piaoCurrentPlayerIndex].type ==
                 PlayerType.human)
           Positioned.fill(
             child: Center(child: _PiaoSelectionPopup(onSetPiao: onSetPiao)),
           ),
-        if (gameState.showZhaoSelection && gameState.zhaoCandidates.isNotEmpty)
+        if (!isReplayMode && gameState.showZhaoSelection && gameState.zhaoCandidates.isNotEmpty)
           Positioned.fill(
             child: Center(
               child: _ZhaoSelectionPopup(
@@ -294,6 +301,7 @@ class _AIPlayerInfo extends StatelessWidget {
   final int currentPlayerIndex;
   final int countdown;
   final int? animatingScore;
+  final bool isReplayMode;
 
   const _AIPlayerInfo({
     required this.player,
@@ -301,6 +309,7 @@ class _AIPlayerInfo extends StatelessWidget {
     required this.currentPlayerIndex,
     this.countdown = 0,
     this.animatingScore,
+    this.isReplayMode = false,
   });
 
   @override
@@ -405,7 +414,7 @@ class _AIPlayerInfo extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isCurrentTurn && countdown > 0)
+              if (isCurrentTurn && countdown > 0 && !isReplayMode)
                 Positioned(
                   top: -10,
                   left: -10,
@@ -512,12 +521,14 @@ class _MyPlayerInfo extends StatelessWidget {
   final GameState gameState;
   final VoidCallback? onAvatarTap;
   final int? animatingScore;
+  final bool isReplayMode;
 
   const _MyPlayerInfo({
     required this.player,
     required this.gameState,
     this.onAvatarTap,
     this.animatingScore,
+    this.isReplayMode = false,
   });
 
   @override
@@ -664,7 +675,8 @@ class _MyPlayerInfo extends StatelessWidget {
                       gameState.canZhao ||
                       (gameState.canHu && !gameState.isZimoOpportunity) ||
                       (gameState.canHu && gameState.isZimoOpportunity)) &&
-                  gameState.countdown > 0)
+                  gameState.countdown > 0 &&
+                  !isReplayMode)
                 Positioned(
                   top: -10,
                   left: -10,
