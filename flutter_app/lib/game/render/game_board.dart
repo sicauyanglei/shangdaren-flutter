@@ -2588,11 +2588,10 @@ class GameBoard extends Component {
     final cx = designWidth / 2;
 
     final handArea = getPlayer1HandArea();
-    final panelBottomY = handArea.top - 10;
     final panelW = 640.0;
-    final panelH = 220.0;
+    final panelH = designHeight;
     final panelX = (designWidth - panelW) / 2;
-    final panelY = panelBottomY - panelH;
+    final panelY = 0.0;
 
     canvas.save();
     canvas.drawRect(
