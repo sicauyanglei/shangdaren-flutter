@@ -947,6 +947,8 @@ class GameController {
       (p) => p.type == PlayerType.human,
     );
     if (humanIndex < 0) return;
+    // 手动选择招字重置超时计数
+    state.timeoutCount = 0;
     state.showZhaoSelection = false;
     state.zhaoCandidates.clear();
     _handleZhaoFromHand(state.players[humanIndex], character: character);
