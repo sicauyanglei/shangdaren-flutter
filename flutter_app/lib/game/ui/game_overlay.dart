@@ -163,7 +163,9 @@ class GameOverlay extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (gameState.isAutoHosting)
+                if (gameState.isAutoHosting &&
+                    !gameState.showHuResult &&
+                    !gameState.showLiujuResult)
                   GameArtButton(
                     label: '取消托管',
                     type: GameButtonType.hosting,
@@ -219,6 +221,7 @@ class GameOverlay extends StatelessWidget {
             dealerName: gameState.players[gameState.dealerIndex].name,
             showHuDisplay: gameState.showHuResult || gameState.showLiujuResult,
             isLastRound: gameState.roundNumber >= 8,
+            isAutoHosting: gameState.isAutoHosting,
             onNextRound: onNextRound,
             onShowSettlement: onShowSettlementFromButton,
             roundHistory: gameState.roundHistory,
@@ -845,6 +848,7 @@ class _RoundInfo extends StatefulWidget {
   final String dealerName;
   final bool showHuDisplay;
   final bool isLastRound;
+  final bool isAutoHosting;
   final VoidCallback? onNextRound;
   final VoidCallback? onShowSettlement;
   final List<Map<String, dynamic>> roundHistory;
@@ -855,6 +859,7 @@ class _RoundInfo extends StatefulWidget {
     this.dealerName = '',
     this.showHuDisplay = false,
     this.isLastRound = false,
+    this.isAutoHosting = false,
     this.onNextRound,
     this.onShowSettlement,
     this.roundHistory = const [],
@@ -868,6 +873,8 @@ class _RoundInfo extends StatefulWidget {
 class _RoundInfoState extends State<_RoundInfo> {
   int _countdown = 60;
   Timer? _timer;
+
+  int get _nextRoundSeconds => widget.isAutoHosting ? 10 : 60;
 
   @override
   void didUpdateWidget(covariant _RoundInfo oldWidget) {
@@ -886,7 +893,7 @@ class _RoundInfoState extends State<_RoundInfo> {
   }
 
   void _startCountdown() {
-    _countdown = 60;
+    _countdown = _nextRoundSeconds;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -907,7 +914,7 @@ class _RoundInfoState extends State<_RoundInfo> {
   void _stopCountdown() {
     _timer?.cancel();
     _timer = null;
-    _countdown = 60;
+    _countdown = _nextRoundSeconds;
   }
 
   void _onAutoNext() {

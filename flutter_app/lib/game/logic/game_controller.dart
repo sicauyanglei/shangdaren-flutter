@@ -63,10 +63,6 @@ class GameController {
   bool _isDealing = false;
   bool _isPaused = false;
   bool _isFromTimeout = false;
-  // 人类玩家回合超时秒数（默认60秒）
-  int _humanTurnTimeout = 60;
-  // 标记上一局是否在托管状态下结束
-  bool _wasAutoHostingAtRoundEnd = false;
 
   Card? _pendingDrawCard;
   int? _pendingDrawPlayerId;
@@ -107,8 +103,6 @@ class GameController {
     print('=== GameController.startGame called ===');
     state.reset();
     _isStartingRound = false;
-    _humanTurnTimeout = 60;
-    _wasAutoHostingAtRoundEnd = false;
     GameRecorder().setEnabled(AudioManager().recordingEnabled);
     GameRecorder().clear();
     if (state.difficulty == 'hard') {
@@ -152,14 +146,7 @@ class GameController {
     if (_isStartingRound) return;
     _isStartingRound = true;
 
-    // 处理上一局托管状态对本局超时的影响
-    if (_wasAutoHostingAtRoundEnd) {
-      // 上一局在托管状态下结束：本局超时10秒，关闭托管功能
-      _humanTurnTimeout = 10;
-      AudioManager().setAutoHostingEnabled(false);
-      _wasAutoHostingAtRoundEnd = false;
-    }
-    // 重置托管状态
+    // 重置托管状态（每局开始重新计数超时）
     state.isAutoHosting = false;
     state.timeoutCount = 0;
 
@@ -1094,8 +1081,8 @@ class GameController {
   }
 
   void startCountdown([int? seconds]) {
-    // 默认使用人类玩家回合超时秒数
-    seconds ??= _humanTurnTimeout;
+    // 玩家出牌倒计时固定30秒
+    seconds ??= 30;
     // 托管状态下使用短倒计时，仅保留动画时间
     if (state.isAutoHosting && (state.isMyTurn || state.waitingForResponse)) {
       seconds = 2;
@@ -1309,8 +1296,6 @@ class GameController {
   void cancelAutoHosting() {
     state.isAutoHosting = false;
     state.timeoutCount = 0;
-    // 取消托管后，下一局超时恢复60秒
-    _humanTurnTimeout = 60;
     onStateChanged?.call();
   }
 
@@ -1328,10 +1313,6 @@ class GameController {
   }) {
     if (state.showHuResult) return;
     stopCountdown();
-    // 记录本局是否在托管状态下结束
-    if (state.isAutoHosting) {
-      _wasAutoHostingAtRoundEnd = true;
-    }
     state.isHandlingHu = true;
     state.canChi = false;
     state.canPeng = false;
@@ -1496,10 +1477,6 @@ class GameController {
   void _handleLiuju() {
     if (state.showLiujuResult) return;
     stopCountdown();
-    // 记录本局是否在托管状态下结束
-    if (state.isAutoHosting) {
-      _wasAutoHostingAtRoundEnd = true;
-    }
     GameRecorder().recordLiuju();
     GameRecorder().endRound(resultType: 'liuju');
     _audio.playLiuju(
