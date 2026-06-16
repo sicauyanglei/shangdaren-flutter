@@ -6,9 +6,24 @@ import '../models/game_state.dart';
 import '../models/player.dart';
 import 'action_buttons.dart' show ActionButtons, GameArtButton, GameButtonType;
 
+const double _handCardW = 65.0;
 const double _handCardH = 224.0;
-const double _handStackVisible = 52.0;
+const double _handStackVisible = 68.0;
+const double _handSentenceGap = 2.0;
+const double _designWidth = 1280.0;
 const double _designHeight = 720.0;
+// 玩家2区域布局参数（与 game_board.dart 一致）
+const double _player2RightPadding = 9.6;
+const double _player2MaxWidth = 280.0;
+const double _player2AvatarBottom = 120.0;
+const double _player2AvatarToMeldGap = 6.0;
+const double _meldCardH = 56.0;
+const double _meldRowGap = 0.0;
+const double _meldToDiscardGap = 1.0;
+const double _smallCardH = 48.0;
+const double _discardRowGap = 0.0;
+const int _maxMeldPerRow = 3;
+const int _maxDiscardPerRow = 8;
 
 int _maxStackCount(List<Card> hand) {
   final sentenceGroups = <int, List<Card>>{};
@@ -30,7 +45,33 @@ double _handTopY(List<Card> hand) {
   final maxStacks = _maxStackCount(hand);
   if (maxStacks == 0) return _designHeight;
   final totalH = (maxStacks - 1) * _handStackVisible + _handCardH;
-  return _designHeight - totalH - 10;
+  return _designHeight - totalH + 60;
+}
+
+double _handWidth(List<Card> hand) {
+  final sentenceGroups = <int, List<Card>>{};
+  for (final card in hand) {
+    sentenceGroups.putIfAbsent(card.sentence, () => []).add(card);
+  }
+  final groupCount = sentenceGroups.length;
+  if (groupCount == 0) return 0;
+  return groupCount * _handCardW + (groupCount - 1) * _handSentenceGap;
+}
+
+// 计算玩家2区域（组合牌+弃牌）的底部Y坐标
+double _player2AreaBottomY(Player? player2) {
+  if (player2 == null) return 0;
+  final meldRowCount = player2.melds.isEmpty
+      ? 0
+      : ((player2.melds.length - 1) ~/ _maxMeldPerRow + 1);
+  final discardRowCount = player2.discards.isEmpty
+      ? 0
+      : ((player2.discards.length - 1) ~/ _maxDiscardPerRow + 1);
+  return _player2AvatarBottom +
+      _player2AvatarToMeldGap +
+      meldRowCount * (_meldCardH + _meldRowGap) +
+      _meldToDiscardGap +
+      discardRowCount * (_smallCardH + _discardRowGap);
 }
 
 class GameOverlay extends StatelessWidget {
@@ -155,6 +196,42 @@ class GameOverlay extends StatelessWidget {
             ],
           ),
         ),
+        // "取消托管"按钮：显示在人类手牌区域右侧，默认与手牌区域上对齐
+        // 如果遮挡了玩家2的组合牌/弃牌区域，自动往下移动
+        if (gameState.isAutoHosting &&
+            !gameState.showHuResult &&
+            !gameState.showLiujuResult)
+          Builder(
+            builder: (context) {
+              final handTopY = _handTopY(player1?.hand ?? []);
+              final handW = _handWidth(player1?.hand ?? []);
+              final handRightX = (_designWidth + handW) / 2;
+              const buttonGap = 10.0;
+              const buttonW = 210.0;
+              const buttonH = 72.0;
+              double buttonLeftX = handRightX + buttonGap;
+              double buttonTopY = handTopY;
+              // 玩家2区域左边界
+              const player2LeftBound =
+                  _designWidth - _player2RightPadding - _player2MaxWidth;
+              final player2BottomY = _player2AreaBottomY(player2);
+              // 如果按钮与玩家2区域重叠，则往下移动到玩家2区域下方
+              if (buttonLeftX + buttonW > player2LeftBound &&
+                  buttonTopY + buttonH > _player2AvatarBottom &&
+                  buttonTopY < player2BottomY) {
+                buttonTopY = player2BottomY + 10.0;
+              }
+              return Positioned(
+                left: buttonLeftX,
+                top: buttonTopY,
+                child: GameArtButton(
+                  label: '取消托管',
+                  type: GameButtonType.hosting,
+                  onTap: onCancelAutoHosting,
+                ),
+              );
+            },
+          ),
         Positioned(
           bottom: _designHeight - _handTopY(player1?.hand ?? []) + 2,
           left: 0,
@@ -163,15 +240,9 @@ class GameOverlay extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (gameState.isAutoHosting &&
-                    !gameState.showHuResult &&
-                    !gameState.showLiujuResult)
-                  GameArtButton(
-                    label: '取消托管',
-                    type: GameButtonType.hosting,
-                    onTap: onCancelAutoHosting,
-                  )
-                else ...[
+                if (!gameState.isAutoHosting ||
+                    gameState.showHuResult ||
+                    gameState.showLiujuResult) ...[
                   if (gameState.canHu && gameState.isZimoOpportunity)
                     GameArtButton(
                       label: '自摸',
