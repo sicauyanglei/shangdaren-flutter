@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手牌触摸方案E演示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #fff; font-family: 'Microsoft YaHei', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+h1 { font-size: 22px; margin-bottom: 8px; }
+.desc { font-size: 14px; color: #aaa; margin-bottom: 16px; text-align: center; max-width: 800px; line-height: 1.6; }
+
+.demo-area {
+  display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; justify-content: center;
+}
+
+.scene {
+  background: #0d1117; border-radius: 16px; padding: 20px; border: 1px solid #333;
+}
+.scene-title { font-size: 16px; color: #ffd700; margin-bottom: 12px; text-align: center; }
+
+.hand-row {
+  display: flex; gap: 2px; position: relative;
+}
+
+.stack {
+  position: relative; width: 65px;
+}
+
+.card {
+  width: 65px; height: 224px; border-radius: 8px; position: absolute; left: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; font-weight: bold; cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.15);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+.card.red { background: linear-gradient(135deg, #8b1a1a, #c62828); color: #ff8a80; }
+.card.green { background: linear-gradient(135deg, #1a4a2e, #2e7d32); color: #a5d6a7; }
+.card.black { background: linear-gradient(135deg, #1a1a1a, #333); color: #e0e0e0; }
+
+.card.hit {
+  border-color: #ffd700 !important;
+  box-shadow: 0 0 20px rgba(255,215,0,0.6), inset 0 0 20px rgba(255,215,0,0.15);
+}
+
+/* 触摸条带可视化 */
+.touch-zone {
+  position: absolute; left: -4px; right: -4px;
+  border: 2px dashed transparent; border-radius: 4px;
+  pointer-events: none; transition: all 0.15s;
+  z-index: 100;
+}
+.touch-zone.highlight {
+  border-color: #00e5ff;
+  background: rgba(0, 229, 255, 0.08);
+}
+.touch-zone-label {
+  position: absolute; right: -80px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: #00e5ff; white-space: nowrap;
+  opacity: 0; transition: opacity 0.15s;
+}
+.touch-zone.highlight .touch-zone-label { opacity: 1; }
+
+/* 当前方案 vs 方案E 对比 */
+.current-zone {
+  position: absolute; left: -4px; right: -4px;
+  border: 2px solid transparent; border-radius: 4px;
+  pointer-events: none; z-index: 99;
+}
+.current-zone.highlight {
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.legend {
+  display: flex; gap: 20px; margin-top: 16px; justify-content: center; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.legend-color { width: 24px; height: 4px; border-radius: 2px; }
+
+.result-box {
+  margin-top: 16px; padding: 10px 20px; border-radius: 8px;
+  background: #16213e; font-size: 15px; text-align: center; min-width: 200px;
+  border: 1px solid #333;
+}
+.result-box .card-name { color: #ffd700; font-weight: bold; font-size: 20px; }
+.result-box .method { color: #00e5ff; font-size: 12px; margin-top: 4px; }
+
+.compare-row {
+  display: flex; gap: 30px; margin-top: 12px; justify-content: center;
+}
+.compare-item {
+  padding: 8px 16px; border-radius: 8px; text-align: center; min-width: 140px;
+}
+.compare-item.current { background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.3); }
+.compare-item.plan-e { background: rgba(0,229,255,0.15); border: 1px solid rgba(0,229,255,0.3); }
+.compare-item .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+.compare-item .value { font-size: 18px; font-weight: bold; }
+
+.info-panel {
+  margin-top: 20px; padding: 16px; background: #16213e; border-radius: 12px;
+  max-width: 800px; border: 1px solid #333;
+}
+.info-panel h3 { color: #ffd700; font-size: 15px; margin-bottom: 8px; }
+.info-panel p { font-size: 13px; color: #bbb; line-height: 1.8; }
+.info-panel code { background: #0d1117; padding: 2px 6px; border-radius: 4px; color: #00e5ff; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>手牌触摸方案E - Y坐标精确匹配</h1>
+<p class="desc">
+  手牌同字层叠时，每张牌可见区域仅68px高，手指触摸容易误选。<br>
+  <b style="color:#ff6b6b">当前方案</b>：整个stack区域都选中最后一张牌（最上面的）<br>
+  <b style="color:#00e5ff">方案E</b>：按触摸Y坐标精确匹配到哪张牌的可见条带，条带间各扩展一半间距
+</p>
+
+<div class="demo-area">
+  <!-- 场景1: 3张同字叠放 -->
+  <div class="scene">
+    <div class="scene-title">场景1: 3张"丘"叠放</div>
+    <div class="hand-row" id="scene1"></div>
+    <div class="compare-row">
+      <div class="compare-item current">
+        <div class="label">当前方案选中</div>
+        <div class="value" id="s1-current" style="color:#ff6b6b">--</div>
+      </div>
+      <div class="compare-item plan-e">
+        <div class="label">方案E选中</div>
+        <div class="value" id="s1-plan-e" style="color:#00e5ff">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 场景2: 多组混合 -->
+  <div class="scene">
+    <div class="scene-title">场景2: 多组混合手牌</div>
+    <div class="hand-row" id="scene2"></div>
+    <div class="compare-row">
+      <div class="compare-item current">
+        <div class="label">当前方案选中</div>
+        <div class="value" id="s2-current" style="color:#ff6b6b">--</div>
+      </div>
+      <div class="compare-item plan-e">
+        <div class="label">方案E选中</div>
+        <div class="value" id="s2-plan-e" style="color:#00e5ff">--</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-color" style="background:#ff6b6b"></div>当前方案触摸区域</div>
+  <div class="legend-item"><div class="legend-color" style="background:#00e5ff"></div>方案E触摸条带</div>
+  <div class="legend-item"><div class="legend-color" style="background:#ffd700"></div>选中的牌</div>
+</div>
+
+<div class="info-panel">
+  <h3>方案E 规则</h3>
+  <p>
+    1. 同一stack中，每张牌有一个<b>可见条带</b>（高度= <code>handStackVisible = 68px</code>），最后一张牌的条带延伸到牌底<br>
+    2. 相邻条带之间各扩展一半间距，形成<b>无间隙触摸热区</b><br>
+    3. 触摸时按Y坐标匹配条带，精确选中对应牌<br>
+    4. 不同stack之间仍按X坐标判断（横向间距2px，但牌宽65px足够区分）<br>
+    5. 效果：手指触摸68px高的条带区域，就能精确选中该层的牌，而非总是选中最上面的牌
+  </p>
+</div>
+
+<script>
+const STACK_VISIBLE = 68;
+const CARD_H = 224;
+const CARD_W = 65;
+
+// 场景1数据：3张"丘"叠放
+const scene1Data = [
+  { char: '丘', count: 3, color: 'green' }
+];
+
+// 场景2数据：多组混合
+const scene2Data = [
+  { char: '上', count: 2, color: 'red' },
+  { char: '大', count: 1, color: 'red' },
+  { char: '人', count: 1, color: 'red' },
+  { char: '丘', count: 3, color: 'green' },
+  { char: '乙', count: 1, color: 'green' },
+  { char: '己', count: 2, color: 'green' },
+];
+
+function buildScene(containerId, data, resultId1, resultId2) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  data.forEach((group, stackIdx) => {
+    const stack = document.createElement('div');
+    stack.className = 'stack';
+    stack.style.height = (group.count - 1) * STACK_VISIBLE + CARD_H + 'px';
+    stack.style.width = CARD_W + 'px';
+
+    for (let i = 0; i < group.count; i++) {
+      const card = document.createElement('div');
+      card.className = `card ${group.color}`;
+      card.style.top = i * STACK_VISIBLE + 'px';
+      card.style.zIndex = i + 1;
+      card.textContent = group.char;
+      card.dataset.stackIdx = stackIdx;
+      card.dataset.cardIdx = i;
+      card.dataset.char = group.char;
+      card.dataset.count = group.count;
+      stack.appendChild(card);
+    }
+
+    // 方案E触摸条带
+    for (let i = 0; i < group.count; i++) {
+      const zone = document.createElement('div');
+      zone.className = 'touch-zone';
+      zone.dataset.stackIdx = stackIdx;
+      zone.dataset.cardIdx = i;
+      zone.dataset.char = group.char;
+      zone.dataset.count = group.count;
+
+      // 计算条带位置
+      let zoneTop = i * STACK_VISIBLE;
+      let zoneBottom = (i + 1) * STACK_VISIBLE;
+      if (i === group.count - 1) {
+        zoneBottom = (group.count - 1) * STACK_VISIBLE + CARD_H;
+      }
+
+      // 扩展一半间距
+      const halfGap = STACK_VISIBLE / 2;
+      if (i > 0) zoneTop -= halfGap / 2;
+      if (i < group.count - 1) zoneBottom += halfGap / 2;
+
+      zone.style.top = zoneTop + 'px';
+      zone.style.height = (zoneBottom - zoneTop) + 'px';
+
+      const label = document.createElement('div');
+      label.className = 'touch-zone-label';
+      label.textContent = `${group.char}#${i+1}`;
+      zone.appendChild(label);
+
+      stack.appendChild(zone);
+    }
+
+    // 当前方案触摸区域（整个stack）
+    const currentZone = document.createElement('div');
+    currentZone.className = 'current-zone';
+    currentZone.style.top = '0';
+    currentZone.style.height = stack.style.height;
+    currentZone.dataset.stackIdx = stackIdx;
+    currentZone.dataset.char = group.char;
+    currentZone.dataset.count = group.count;
+    stack.appendChild(currentZone);
+
+    container.appendChild(stack);
+  });
+
+  // 交互
+  let lastHitCard = null;
+  let lastHitZone = null;
+  let lastCurrentZone = null;
+
+  container.addEventListener('mousemove', (e) => {
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // 清除之前的高亮
+    if (lastHitCard) lastHitCard.classList.remove('hit');
+    if (lastHitZone) lastHitZone.classList.remove('highlight');
+    if (lastCurrentZone) lastCurrentZone.classList.remove('highlight');
+
+    // 方案E：精确Y匹配
+    let planECard = null;
+    let planEZone = null;
+    const stacks = container.querySelectorAll('.stack');
+    let stackLeft = 0;
+    for (const st of stacks) {
+      const stackRight = stackLeft + CARD_W;
+      if (mx >= stackLeft && mx <= stackRight) {
+        // 在这个stack内，按Y匹配条带
+        const zones = st.querySelectorAll('.touch-zone');
+        for (const z of zones) {
+          const zTop = parseFloat(z.style.top);
+          const zH = parseFloat(z.style.height);
+          if (my >= zTop && my <= zTop + zH) {
+            planEZone = z;
+            planECard = st.querySelector(`.card[data-card-idx="${z.dataset.cardIdx}"][data-stack-idx="${z.dataset.stackIdx}"]`);
+            break;
+          }
+        }
+        break;
+      }
+      stackLeft += CARD_W + 2;
+    }
+
+    // 当前方案：整个stack -> 最后一张
+    let currentCard = null;
+    let currentZoneEl = null;
+    stackLeft = 0;
+    for (const st of stacks) {
+      const stackRight = stackLeft + CARD_W;
+      if (mx >= stackLeft && mx <= stackRight) {
+        const count = parseInt(st.querySelector('.card').dataset.count);
+        currentCard = st.querySelector(`.card[data-card-idx="${count - 1}"]`);
+        currentZoneEl = st.querySelector('.current-zone');
+        break;
+      }
+      stackLeft += CARD_W + 2;
+    }
+
+    if (planECard) planECard.classList.add('hit');
+    if (planEZone) planEZone.classList.add('highlight');
+    if (currentZoneEl) currentZoneEl.classList.add('highlight');
+
+    lastHitCard = planECard;
+    lastHitZone = planEZone;
+    lastCurrentZone = currentZoneEl;
+
+    // 更新结果
+    const cur = document.getElementById(resultId1);
+    const plE = document.getElementById(resultId2);
+    if (currentCard) {
+      cur.textContent = currentCard.dataset.char + '(第' + currentCard.dataset.cardIdx + '张)';
+    } else {
+      cur.textContent = '--';
+    }
+    if (planECard) {
+      plE.textContent = planECard.dataset.char + '(第' + planECard.dataset.cardIdx + '张)';
+    } else {
+      plE.textContent = '--';
+    }
+  });
+
+  container.addEventListener('mouseleave', () => {
+    if (lastHitCard) lastHitCard.classList.remove('hit');
+    if (lastHitZone) lastHitZone.classList.remove('highlight');
+    if (lastCurrentZone) lastCurrentZone.classList.remove('highlight');
+    lastHitCard = null;
+    lastHitZone = null;
+    lastCurrentZone = null;
+    document.getElementById(resultId1).textContent = '--';
+    document.getElementById(resultId2).textContent = '--';
+  });
+}
+
+buildScene('scene1', scene1Data, 's1-current', 's1-plan-e');
+buildScene('scene2', scene2Data, 's2-current', 's2-plan-e');
+</script>
+</body>
+</html>

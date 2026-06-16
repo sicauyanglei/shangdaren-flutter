@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>结算统计 - 图文优化版</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #fff; font-family: 'Microsoft YaHei', sans-serif; padding: 20px; }
+h1 { font-size: 22px; text-align: center; color: #ffd700; margin-bottom: 6px; }
+.subtitle { font-size: 13px; color: #888; text-align: center; margin-bottom: 24px; }
+
+.tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { padding: 8px 18px; border-radius: 20px; border: 1px solid #444; background: #1a1a2e; color: #aaa; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.tab:hover { border-color: #ffd700; color: #ffd700; }
+.tab.active { background: #ffd700; color: #000; border-color: #ffd700; font-weight: bold; }
+
+.demo-container { display: flex; justify-content: center; }
+.panel { display: none; width: 440px; max-height: 90vh; overflow-y: auto; }
+.panel.active { display: block; }
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: #ffd700; border-radius: 2px; }
+
+.settlement-panel {
+  background: linear-gradient(135deg, #1a5c2e, #0d3018);
+  border-radius: 20px; border: 3px solid #ffd700;
+  box-shadow: 0 0 40px rgba(255,215,0,0.4);
+  padding: 20px 24px 16px;
+}
+.panel-title { font-size: 28px; color: #ffd700; text-align: center; font-weight: bold; margin-bottom: 16px; }
+
+/* 头像 */
+.avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar.male { background: linear-gradient(135deg, #1565c0, #42a5f5); }
+.avatar.female { background: linear-gradient(135deg, #ad1457, #f06292); }
+
+/* ===== 方案A: 图文卡片 ===== */
+.total-box {
+  background: rgba(255,215,0,0.08); border: 2px solid #ffd700; border-radius: 15px;
+  padding: 16px; margin-bottom: 16px;
+}
+.total-title { font-size: 18px; color: #ffd700; text-align: center; font-weight: bold; margin-bottom: 12px; }
+.total-row { display: flex; justify-content: space-around; }
+.total-player { text-align: center; padding: 10px 14px; border-radius: 12px; position: relative; }
+.total-player.winner { background: rgba(255,215,0,0.2); border: 2px solid #ffd700; }
+.total-player.loser { background: rgba(0,0,0,0.3); border: 2px solid transparent; }
+.total-crown { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 18px; }
+.total-name { font-size: 13px; color: #ccc; margin: 4px 0 2px; }
+.total-score { font-size: 24px; font-weight: bold; }
+.total-score.plus { color: #ffd700; }
+.total-score.minus { color: #ff6b6b; }
+
+.score-bar-wrap { width: 80px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin: 4px auto 0; overflow: hidden; }
+.score-bar { height: 100%; border-radius: 3px; transition: width 0.5s; }
+.score-bar.plus { background: linear-gradient(90deg, #ffd700, #ffeb3b); }
+.score-bar.minus { background: linear-gradient(90deg, #ff6b6b, #ef5350); }
+
+.round-card {
+  background: rgba(0,0,0,0.25); border-radius: 12px; padding: 12px 14px;
+  margin-bottom: 8px; border-left: 4px solid #ffd700;
+  transition: background 0.2s;
+}
+.round-card:hover { background: rgba(0,0,0,0.4); }
+.round-card.liuju-card { border-left-color: #555; }
+
+.round-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.round-num { font-size: 15px; color: #ffd700; font-weight: bold; }
+.round-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+.round-badge.zimo { background: linear-gradient(135deg, #ff6b6b, #ef5350); color: #fff; }
+.round-badge.dianpao { background: linear-gradient(135deg, #4ecdc4, #26a69a); color: #fff; }
+.round-badge.liuju { background: rgba(100,100,100,0.3); color: #999; }
+
+.round-hutype { font-size: 14px; color: #ff8a80; font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.hutype-icon { font-size: 16px; }
+
+.round-winner-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255,215,0,0.08); border-radius: 8px; }
+.winner-label { font-size: 11px; color: #ffd700; font-weight: bold; }
+.winner-name { font-size: 13px; color: #fff; font-weight: bold; }
+.winner-score { font-size: 14px; color: #ffd700; font-weight: bold; margin-left: auto; }
+
+.round-losers { display: flex; gap: 6px; flex-wrap: wrap; }
+.loser-chip { display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(255,107,107,0.1); }
+.loser-name { color: #ccc; }
+.loser-score { color: #ff6b6b; font-weight: bold; }
+
+.piao-row { display: flex; gap: 4px; margin-top: 6px; }
+.piao-chip { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: rgba(156,39,176,0.2); color: #ce93d8; }
+
+/* ===== 方案B: 大图展示 ===== */
+.round-detail-card {
+  background: rgba(0,0,0,0.3); border-radius: 14px; padding: 14px;
+  margin-bottom: 10px; border: 1px solid rgba(255,215,0,0.2);
+  position: relative; overflow: hidden;
+}
+.round-detail-card::before {
+  content: ''; position: absolute; top: 0; right: 0; width: 60px; height: 60px;
+  background: radial-gradient(circle at top right, rgba(255,215,0,0.08), transparent);
+  pointer-events: none;
+}
+.round-detail-num { font-size: 28px; color: rgba(255,215,0,0.2); font-weight: 900; position: absolute; top: 4px; right: 12px; }
+.round-detail-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.round-detail-hutype { font-size: 18px; color: #ffd700; font-weight: bold; }
+.round-detail-method { font-size: 12px; color: #aaa; }
+
+.round-detail-players { display: flex; gap: 8px; margin-top: 8px; }
+.rd-player { flex: 1; text-align: center; padding: 8px 4px; border-radius: 10px; }
+.rd-player.rd-winner { background: rgba(255,215,0,0.12); border: 1px solid rgba(255,215,0,0.3); }
+.rd-player.rd-loser { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.15); }
+.rd-player.rd-neutral { background: rgba(100,100,100,0.1); border: 1px solid rgba(100,100,100,0.15); }
+.rd-player-name { font-size: 12px; color: #ccc; margin-bottom: 4px; }
+.rd-player-score { font-size: 16px; font-weight: bold; }
+.rd-player-score.plus { color: #ffd700; }
+.rd-player-score.minus { color: #ff6b6b; }
+.rd-player-score.zero { color: #666; }
+.rd-player-role { font-size: 10px; margin-top: 2px; }
+.rd-role-winner { color: #ffd700; }
+.rd-role-dianpao { color: #4ecdc4; }
+.rd-role-loser { color: #ff6b6b; }
+
+/* ===== 方案C: 对比条形图 ===== */
+.compare-section { margin-bottom: 12px; }
+.compare-title { font-size: 13px; color: #aaa; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.compare-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.compare-bar-bg { flex: 1; height: 20px; background: rgba(255,255,255,0.05); border-radius: 4px; position: relative; overflow: hidden; }
+.compare-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 6px; font-size: 11px; font-weight: bold; color: #fff; min-width: 30px; transition: width 0.5s; }
+.compare-bar-fill.plus { background: linear-gradient(90deg, rgba(255,215,0,0.6), rgba(255,215,0,0.3)); }
+.compare-bar-fill.minus { background: linear-gradient(90deg, rgba(255,107,107,0.6), rgba(255,107,107,0.3)); }
+.compare-value { width: 50px; font-size: 12px; font-weight: bold; }
+.compare-value.plus { color: #ffd700; }
+.compare-value.minus { color: #ff6b6b; }
+
+.btn-row { display: flex; justify-content: flex-end; margin-top: 12px; }
+.btn-confirm {
+  width: 90px; height: 36px; border-radius: 18px; border: none;
+  background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+  color: #fff; font-size: 13px; font-weight: bold; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>结算统计 - 图文优化版</h1>
+<p class="subtitle">保持现有信息，优化视觉呈现，3种方案对比</p>
+
+<div class="tabs">
+  <div class="tab active" data-tab="a">A. 图文卡片</div>
+  <div class="tab" data-tab="b">B. 大图展示</div>
+  <div class="tab" data-tab="c">C. 对比条形图</div>
+</div>
+
+<div class="demo-container">
+  <div class="panel active" id="panel-a"></div>
+  <div class="panel" id="panel-b"></div>
+  <div class="panel" id="panel-c"></div>
+</div>
+
+<script>
+const players = [
+  { name: '我', gender: 'male', emoji: '😎' },
+  { name: '玩家1', gender: 'female', emoji: '👩' },
+  { name: '玩家2', gender: 'male', emoji: '🧔' },
+];
+
+const rounds = [
+  { round: 1, winner: 0, huType: '红元', method: 'zimo', multiplier: 6, score: 186, scoreChanges: [186, -62, -62], piao: [3, 1, 2], dianpaoPlayer: -1 },
+  { round: 2, winner: 1, huType: '枯胡', method: 'dianpao', multiplier: 2, score: 78, scoreChanges: [-78, 78, 0], piao: [3, 1, 2], dianpaoPlayer: 0 },
+  { round: 3, isLiuJu: true, scoreChanges: [0, 0, 0], piao: [3, 1, 2] },
+  { round: 4, winner: 2, huType: '十对', method: 'zimo', multiplier: 4, score: 134, scoreChanges: [-62, -62, 134], piao: [3, 1, 2], dianpaoPlayer: -1 },
+  { round: 5, winner: 0, huType: '清枯', method: 'dianpao', multiplier: 3, score: 98, scoreChanges: [98, 0, -98], piao: [3, 1, 2], dianpaoPlayer: 2 },
+  { round: 6, winner: 1, huType: '黑元', method: 'zimo', multiplier: 8, score: 242, scoreChanges: [-82, 242, -82], piao: [3, 1, 2], dianpaoPlayer: -1 },
+  { round: 7, winner: 0, huType: '普胡', method: 'dianpao', multiplier: 1, score: 52, scoreChanges: [52, -52, 0], piao: [3, 1, 2], dianpaoPlayer: 1 },
+  { round: 8, winner: 2, huType: '3精句', method: 'zimo', multiplier: 10, score: 298, scoreChanges: [-102, -102, 298], piao: [3, 1, 2], dianpaoPlayer: -1 },
+];
+
+const totalScores = [0, 0, 0];
+rounds.forEach(r => r.scoreChanges.forEach((s, i) => totalScores[i] += s));
+
+function fmtScore(v) { return v > 0 ? `+${v}` : `${v}`; }
+
+function avatarHtml(p, size) {
+  return `<div class="avatar ${p.gender}" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px">${p.emoji}</div>`;
+}
+
+const huIcons = { '红元':'🔥', '枯胡':'🍂', '十对':'🔟', '清枯':'🍃', '黑元':'🌑', '普胡':'✨', '3精句':'💎', '清枯重台':'🌟', '黑元重台':'🌑' };
+
+// ===== 方案A: 图文卡片 =====
+function renderA() {
+  const el = document.getElementById('panel-a');
+  const maxScore = Math.max(...totalScores);
+  const minScore = Math.min(...totalScores);
+  const range = maxScore - minScore || 1;
+
+  let html = `<div class="settlement-panel">
+    <div class="panel-title">游戏结算</div>
+    <div class="total-box">
+      <div class="total-title">总结算</div>
+      <div class="total-row">`;
+  players.forEach((p, i) => {
+    const isW = totalScores[i] === maxScore;
+    const pct = Math.max(5, ((totalScores[i] - minScore) / range) * 100);
+    html += `<div class="total-player ${isW ? 'winner' : 'loser'}">
+      ${isW ? '<div class="total-crown">👑</div>' : ''}
+      ${avatarHtml(p, 36)}
+      <div class="total-name">${p.name}</div>
+      <div class="total-score ${totalScores[i] >= 0 ? 'plus' : 'minus'}">${fmtScore(totalScores[i])}</div>
+      <div class="score-bar-wrap"><div class="score-bar ${totalScores[i] >= 0 ? 'plus' : 'minus'}" style="width:${pct}%"></div></div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  rounds.forEach(r => {
+    if (r.isLiuJu) {
+      html += `<div class="round-card liuju-card">
+        <div class="round-header">
+          <span class="round-num">第${r.round}局</span>
+          <span class="round-badge liuju">流局</span>
+        </div>
+        <div style="color:#666;font-size:13px;text-align:center;padding:8px 0">无胡牌</div>
+      </div>`;
+    } else {
+      const methodLabel = r.method === 'zimo' ? '自摸' : '点炮';
+      const methodClass = r.method === 'zimo' ? 'zimo' : 'dianpao';
+      const huIcon = huIcons[r.huType] || '🎯';
+
+      html += `<div class="round-card">
+        <div class="round-header">
+          <span class="round-num">第${r.round}局</span>
+          <span class="round-badge ${methodClass}">${methodLabel}</span>
+        </div>
+        <div class="round-hutype"><span class="hutype-icon">${huIcon}</span>${r.huType} <span style="color:#aaa;font-size:12px;font-weight:normal">${r.multiplier}倍</span></div>
+        <div class="round-winner-row">
+          ${avatarHtml(players[r.winner], 28)}
+          <span class="winner-label">赢家</span>
+          <span class="winner-name">${players[r.winner].name}</span>
+          <span class="winner-score">${fmtScore(r.scoreChanges[r.winner])}</span>
+        </div>
+        <div class="round-losers">`;
+      players.forEach((p, i) => {
+        if (i === r.winner) return;
+        const sc = r.scoreChanges[i];
+        if (sc === 0) return;
+        const role = r.dianpaoPlayer === i ? ' (点炮)' : '';
+        html += `<div class="loser-chip">
+          ${avatarHtml(p, 20)}
+          <span class="loser-name">${p.name}${role}</span>
+          <span class="loser-score">${fmtScore(sc)}</span>
+        </div>`;
+      });
+      html += `</div>`;
+      html += `<div class="piao-row">`;
+      players.forEach((p, i) => {
+        html += `<span class="piao-chip">${p.name}飘${r.piao[i]}</span>`;
+      });
+      html += `</div></div>`;
+    }
+  });
+
+  html += `<div class="btn-row"><button class="btn-confirm">确认</button></div></div>`;
+  el.innerHTML = html;
+}
+
+// ===== 方案B: 大图展示 =====
+function renderB() {
+  const el = document.getElementById('panel-b');
+  const maxScore = Math.max(...totalScores);
+  const minScore = Math.min(...totalScores);
+  const range = maxScore - minScore || 1;
+
+  let html = `<div class="settlement-panel">
+    <div class="panel-title">游戏结算</div>
+    <div class="total-box">
+      <div class="total-row">`;
+  players.forEach((p, i) => {
+    const isW = totalScores[i] === maxScore;
+    const pct = Math.max(5, ((totalScores[i] - minScore) / range) * 100);
+    html += `<div class="total-player ${isW ? 'winner' : 'loser'}" style="flex:1">
+      ${isW ? '<div class="total-crown">👑</div>' : ''}
+      ${avatarHtml(p, 44)}
+      <div class="total-name">${p.name}</div>
+      <div class="total-score ${totalScores[i] >= 0 ? 'plus' : 'minus'}" style="font-size:28px">${fmtScore(totalScores[i])}</div>
+      <div class="score-bar-wrap" style="width:100px"><div class="score-bar ${totalScores[i] >= 0 ? 'plus' : 'minus'}" style="width:${pct}%"></div></div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  rounds.forEach(r => {
+    if (r.isLiuJu) {
+      html += `<div class="round-detail-card" style="border-color:rgba(100,100,100,0.3)">
+        <div class="round-detail-num">${r.round}</div>
+        <div style="text-align:center;padding:12px 0;color:#666;font-size:14px">流局</div>
+      </div>`;
+    } else {
+      const methodLabel = r.method === 'zimo' ? '自摸' : '点炮';
+      const huIcon = huIcons[r.huType] || '🎯';
+
+      html += `<div class="round-detail-card">
+        <div class="round-detail-num">${r.round}</div>
+        <div class="round-detail-header">
+          ${avatarHtml(players[r.winner], 32)}
+          <div>
+            <div class="round-detail-hutype">${huIcon} ${r.huType}</div>
+            <div class="round-detail-method">${methodLabel} · ${r.multiplier}倍</div>
+          </div>
+        </div>
+        <div class="round-detail-players">`;
+      players.forEach((p, i) => {
+        const sc = r.scoreChanges[i];
+        let cls = 'rd-neutral', role = '', roleCls = '';
+        if (i === r.winner) { cls = 'rd-winner'; role = '赢家'; roleCls = 'rd-role-winner'; }
+        else if (sc < 0) { cls = 'rd-loser'; role = r.dianpaoPlayer === i ? '点炮' : '输家'; roleCls = r.dianpaoPlayer === i ? 'rd-role-dianpao' : 'rd-role-loser'; }
+        html += `<div class="rd-player ${cls}">
+          ${avatarHtml(p, 28)}
+          <div class="rd-player-name">${p.name}</div>
+          <div class="rd-player-score ${sc > 0 ? 'plus' : (sc < 0 ? 'minus' : 'zero')}">${fmtScore(sc)}</div>
+          <div class="rd-player-role ${roleCls}">${role}</div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+  });
+
+  html += `<div class="btn-row"><button class="btn-confirm">确认</button></div></div>`;
+  el.innerHTML = html;
+}
+
+// ===== 方案C: 对比条形图 =====
+function renderC() {
+  const el = document.getElementById('panel-c');
+  const maxAbs = Math.max(...totalScores.map(Math.abs), 1);
+
+  let html = `<div class="settlement-panel">
+    <div class="panel-title">游戏结算</div>
+    <div class="total-box">
+      <div class="total-title">总分对比</div>`;
+
+  players.forEach((p, i) => {
+    const pct = Math.abs(totalScores[i]) / maxAbs * 100;
+    html += `<div class="compare-bar-row">
+      <div style="display:flex;align-items:center;gap:4px;width:60px;justify-content:flex-end">
+        ${avatarHtml(p, 22)}
+        <span style="font-size:12px;color:#ccc">${p.name}</span>
+      </div>
+      <div class="compare-bar-bg">
+        <div class="compare-bar-fill ${totalScores[i] >= 0 ? 'plus' : 'minus'}" style="width:${Math.max(pct, 5)}%">${totalScores[i] >= 0 ? '+' : ''}</div>
+      </div>
+      <div class="compare-value ${totalScores[i] >= 0 ? 'plus' : 'minus'}">${fmtScore(totalScores[i])}</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  rounds.forEach(r => {
+    if (r.isLiuJu) {
+      html += `<div class="compare-section">
+        <div class="compare-title">第${r.round}局 <span class="round-badge liuju" style="font-size:10px">流局</span></div>
+        <div style="text-align:center;color:#555;font-size:12px;padding:4px 0">无分数变动</div>
+      </div>`;
+    } else {
+      const methodLabel = r.method === 'zimo' ? '自摸' : '点炮';
+      const methodClass = r.method === 'zimo' ? 'zimo' : 'dianpao';
+      const huIcon = huIcons[r.huType] || '🎯';
+      const localMax = Math.max(...r.scoreChanges.map(Math.abs), 1);
+
+      html += `<div class="compare-section">
+        <div class="compare-title">
+          第${r.round}局
+          <span class="round-badge ${methodClass}" style="font-size:10px">${methodLabel}</span>
+          <span style="color:#ff8a80;font-size:12px">${huIcon} ${r.huType}</span>
+          <span style="color:#888;font-size:11px">${r.multiplier}倍</span>
+        </div>`;
+
+      players.forEach((p, i) => {
+        const sc = r.scoreChanges[i];
+        const pct = Math.abs(sc) / localMax * 100;
+        let role = '';
+        if (i === r.winner) role = ' 👑';
+        else if (r.dianpaoPlayer === i) role = ' 🎯';
+
+        html += `<div class="compare-bar-row">
+          <div style="display:flex;align-items:center;gap:4px;width:60px;justify-content:flex-end">
+            ${avatarHtml(p, 18)}
+            <span style="font-size:11px;color:#ccc">${p.name}${role}</span>
+          </div>
+          <div class="compare-bar-bg">
+            <div class="compare-bar-fill ${sc >= 0 ? 'plus' : 'minus'}" style="width:${Math.max(pct, 5)}%">${sc >= 0 ? '+' : ''}</div>
+          </div>
+          <div class="compare-value ${sc >= 0 ? 'plus' : 'minus'}" style="font-size:11px">${fmtScore(sc)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+  });
+
+  html += `<div class="btn-row"><button class="btn-confirm">确认</button></div></div>`;
+  el.innerHTML = html;
+}
+
+renderA(); renderB(); renderC();
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

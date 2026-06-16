@@ -43,6 +43,7 @@ class GameOverlay extends StatelessWidget {
   final VoidCallback? onHu;
   final VoidCallback? onPass;
   final VoidCallback? onSettings;
+  final VoidCallback? onCancelAutoHosting;
   final void Function(int piaoValue)? onSetPiao;
   final VoidCallback? onNextRound;
   final VoidCallback? onShowSettlementFromButton;
@@ -59,6 +60,7 @@ class GameOverlay extends StatelessWidget {
     this.onHu,
     this.onPass,
     this.onSettings,
+    this.onCancelAutoHosting,
     this.onSetPiao,
     this.onNextRound,
     this.onShowSettlementFromButton,
@@ -161,42 +163,50 @@ class GameOverlay extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (gameState.canHu && gameState.isZimoOpportunity)
+                if (gameState.isAutoHosting)
                   GameArtButton(
-                    label: '自摸',
-                    type: GameButtonType.zimo,
-                    onTap: onHu,
-                  ),
-                if (gameState.canHu &&
-                    gameState.isZimoOpportunity &&
-                    (gameState.canChi ||
-                        gameState.canPeng ||
-                        gameState.canZhao)) ...[
-                  const SizedBox(width: 14),
-                  ActionButtons(
-                    canChi: gameState.canChi,
-                    canPeng: gameState.canPeng,
-                    canZhao: gameState.canZhao,
-                    canHu: false,
-                    onChi: onChi,
-                    onPeng: onPeng,
-                    onZhao: onZhao,
-                    onHu: onHu,
-                    onPass: onPass,
-                  ),
+                    label: '取消托管',
+                    type: GameButtonType.hosting,
+                    onTap: onCancelAutoHosting,
+                  )
+                else ...[
+                  if (gameState.canHu && gameState.isZimoOpportunity)
+                    GameArtButton(
+                      label: '自摸',
+                      type: GameButtonType.zimo,
+                      onTap: onHu,
+                    ),
+                  if (gameState.canHu &&
+                      gameState.isZimoOpportunity &&
+                      (gameState.canChi ||
+                          gameState.canPeng ||
+                          gameState.canZhao)) ...[
+                    const SizedBox(width: 14),
+                    ActionButtons(
+                      canChi: gameState.canChi,
+                      canPeng: gameState.canPeng,
+                      canZhao: gameState.canZhao,
+                      canHu: false,
+                      onChi: onChi,
+                      onPeng: onPeng,
+                      onZhao: onZhao,
+                      onHu: onHu,
+                      onPass: onPass,
+                    ),
+                  ],
+                  if (!gameState.isZimoOpportunity)
+                    ActionButtons(
+                      canChi: gameState.canChi,
+                      canPeng: gameState.canPeng,
+                      canZhao: gameState.canZhao,
+                      canHu: gameState.canHu && !gameState.isZimoOpportunity,
+                      onChi: onChi,
+                      onPeng: onPeng,
+                      onZhao: onZhao,
+                      onHu: onHu,
+                      onPass: onPass,
+                    ),
                 ],
-                if (!gameState.isZimoOpportunity)
-                  ActionButtons(
-                    canChi: gameState.canChi,
-                    canPeng: gameState.canPeng,
-                    canZhao: gameState.canZhao,
-                    canHu: gameState.canHu && !gameState.isZimoOpportunity,
-                    onChi: onChi,
-                    onPeng: onPeng,
-                    onZhao: onZhao,
-                    onHu: onHu,
-                    onPass: onPass,
-                  ),
               ],
             ),
           ),

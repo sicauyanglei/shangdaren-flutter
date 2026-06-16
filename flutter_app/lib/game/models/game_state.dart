@@ -43,6 +43,10 @@ class GameState {
   bool showZhaoSelection;
   bool hideTingBadge;
 
+  // 人类玩家托管状态
+  bool isAutoHosting;
+  int timeoutCount;
+
   String? huResultWinnerName;
   int? huResultWinnerIndex;
   String? huResultMethod;
@@ -133,6 +137,8 @@ class GameState {
     List<String>? zhaoCandidates,
     this.showZhaoSelection = false,
     this.hideTingBadge = false,
+    this.isAutoHosting = false,
+    this.timeoutCount = 0,
     this.huResultWinnerName,
     this.huResultWinnerIndex,
     this.huResultMethod,
@@ -184,6 +190,8 @@ class GameState {
     zhaoCandidates.clear();
     showZhaoSelection = false;
     hideTingBadge = false;
+    isAutoHosting = false;
+    timeoutCount = 0;
     huResultWinnerName = null;
     huResultWinnerIndex = null;
     huResultMethod = null;

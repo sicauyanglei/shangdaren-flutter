@@ -6,10 +6,14 @@ class SettingsScreen extends StatefulWidget {
   final String initialDifficulty;
   final bool initialTickEnabled;
   final bool initialRecordingEnabled;
+  final bool initialAutoHostingEnabled;
+  final String initialAutoHostingStrategy;
   final ValueChanged<int>? onVolumeChanged;
   final ValueChanged<String>? onDifficultyChanged;
   final ValueChanged<bool>? onTickEnabledChanged;
   final ValueChanged<bool>? onRecordingEnabledChanged;
+  final ValueChanged<bool>? onAutoHostingEnabledChanged;
+  final ValueChanged<String>? onAutoHostingStrategyChanged;
   final VoidCallback? onExitGame;
   final VoidCallback? onClose;
 
@@ -18,11 +22,15 @@ class SettingsScreen extends StatefulWidget {
     this.initialVolume = 100,
     this.initialDifficulty = 'hard',
     this.initialTickEnabled = true,
-    this.initialRecordingEnabled = false,
+    this.initialRecordingEnabled = true,
+    this.initialAutoHostingEnabled = false,
+    this.initialAutoHostingStrategy = 'ai',
     this.onVolumeChanged,
     this.onDifficultyChanged,
     this.onTickEnabledChanged,
     this.onRecordingEnabledChanged,
+    this.onAutoHostingEnabledChanged,
+    this.onAutoHostingStrategyChanged,
     this.onExitGame,
     this.onClose,
   });
@@ -36,6 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late String _difficulty;
   late bool _tickEnabled;
   late bool _recordingEnabled;
+  late bool _autoHostingEnabled;
+  late String _autoHostingStrategy;
+  bool _featureExpanded = false;
 
   @override
   void initState() {
@@ -44,6 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _difficulty = widget.initialDifficulty;
     _tickEnabled = widget.initialTickEnabled;
     _recordingEnabled = widget.initialRecordingEnabled;
+    _autoHostingEnabled = widget.initialAutoHostingEnabled;
+    _autoHostingStrategy = widget.initialAutoHostingStrategy;
   }
 
   @override
@@ -51,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final mq = MediaQuery.of(context);
     final screenH = mq.size.height;
     final screenW = mq.size.width;
-    final panelW = screenW < 400 ? screenW * 0.88 : 340.0;
+    final panelW = screenW < 400 ? screenW * 0.92 : 400.0;
     final compact = screenH < 420;
 
     return Container(
@@ -170,9 +183,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       width: double.infinity,
                       padding: EdgeInsets.fromLTRB(
                         24,
-                        compact ? 12 : 20,
+                        compact ? 8 : 12,
                         24,
-                        compact ? 12 : 20,
+                        compact ? 8 : 12,
                       ),
                       decoration: BoxDecoration(
                         border: Border(
@@ -204,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               Expanded(
@@ -250,15 +263,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    // Tick Sound & Recording Toggle
+                    // 功能开关（可折叠）
                     Container(
                       width: double.infinity,
-                      padding: EdgeInsets.fromLTRB(
-                        24,
-                        compact ? 10 : 16,
-                        24,
-                        compact ? 10 : 16,
-                      ),
                       decoration: BoxDecoration(
                         border: Border(
                           top: BorderSide(
@@ -266,77 +273,313 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          // 倒计时跑秒
-                          Text(
-                            _tickEnabled ? '⏱️' : '🔕',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '倒计时跑秒',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white.withOpacity(0.5),
-                                    letterSpacing: 2,
-                                    fontWeight: FontWeight.w600,
+                          // 折叠头部
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _featureExpanded = !_featureExpanded;
+                              });
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.fromLTRB(
+                                24,
+                                compact ? 10 : 14,
+                                24,
+                                compact ? 10 : 14,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '🔧',
+                                    style: TextStyle(fontSize: 16),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _tickEnabled ? '时间紧迫时播放跑秒提示音' : '已关闭跑秒提示音',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.white.withOpacity(0.3),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '功能开关',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.5),
+                                      letterSpacing: 2,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const Spacer(),
+                                  // 展开/收起按钮
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.06),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _featureExpanded ? '隐藏' : '详情',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  // 收缩小图标
+                                  AnimatedRotation(
+                                    turns: _featureExpanded ? 0.25 : 0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      size: 18,
+                                      color: Colors.white.withOpacity(0.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          _buildToggle(_tickEnabled, (v) {
-                            setState(() => _tickEnabled = v);
-                            widget.onTickEnabledChanged?.call(v);
-                          }),
-                          const SizedBox(width: 12),
-                          // 游戏录制
-                          Text(
-                            _recordingEnabled ? '🎬' : '📹',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '游戏录制',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white.withOpacity(0.5),
-                                    letterSpacing: 2,
-                                    fontWeight: FontWeight.w600,
+                          // 展开内容
+                          AnimatedCrossFade(
+                            duration: const Duration(milliseconds: 200),
+                            crossFadeState: _featureExpanded
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            firstChild: const SizedBox.shrink(),
+                            secondChild: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.fromLTRB(
+                                24,
+                                compact ? 6 : 10,
+                                24,
+                                compact ? 6 : 10,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Colors.white.withOpacity(0.02),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _recordingEnabled ? '录制游戏过程到视频' : '已关闭录制',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.white.withOpacity(0.3),
+                              ),
+                              child: Column(
+                                children: [
+                                  // 倒计时跑秒
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _tickEnabled ? '⏱️' : '🔕',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '倒计时跑秒',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.white.withOpacity(
+                                                  0.5,
+                                                ),
+                                                letterSpacing: 2,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _tickEnabled
+                                                  ? '时间紧迫时播放跑秒提示音'
+                                                  : '已关闭跑秒提示音',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _buildToggle(_tickEnabled, (v) {
+                                        setState(() => _tickEnabled = v);
+                                        widget.onTickEnabledChanged?.call(v);
+                                      }),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 10),
+                                  // 游戏录制
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _recordingEnabled ? '🎬' : '📹',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '游戏录制',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.white.withOpacity(
+                                                  0.5,
+                                                ),
+                                                letterSpacing: 2,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _recordingEnabled
+                                                  ? '录制游戏过程到视频'
+                                                  : '已关闭录制',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _buildToggle(_recordingEnabled, (v) {
+                                        setState(() => _recordingEnabled = v);
+                                        widget.onRecordingEnabledChanged?.call(
+                                          v,
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  // 倒计时托管
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _autoHostingEnabled ? '🤖' : '💤',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '倒计时托管',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.white.withOpacity(
+                                                  0.5,
+                                                ),
+                                                letterSpacing: 2,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _autoHostingEnabled
+                                                  ? '连续3次超时自动托管'
+                                                  : '已关闭自动托管',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _buildToggle(_autoHostingEnabled, (v) {
+                                        setState(() => _autoHostingEnabled = v);
+                                        widget.onAutoHostingEnabledChanged
+                                            ?.call(v);
+                                      }),
+                                    ],
+                                  ),
+                                  // 托管策略选择（仅在开启倒计时时显示）
+                                  AnimatedCrossFade(
+                                    duration: const Duration(milliseconds: 200),
+                                    crossFadeState: _autoHostingEnabled
+                                        ? CrossFadeState.showSecond
+                                        : CrossFadeState.showFirst,
+                                    firstChild: const SizedBox.shrink(),
+                                    secondChild: Padding(
+                                      padding: const EdgeInsets.only(
+                                        left: 22,
+                                        top: 8,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '🧠',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '托管策略',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.white.withOpacity(
+                                                0.4,
+                                              ),
+                                              letterSpacing: 1,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          // AI托管策略
+                                          _StrategyChip(
+                                            label: 'AI托管策略',
+                                            value: 'ai',
+                                            groupValue: _autoHostingStrategy,
+                                            compact: compact,
+                                            onChanged: (value) {
+                                              setState(
+                                                () => _autoHostingStrategy =
+                                                    value,
+                                              );
+                                              widget
+                                                  .onAutoHostingStrategyChanged
+                                                  ?.call(value);
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // 非AI托管
+                                          _StrategyChip(
+                                            label: '非AI托管',
+                                            value: 'simple',
+                                            groupValue: _autoHostingStrategy,
+                                            compact: compact,
+                                            onChanged: (value) {
+                                              setState(
+                                                () => _autoHostingStrategy =
+                                                    value,
+                                              );
+                                              widget
+                                                  .onAutoHostingStrategyChanged
+                                                  ?.call(value);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          _buildToggle(_recordingEnabled, (v) {
-                            setState(() => _recordingEnabled = v);
-                            widget.onRecordingEnabledChanged?.call(v);
-                          }),
                         ],
                       ),
                     ),
@@ -427,46 +670,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Padding(
                       padding: EdgeInsets.fromLTRB(
                         24,
-                        0,
+                        4,
                         24,
                         compact ? 16 : 24,
                       ),
-                      child: SizedBox(
+                      child: Container(
                         width: double.infinity,
-                        height: compact ? 38 : 46,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment(-0.7, -0.7),
-                              end: Alignment(0.7, 0.7),
-                              colors: [Color(0xFFe74c3c), Color(0xFFc0392b)],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFe74c3c).withOpacity(0.3),
-                                blurRadius: 15,
-                              ),
-                            ],
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment(-0.7, -0.7),
+                            end: Alignment(0.7, 0.7),
+                            colors: [Color(0xFFe74c3c), Color(0xFFc0392b)],
                           ),
-                          child: ElevatedButton(
-                            onPressed: widget.onExitGame,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFe74c3c).withOpacity(0.3),
+                              blurRadius: 15,
                             ),
-                            child: const Text(
-                              '退出游戏',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 2,
-                              ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: widget.onExitGame,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            minimumSize: Size(
+                              double.infinity,
+                              compact ? 36 : 44,
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              vertical: compact ? 8 : 12,
+                            ),
+                          ),
+                          child: const Text(
+                            '退出游戏',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 2,
                             ),
                           ),
                         ),
@@ -570,28 +816,35 @@ class _DifficultyCard extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              Column(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(icon, style: TextStyle(fontSize: compact ? 18 : 24)),
-                  SizedBox(height: compact ? 4 : 6),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: compact ? 12 : 14,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : Colors.white70,
-                    ),
-                  ),
-                  if (desc != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      desc!,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white.withOpacity(0.4),
+                  Text(icon, style: TextStyle(fontSize: compact ? 16 : 20)),
+                  const SizedBox(width: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: compact ? 12 : 14,
+                          fontWeight: FontWeight.w600,
+                          color: isActive ? Colors.white : Colors.white70,
+                        ),
                       ),
-                    ),
-                  ],
+                      if (desc != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          desc!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withOpacity(0.4),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
               if (isActive)
@@ -617,6 +870,55 @@ class _DifficultyCard extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 托管策略选择芯片
+class _StrategyChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final String groupValue;
+  final bool compact;
+  final ValueChanged<String> onChanged;
+
+  const _StrategyChip({
+    required this.label,
+    required this.value,
+    required this.groupValue,
+    this.compact = false,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = value == groupValue;
+    const color = Color(0xFFFF9800);
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          vertical: compact ? 5 : 7,
+          horizontal: compact ? 8 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isActive ? 0.25 : 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: color.withOpacity(isActive ? 0.9 : 0.25),
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: compact ? 10 : 11,
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : Colors.white.withOpacity(0.5),
           ),
         ),
       ),

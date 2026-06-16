@@ -16,8 +16,15 @@ class AudioManager {
   bool get tickEnabled => _tickEnabled;
   String _difficulty = 'hard';
   String get difficulty => _difficulty;
-  bool _recordingEnabled = false;
+  bool _recordingEnabled = true;
   bool get recordingEnabled => _recordingEnabled;
+
+  bool _autoHostingEnabled = false;
+  bool get autoHostingEnabled => _autoHostingEnabled;
+
+  // 托管策略: 'ai' = AI托管策略, 'simple' = 非AI托管(简单出牌)
+  String _autoHostingStrategy = 'ai';
+  String get autoHostingStrategy => _autoHostingStrategy;
   bool _initialized = false;
 
   static const _audioFileMap = <String, String>{
@@ -128,13 +135,25 @@ class AudioManager {
     _saveSettings();
   }
 
+  void setAutoHostingEnabled(bool enabled) {
+    _autoHostingEnabled = enabled;
+    _saveSettings();
+  }
+
+  void setAutoHostingStrategy(String strategy) {
+    _autoHostingStrategy = strategy;
+    _saveSettings();
+  }
+
   Future<void> loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _volume = prefs.getDouble('audio_volume') ?? 1.0;
       _tickEnabled = prefs.getBool('tick_enabled') ?? true;
       _difficulty = prefs.getString('difficulty') ?? 'hard';
-      _recordingEnabled = prefs.getBool('recording_enabled') ?? false;
+      _recordingEnabled = prefs.getBool('recording_enabled') ?? true;
+      _autoHostingEnabled = prefs.getBool('auto_hosting_enabled') ?? false;
+      _autoHostingStrategy = prefs.getString('auto_hosting_strategy') ?? 'ai';
     } catch (_) {}
   }
 
@@ -144,6 +163,8 @@ class AudioManager {
       prefs.setBool('tick_enabled', _tickEnabled);
       prefs.setString('difficulty', _difficulty);
       prefs.setBool('recording_enabled', _recordingEnabled);
+      prefs.setBool('auto_hosting_enabled', _autoHostingEnabled);
+      prefs.setString('auto_hosting_strategy', _autoHostingStrategy);
     });
   }
 

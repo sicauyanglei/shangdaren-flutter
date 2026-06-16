@@ -1,8 +1,0 @@
-{
-  "pages": ["pages/home/index"],
-  "window": {
-    "navigationBarBackgroundColor": "#0d2818",
-    "navigationBarTitleText": "上大人字牌",
-    "navigationBarTextStyle": "white"
-  }
-}

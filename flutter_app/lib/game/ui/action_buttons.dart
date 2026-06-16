@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum GameButtonType { hu, chi, peng, zhao, pass, zimo, ting }
+enum GameButtonType { hu, chi, peng, zhao, pass, zimo, ting, hosting }
 
 class GameArtButton extends StatefulWidget {
   final String label;
@@ -102,6 +102,15 @@ class _GameArtButtonState extends State<GameArtButton>
           textColor: const Color(0xFFFFFFFF),
           shadowColor: const Color(0xFFc62828),
           glowColor: const Color(0xFFff6b6b),
+        );
+      case GameButtonType.hosting:
+        return _ButtonStyle(
+          bgColors: const [Color(0xFFE65100), Color(0xFFFF9800)],
+          borderColor: const Color(0xFFFFF8E1),
+          innerBorderColor: const Color(0xFFFFCC80),
+          textColor: const Color(0xFFFFFFFF),
+          shadowColor: const Color(0xFFE65100),
+          glowColor: const Color(0xFFFF9800),
         );
     }
   }

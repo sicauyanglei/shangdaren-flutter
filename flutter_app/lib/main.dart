@@ -5,10 +5,12 @@ import 'package:flame/game.dart';
 import 'game/shangdaren_game.dart';
 import 'game/ui/start_screen.dart';
 import 'game/ui/settlement_screen.dart';
+import 'game/ui/replay_screen.dart';
 import 'game/core/game_logger.dart';
 import 'game/ui/settings_screen.dart';
 import 'game/ui/game_overlay.dart';
 import 'game/core/audio_manager.dart';
+import 'game/models/game_recorder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +63,8 @@ class _GameHomePageState extends State<GameHomePage>
   bool _showStartScreen = true;
   bool _showSettlement = false;
   bool _showSettings = false;
+  bool _showReplay = false;
+  RoundReplay? _currentReplay;
   final Map<int, int> _displayScores = {};
   final Map<int, int> _targetScores = {};
   final Map<int, Timer> _scoreAnimTimers = {};
@@ -339,6 +343,7 @@ class _GameHomePageState extends State<GameHomePage>
                                   onPass: g.respondPass,
                                   onSettings: () =>
                                       setState(() => _showSettings = true),
+                                  onCancelAutoHosting: g.cancelAutoHosting,
                                   onSetPiao: g.setPiao,
                                   onNextRound: _triggerNextOrSettlement,
                                   onShowSettlementFromButton:
@@ -364,6 +369,27 @@ class _GameHomePageState extends State<GameHomePage>
                   players: _game.gameState.players,
                   roundResults: _game.gameState.roundHistory,
                   onClose: _onCloseSettlement,
+                  onReplay: (roundNumber) {
+                    final replay = GameRecorder().getRoundReplay(roundNumber);
+                    if (replay != null) {
+                      setState(() {
+                        _showSettlement = false;
+                        _showReplay = true;
+                        _currentReplay = replay;
+                      });
+                    }
+                  },
+                ),
+
+              if (_showReplay && _currentReplay != null)
+                ReplayScreen(
+                  replay: _currentReplay!,
+                  onClose: () {
+                    setState(() {
+                      _showReplay = false;
+                      _showSettlement = true;
+                    });
+                  },
                 ),
 
               if (_showSettings)
@@ -371,6 +397,9 @@ class _GameHomePageState extends State<GameHomePage>
                   initialVolume: (AudioManager().volume * 100).round(),
                   initialTickEnabled: AudioManager().tickEnabled,
                   initialRecordingEnabled: AudioManager().recordingEnabled,
+                  initialAutoHostingEnabled: AudioManager().autoHostingEnabled,
+                  initialAutoHostingStrategy:
+                      AudioManager().autoHostingStrategy,
                   initialDifficulty: AudioManager().difficulty,
                   onVolumeChanged: (v) {
                     AudioManager().setVolume(v / 100.0);
@@ -380,6 +409,12 @@ class _GameHomePageState extends State<GameHomePage>
                   },
                   onRecordingEnabledChanged: (enabled) {
                     AudioManager().setRecordingEnabled(enabled);
+                  },
+                  onAutoHostingEnabledChanged: (enabled) {
+                    AudioManager().setAutoHostingEnabled(enabled);
+                  },
+                  onAutoHostingStrategyChanged: (strategy) {
+                    AudioManager().setAutoHostingStrategy(strategy);
                   },
                   onDifficultyChanged: (d) {
                     AudioManager().setDifficulty(d);

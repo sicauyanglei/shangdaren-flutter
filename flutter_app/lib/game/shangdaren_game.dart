@@ -421,6 +421,11 @@ class ShangdarenGame extends FlameGame {
     _gameController!.respondPass();
   }
 
+  void cancelAutoHosting() {
+    if (!_loaded) return;
+    _gameController!.cancelAutoHosting();
+  }
+
   void setPiao(int piaoValue) {
     if (!_loaded) return;
     _gameController!.setPiao(piaoValue);

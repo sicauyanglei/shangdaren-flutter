@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>醒悟提醒效果演示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a12; color: #fff; font-family: 'Microsoft YaHei', sans-serif; overflow-x: hidden; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+h1 { text-align: center; font-size: 24px; color: #ffd700; margin-bottom: 30px; text-shadow: 0 0 20px rgba(255,215,0,0.3); }
+
+.demo-grid { display: flex; flex-direction: column; gap: 30px; }
+
+.demo-card {
+  background: linear-gradient(135deg, #1a1a2e, #14141e);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.demo-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.demo-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.demo-tag {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.tag-strong { background: rgba(231,76,60,0.15); color: #e74c3c; }
+.tag-medium { background: rgba(241,196,15,0.15); color: #f1c40f; }
+.tag-weak { background: rgba(46,204,113,0.15); color: #2ecc71; }
+
+.demo-body {
+  padding: 20px;
+  position: relative;
+}
+
+.demo-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+/* 模拟游戏画面 */
+.game-frame {
+  width: 100%;
+  height: 300px;
+  background: #0d0d1a;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.game-top { 
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+
+.avatar-box {
+  width: 60px; height: 60px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2d2d3d, #1a1a2e);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
+.game-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.countdown {
+  font-size: 48px; font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-bottom {
+  position: absolute; bottom: 10px; left: 10px; right: 10px;
+  display: flex; gap: 8px; justify-content: center;
+}
+
+.action-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+}
+
+.btn-chi { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+.btn-peng { background: linear-gradient(135deg, #3498db, #2980b9); }
+.btn-zhao { background: linear-gradient(135deg, #e67e22, #d35400); }
+.btn-hu { background: linear-gradient(135deg, #e74c3c, #c0392b); font-size: 16px; }
+
+.hand-area {
+  position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 4px;
+}
+
+.hand-card {
+  width: 30px; height: 50px;
+  background: linear-gradient(180deg, #f5f0e0, #e8dcc8);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  color: #c0392b;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
+/* ========== A: 屏幕边缘闪烁 ========== */
+.edge-flash {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  opacity: 0;
+}
+
+.edge-flash.level-1 {
+  box-shadow: inset 0 0 30px rgba(255,215,0,0.3), inset 0 0 60px rgba(255,215,0,0.1);
+  animation: edgePulse1 2s ease-in-out infinite;
+}
+
+.edge-flash.level-2 {
+  box-shadow: inset 0 0 40px rgba(255,140,0,0.4), inset 0 0 80px rgba(255,140,0,0.15);
+  animation: edgePulse2 1.2s ease-in-out infinite;
+}
+
+.edge-flash.level-3 {
+  box-shadow: inset 0 0 50px rgba(231,76,60,0.5), inset 0 0 100px rgba(231,76,60,0.2);
+  animation: edgePulse3 0.6s ease-in-out infinite;
+}
+
+@keyframes edgePulse1 {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+@keyframes edgePulse2 {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@keyframes edgePulse3 {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ========== B: 操作按钮脉冲 ========== */
+.pulse-btn {
+  animation: btnPulse1 2s ease-in-out infinite;
+}
+
+.pulse-btn.level-2 {
+  animation: btnPulse2 1.2s ease-in-out infinite;
+}
+
+.pulse-btn.level-3 {
+  animation: btnPulse3 0.6s ease-in-out infinite;
+}
+
+@keyframes btnPulse1 {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes btnPulse2 {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes btnPulse3 {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+/* ========== C: 手机震动模拟 ========== */
+.vibrate-1 { animation: vibrate1 0.5s ease-in-out infinite; }
+.vibrate-2 { animation: vibrate2 0.3s ease-in-out infinite; }
+.vibrate-3 { animation: vibrate3 0.15s ease-in-out infinite; }
+
+@keyframes vibrate1 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, -1px); }
+}
+@keyframes vibrate2 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, -2px); }
+  75% { transform: translate(-2px, -2px); }
+}
+@keyframes vibrate3 {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-4px, 3px); }
+  50% { transform: translate(4px, -3px); }
+  75% { transform: translate(-3px, -3px); }
+}
+
+/* ========== D: 手牌区域高亮 ========== */
+.hand-glow {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  width: 280px; height: 70px;
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.hand-glow.level-1 {
+  background: radial-gradient(ellipse, rgba(255,215,0,0.15), transparent 70%);
+  animation: handBreath1 2s ease-in-out infinite;
+}
+.hand-glow.level-2 {
+  background: radial-gradient(ellipse, rgba(255,140,0,0.2), transparent 70%);
+  animation: handBreath2 1.2s ease-in-out infinite;
+}
+.hand-glow.level-3 {
+  background: radial-gradient(ellipse, rgba(231,76,60,0.25), transparent 70%);
+  animation: handBreath3 0.6s ease-in-out infinite;
+}
+
+@keyframes handBreath1 {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@keyframes handBreath2 {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+@keyframes handBreath3 {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ========== E: 中央弹出提示 ========== */
+.center-popup {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+  padding: 12px 28px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.center-popup.level-1 {
+  background: rgba(255,215,0,0.15);
+  color: #ffd700;
+  border: 1px solid rgba(255,215,0,0.3);
+  animation: popupFade1 3s ease-in-out infinite;
+}
+.center-popup.level-2 {
+  background: rgba(255,140,0,0.2);
+  color: #ff8c00;
+  border: 1px solid rgba(255,140,0,0.4);
+  animation: popupFade2 2s ease-in-out infinite;
+}
+.center-popup.level-3 {
+  background: rgba(231,76,60,0.25);
+  color: #ff6b6b;
+  border: 1px solid rgba(231,76,60,0.5);
+  animation: popupFade3 1s ease-in-out infinite;
+}
+
+@keyframes popupFade1 {
+  0%, 100% { opacity: 0; }
+  15%, 85% { opacity: 1; }
+}
+@keyframes popupFade2 {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+@keyframes popupFade3 {
+  0%, 100% { opacity: 0; }
+  25%, 75% { opacity: 1; }
+}
+
+/* ========== F: 头像呼吸灯 ========== */
+.avatar-breath {
+  border: 2px solid transparent;
+}
+
+.avatar-breath.level-1 {
+  animation: avatarBreath1 2s ease-in-out infinite;
+}
+.avatar-breath.level-2 {
+  animation: avatarBreath2 1.2s ease-in-out infinite;
+}
+.avatar-breath.level-3 {
+  animation: avatarBreath3 0.6s ease-in-out infinite;
+}
+
+@keyframes avatarBreath1 {
+  0%, 100% { border-color: rgba(255,215,0,0.2); box-shadow: 0 0 0 rgba(255,215,0,0); }
+  50% { border-color: rgba(255,215,0,0.8); box-shadow: 0 0 15px rgba(255,215,0,0.3); }
+}
+@keyframes avatarBreath2 {
+  0%, 100% { border-color: rgba(255,140,0,0.3); box-shadow: 0 0 0 rgba(255,140,0,0); }
+  50% { border-color: rgba(255,140,0,0.9); box-shadow: 0 0 20px rgba(255,140,0,0.4); }
+}
+@keyframes avatarBreath3 {
+  0%, 100% { border-color: rgba(231,76,60,0.4); box-shadow: 0 0 0 rgba(231,76,60,0); }
+  50% { border-color: rgba(231,76,60,1); box-shadow: 0 0 25px rgba(231,76,60,0.5); }
+}
+
+/* 控制栏 */
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+.ctrl-btn.active { border-color: #ffd700; color: #ffd700; background: rgba(255,215,0,0.1); }
+
+/* 组合演示 */
+.combo-frame {
+  position: relative;
+}
+
+.combo-edge {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  opacity: 0;
+  animation: comboEdge 0.6s ease-in-out infinite;
+}
+
+@keyframes comboEdge {
+  0%, 100% { opacity: 0.4; box-shadow: inset 0 0 50px rgba(231,76,60,0.5), inset 0 0 100px rgba(231,76,60,0.2); }
+  50% { opacity: 1; box-shadow: inset 0 0 60px rgba(231,76,60,0.6), inset 0 0 120px rgba(231,76,60,0.3); }
+}
+
+.combo-vibrate {
+  animation: vibrate3 0.15s ease-in-out infinite;
+}
+
+.combo-btn-pulse {
+  animation: btnPulse3 0.6s ease-in-out infinite;
+}
+
+.combo-hand-glow {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  width: 280px; height: 70px;
+  border-radius: 12px;
+  pointer-events: none;
+  background: radial-gradient(ellipse, rgba(231,76,60,0.25), transparent 70%);
+  animation: handBreath3 0.6s ease-in-out infinite;
+}
+
+.combo-avatar {
+  border: 2px solid transparent;
+  animation: avatarBreath3 0.6s ease-in-out infinite;
+}
+
+.combo-popup {
+  position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%);
+  padding: 10px 24px;
+  border-radius: 10px;
+  background: rgba(231,76,60,0.25);
+  color: #ff6b6b;
+  border: 1px solid rgba(231,76,60,0.5);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  pointer-events: none;
+  animation: popupFade3 1s ease-in-out infinite;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>醒悟提醒效果演示</h1>
+  <div class="demo-grid">
+
+    <!-- A: 屏幕边缘闪烁 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">A: 屏幕边缘闪烁</div>
+        <div class="demo-tag tag-strong">紧迫感: 强</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">屏幕四边出现脉冲光带，颜色随阶段变化(金→橙→红)，频率递增。最直观的全局视觉提醒。</div>
+        <div class="game-frame" id="frameA">
+          <div class="edge-flash level-1" id="edgeA"></div>
+          <div class="game-top">
+            <div class="avatar-box">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" id="countA" style="color: #ffd700;">20</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi">吃</button>
+            <button class="action-btn btn-peng">碰</button>
+            <button class="action-btn btn-hu">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn active" onclick="setEdgeLevel(1)">20秒(金色慢)</button>
+          <button class="ctrl-btn" onclick="setEdgeLevel(2)">10秒(橙色中)</button>
+          <button class="ctrl-btn" onclick="setEdgeLevel(3)">5秒(红色快)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- B: 操作按钮脉冲 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">B: 操作按钮脉冲</div>
+        <div class="demo-tag tag-medium">紧迫感: 中</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">需要点击的按钮放大缩小脉冲动画，直接引导玩家点击目标。</div>
+        <div class="game-frame">
+          <div class="game-top">
+            <div class="avatar-box">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff8c00;">10</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi pulse-btn level-2">吃</button>
+            <button class="action-btn btn-peng pulse-btn level-2">碰</button>
+            <button class="action-btn btn-hu pulse-btn level-2">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" onclick="setBtnLevel(1)">20秒(慢脉冲)</button>
+          <button class="ctrl-btn active" onclick="setBtnLevel(2)">10秒(中脉冲)</button>
+          <button class="ctrl-btn" onclick="setBtnLevel(3)">5秒(快脉冲)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- C: 手机震动模拟 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">C: 手机震动</div>
+        <div class="demo-tag tag-strong">紧迫感: 强</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">模拟手机震动效果，5秒内每秒短震，3秒内连续双震。触觉提醒最直接。</div>
+        <div class="game-frame vibrate-2" id="frameC">
+          <div class="game-top">
+            <div class="avatar-box">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff6b6b;">5</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi">吃</button>
+            <button class="action-btn btn-peng">碰</button>
+            <button class="action-btn btn-hu">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" onclick="setVibLevel(1)">20秒(轻震)</button>
+          <button class="ctrl-btn active" onclick="setVibLevel(2)">10秒(中震)</button>
+          <button class="ctrl-btn" onclick="setVibLevel(3)">5秒(强震)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- D: 手牌区域高亮 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">D: 手牌区域高亮</div>
+        <div class="demo-tag tag-medium">紧迫感: 中</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">手牌区域出现呼吸光效，提示玩家该操作手牌区。引导视线到操作区域。</div>
+        <div class="game-frame">
+          <div class="hand-glow level-2"></div>
+          <div class="game-top">
+            <div class="avatar-box">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff8c00;">10</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi">吃</button>
+            <button class="action-btn btn-peng">碰</button>
+            <button class="action-btn btn-hu">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" onclick="setHandLevel(1)">20秒(金色)</button>
+          <button class="ctrl-btn active" onclick="setHandLevel(2)">10秒(橙色)</button>
+          <button class="ctrl-btn" onclick="setHandLevel(3)">5秒(红色)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- E: 中央弹出提示 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">E: 中央弹出提示</div>
+        <div class="demo-tag tag-weak">紧迫感: 弱</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">屏幕中央短暂弹出"轮到你了！"文字，周期性闪现。简单直接但可能干扰视线。</div>
+        <div class="game-frame">
+          <div class="center-popup level-2">轮到你了！</div>
+          <div class="game-top">
+            <div class="avatar-box">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff8c00;">10</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi">吃</button>
+            <button class="action-btn btn-peng">碰</button>
+            <button class="action-btn btn-hu">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" onclick="setPopupLevel(1)">20秒(金色慢)</button>
+          <button class="ctrl-btn active" onclick="setPopupLevel(2)">10秒(橙色中)</button>
+          <button class="ctrl-btn" onclick="setPopupLevel(3)">5秒(红色快)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- F: 头像呼吸灯 -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-title">F: 头像呼吸灯</div>
+        <div class="demo-tag tag-weak">紧迫感: 弱</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">人类玩家头像边框出现呼吸灯效果(亮→暗→亮循环)。温和提醒，不干扰游戏。</div>
+        <div class="game-frame">
+          <div class="game-top">
+            <div class="avatar-box avatar-breath level-2">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff8c00;">10</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi">吃</button>
+            <button class="action-btn btn-peng">碰</button>
+            <button class="action-btn btn-hu">胡</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" onclick="setAvatarLevel(1)">20秒(金色)</button>
+          <button class="ctrl-btn active" onclick="setAvatarLevel(2)">10秒(橙色)</button>
+          <button class="ctrl-btn" onclick="setAvatarLevel(3)">5秒(红色)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 组合: A+C+D+F -->
+    <div class="demo-card" style="border-color: rgba(255,215,0,0.2);">
+      <div class="demo-header" style="background: linear-gradient(90deg, rgba(255,215,0,0.08), transparent);">
+        <div class="demo-title">推荐组合: A(边缘闪烁) + C(震动) + D(手牌高亮) + F(头像呼吸灯)</div>
+        <div class="demo-tag tag-strong">综合效果: 最强</div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-desc">视觉+触觉+引导三重提醒，从全局到局部层层递进。边缘闪烁吸引注意→手牌高亮引导视线→头像呼吸灯确认身份→震动触觉兜底。</div>
+        <div class="game-frame combo-frame combo-vibrate" id="comboFrame">
+          <div class="combo-edge"></div>
+          <div class="combo-hand-glow"></div>
+          <div class="combo-popup">轮到你了！</div>
+          <div class="game-top">
+            <div class="avatar-box combo-avatar">🧑</div>
+            <div class="avatar-box">🤖</div>
+            <div class="avatar-box">🤖</div>
+          </div>
+          <div class="game-center">
+            <div class="countdown" style="color: #ff6b6b;">5</div>
+          </div>
+          <div class="hand-area">
+            <div class="hand-card">上</div><div class="hand-card">大</div><div class="hand-card">人</div>
+            <div class="hand-card">丘</div><div class="hand-card">乙</div><div class="hand-card">己</div>
+            <div class="hand-card">七</div><div class="hand-card">十</div>
+          </div>
+          <div class="game-bottom">
+            <button class="action-btn btn-chi combo-btn-pulse">吃</button>
+            <button class="action-btn btn-peng combo-btn-pulse">碰</button>
+            <button class="action-btn btn-hu combo-btn-pulse">胡</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// A: Edge flash
+function setEdgeLevel(level) {
+  const el = document.getElementById('edgeA');
+  el.className = 'edge-flash level-' + level;
+  const count = document.getElementById('countA');
+  const colors = { 1: '#ffd700', 2: '#ff8c00', 3: '#ff6b6b' };
+  const nums = { 1: '20', 2: '10', 3: '5' };
+  count.style.color = colors[level];
+  count.textContent = nums[level];
+  document.querySelectorAll('#frameA ~ .controls .ctrl-btn').forEach((b, i) => {
+    b.classList.toggle('active', i + 1 === level);
+  });
+}
+
+// B: Button pulse
+function setBtnLevel(level) {
+  const btns = document.querySelectorAll('.pulse-btn');
+  btns.forEach(b => {
+    b.className = b.className.replace(/level-\d/, 'level-' + level);
+  });
+}
+
+// C: Vibrate
+function setVibLevel(level) {
+  const frame = document.getElementById('frameC');
+  frame.className = 'game-frame vibrate-' + level;
+}
+
+// D: Hand glow
+function setHandLevel(level) {
+  const glow = document.querySelector('.hand-glow');
+  glow.className = 'hand-glow level-' + level;
+}
+
+// E: Popup
+function setPopupLevel(level) {
+  const popup = document.querySelector('.center-popup');
+  popup.className = 'center-popup level-' + level;
+}
+
+// F: Avatar
+function setAvatarLevel(level) {
+  const avatar = document.querySelector('.avatar-breath');
+  avatar.className = 'avatar-box avatar-breath level-' + level;
+}
+</script>
+</body>
+</html>

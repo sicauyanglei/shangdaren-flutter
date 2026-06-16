@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>方案G Emoji风格 - 分数显示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #fff; font-family: 'Microsoft YaHei', sans-serif; padding: 30px; }
+h2 { margin: 20px 0 15px; color: #ffd700; font-size: 18px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,0.1); border-radius: 20px;
+  padding: 6px 12px; font-size: 16px; font-weight: bold;
+}
+.num { font-size: 20px; color: #fff; }
+.neg { color: #ff6b6b; }
+.pos { color: #7dff7d; }
+
+/* 游戏内实际应用 */
+.demo-card {
+  background: linear-gradient(135deg, #1a3d28, #0d2618);
+  border: 1px solid rgba(74,124,89,0.4);
+  border-radius: 12px; padding: 16px; margin: 10px 0;
+  display: flex; align-items: center; gap: 16px;
+}
+.demo-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.demo-info { flex: 1; }
+.demo-name { font-size: 14px; color: #aaa; margin-bottom: 6px; }
+.demo-stats { display: flex; gap: 10px; align-items: center; }
+.demo-score { font-size: 22px; font-weight: bold; margin-left: auto; }
+
+/* 结算面板样式 */
+.result-panel {
+  background: linear-gradient(135deg, #2d1b4e, #1a0a3e);
+  border: 2px solid rgba(138,43,226,0.4);
+  border-radius: 16px; padding: 24px; margin: 20px 0;
+  max-width: 400px;
+}
+.result-title {
+  text-align: center; font-size: 22px; color: #ffd700;
+  margin-bottom: 20px; font-weight: bold;
+}
+.result-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.result-row:last-child { border-bottom: none; }
+.result-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.result-name { font-size: 14px; color: #ccc; width: 50px; }
+.result-badges { display: flex; gap: 8px; flex: 1; }
+.result-score { font-size: 18px; font-weight: bold; margin-left: auto; }
+
+/* 头像区域分数显示 */
+.avatar-area {
+  position: relative; width: 250px; height: 80px;
+  background: linear-gradient(135deg, #2d5a3d, #1a3d28);
+  border: 1px solid rgba(74,124,89,0.4);
+  border-radius: 10px; padding: 10px;
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 0;
+}
+.avatar-circle {
+  width: 50px; height: 50px; border-radius: 50%;
+  background: linear-gradient(135deg, #4a7c59, #2d5a3d);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; border: 2px solid #6ab0ff;
+  flex-shrink: 0;
+}
+.avatar-info { flex: 1; }
+.avatar-name { font-size: 13px; color: #aaa; }
+.avatar-badges { display: flex; gap: 6px; margin-top: 4px; }
+.avatar-total { font-size: 20px; font-weight: bold; color: #ffd700; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<h2>方案G Emoji风格：🃏 张 + 💰 分</h2>
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;margin:15px 0;">
+  <div class="badge">
+    🃏 <span class="num">10</span> 💰 <span class="num neg">-5</span>
+  </div>
+  <div class="badge">
+    🃏 <span class="num">19</span> 💰 <span class="num pos">+20</span>
+  </div>
+  <div class="badge">
+    🃏 <span class="num">20</span> 💰 <span class="num pos">+35</span>
+  </div>
+  <div class="badge">
+    🃏 <span class="num">19</span> 💰 <span class="num neg">-15</span>
+  </div>
+</div>
+
+<h2>游戏头像区域应用</h2>
+
+<div class="avatar-area">
+  <div class="avatar-circle">👨‍🌾</div>
+  <div class="avatar-info">
+    <div class="avatar-name">玩家1</div>
+    <div class="avatar-badges">
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        🃏 <span class="num" style="font-size:15px;">10</span>
+      </div>
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        💰 <span class="num neg" style="font-size:15px;">-5</span>
+      </div>
+    </div>
+  </div>
+  <div class="avatar-total">120</div>
+</div>
+
+<div class="avatar-area" style="background:linear-gradient(135deg,#8b4789,#6a2c6a);border-color:rgba(138,67,137,0.4);">
+  <div class="avatar-circle" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);border-color:#ffd700;">👑</div>
+  <div class="avatar-info">
+    <div class="avatar-name">我 (庄家)</div>
+    <div class="avatar-badges">
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        🃏 <span class="num" style="font-size:15px;">20</span>
+      </div>
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        💰 <span class="num pos" style="font-size:15px;">+35</span>
+      </div>
+    </div>
+  </div>
+  <div class="avatar-total">155</div>
+</div>
+
+<div class="avatar-area" style="background:linear-gradient(135deg,#8b4789,#6a2c6a);border-color:rgba(138,67,137,0.4);">
+  <div class="avatar-circle" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);">👩‍🌾</div>
+  <div class="avatar-info">
+    <div class="avatar-name">玩家2</div>
+    <div class="avatar-badges">
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        🃏 <span class="num" style="font-size:15px;">19</span>
+      </div>
+      <div class="badge" style="padding:3px 8px;font-size:13px;">
+        💰 <span class="num neg" style="font-size:15px;">-15</span>
+      </div>
+    </div>
+  </div>
+  <div class="avatar-total">85</div>
+</div>
+
+<h2>胡牌结算面板应用</h2>
+
+<div class="result-panel">
+  <div class="result-title">🎉 自摸</div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#4a7c59,#2d5a3d);border:2px solid #6ab0ff;border-radius:50%;">👨‍🌾</div>
+    <div class="result-name">玩家1</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">19</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num neg" style="font-size:14px;">-15</span>
+      </div>
+    </div>
+    <div class="result-score neg">-15</div>
+  </div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);border:2px solid #ffd700;border-radius:50%;">👑</div>
+    <div class="result-name">我</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">20</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num pos" style="font-size:14px;">+35</span>
+      </div>
+    </div>
+    <div class="result-score pos">+35</div>
+  </div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);border-radius:50%;">👩‍🌾</div>
+    <div class="result-name">玩家2</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">19</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num neg" style="font-size:14px;">-20</span>
+      </div>
+    </div>
+    <div class="result-score neg">-20</div>
+  </div>
+</div>
+
+<h2>流局面板应用</h2>
+
+<div class="result-panel" style="background:linear-gradient(135deg,#2d2d2d,#1a1a1a);border-color:rgba(255,255,255,0.2);">
+  <div class="result-title" style="color:#aaa;">流局</div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#4a7c59,#2d5a3d);border:2px solid #6ab0ff;border-radius:50%;">👨‍🌾</div>
+    <div class="result-name">玩家1</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">19</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num" style="font-size:14px;color:#888;">0</span>
+      </div>
+    </div>
+    <div class="result-score" style="color:#888;">0</div>
+  </div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);border:2px solid #ffd700;border-radius:50%;">👑</div>
+    <div class="result-name">我</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">19</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num" style="font-size:14px;color:#888;">0</span>
+      </div>
+    </div>
+    <div class="result-score" style="color:#888;">0</div>
+  </div>
+  <div class="result-row">
+    <div class="result-avatar" style="background:linear-gradient(135deg,#a85ca0,#7a3d72);border-radius:50%;">👩‍🌾</div>
+    <div class="result-name">玩家2</div>
+    <div class="result-badges">
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        🃏 <span class="num" style="font-size:14px;">19</span>
+      </div>
+      <div class="badge" style="padding:2px 6px;font-size:12px;">
+        💰 <span class="num" style="font-size:14px;color:#888;">0</span>
+      </div>
+    </div>
+    <div class="result-score" style="color:#888;">0</div>
+  </div>
+</div>
+
+</body>
+</html>

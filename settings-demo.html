@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设置页面美化方案</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a;
+  color: #fff;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  gap: 40px;
+  flex-wrap: wrap;
+  padding: 20px;
+}
+
+.panel-wrapper {
+  position: relative;
+}
+
+.panel-label {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+/* ========== 原始方案 ========== */
+.settings-old {
+  width: 320px;
+  background: linear-gradient(135deg, #2d2d2d, #1a1a1a);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+/* ========== 方案A: 毛玻璃质感 ========== */
+.settings-a {
+  width: 340px;
+  background: rgba(20, 20, 30, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 0;
+  box-shadow: 
+    0 20px 60px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.settings-a .header {
+  position: relative;
+  padding: 24px 24px 16px;
+  background: linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,100,100,0.05));
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.settings-a .header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+}
+
+.settings-a .close-btn {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255,107,107,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.settings-a .close-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(255,107,107,0.6); }
+
+.settings-a .section {
+  padding: 20px 24px;
+}
+
+.settings-a .section + .section {
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.settings-a .section-title {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-a .section-title .icon {
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+/* 音量滑块 */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.volume-slider {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+}
+
+.volume-slider .fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+  width: 70%;
+  position: relative;
+}
+
+.volume-slider .fill::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffd700, #f0c000);
+  box-shadow: 0 2px 8px rgba(255,215,0,0.4);
+}
+
+.volume-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd700;
+  min-width: 48px;
+  text-align: right;
+}
+
+/* 难度选择 - 卡片式 */
+.difficulty-cards {
+  display: flex;
+  gap: 10px;
+}
+
+.diff-card {
+  flex: 1;
+  padding: 14px 8px;
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.diff-card.easy {
+  background: rgba(46, 204, 113, 0.1);
+  border-color: rgba(46, 204, 113, 0.3);
+}
+.diff-card.easy.active {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.2);
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.2);
+}
+
+.diff-card.medium {
+  background: rgba(241, 196, 15, 0.1);
+  border-color: rgba(241, 196, 15, 0.3);
+}
+.diff-card.medium.active {
+  border-color: #f1c40f;
+  background: rgba(241, 196, 15, 0.2);
+  box-shadow: 0 0 20px rgba(241, 196, 15, 0.2);
+}
+
+.diff-card.hard {
+  background: rgba(231, 76, 60, 0.1);
+  border-color: rgba(231, 76, 60, 0.3);
+}
+.diff-card.hard.active {
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
+  box-shadow: 0 0 20px rgba(231, 76, 60, 0.2);
+}
+
+.diff-card .diff-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.diff-card .diff-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.diff-card .diff-desc {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+.diff-card.active::before {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.diff-card.easy.active::before { color: #2ecc71; }
+.diff-card.medium.active::before { color: #f1c40f; }
+.diff-card.hard.active::before { color: #e74c3c; }
+
+/* 退出按钮 */
+.exit-btn-a {
+  margin: 0 24px 24px;
+  width: calc(100% - 48px);
+  height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(231,76,60,0.3);
+}
+.exit-btn-a:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(231,76,60,0.5);
+}
+
+/* ========== 方案B: 游戏主题风 ========== */
+.settings-b {
+  width: 340px;
+  background: linear-gradient(180deg, #1a1428 0%, #0d0d1a 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(255,215,0,0.15);
+  padding: 0;
+  box-shadow: 
+    0 20px 60px rgba(0,0,0,0.6),
+    0 0 40px rgba(255,215,0,0.05);
+}
+
+.settings-b .header {
+  position: relative;
+  padding: 28px 24px 20px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255,215,0,0.06) 0%, transparent 100%);
+}
+
+.settings-b .header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,215,0,0.3), transparent);
+}
+
+.settings-b .header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255,215,0,0.3);
+}
+
+.settings-b .header .subtitle {
+  font-size: 11px;
+  color: rgba(255,215,0,0.4);
+  margin-top: 4px;
+  letter-spacing: 4px;
+}
+
+.settings-b .close-btn {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255,107,107,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.settings-b .close-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(255,107,107,0.6); }
+
+.settings-b .section {
+  padding: 20px 24px;
+}
+
+.settings-b .section + .section {
+  border-top: 1px solid rgba(255,215,0,0.06);
+}
+
+.settings-b .section-title {
+  font-size: 14px;
+  color: rgba(255,215,0,0.7);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.settings-b .section-title .icon {
+  font-size: 18px;
+}
+
+/* 音量 - 游戏风 */
+.volume-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.volume-bars {
+  flex: 1;
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 30px;
+}
+
+.volume-bar {
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255,215,0,0.15);
+  transition: all 0.3s;
+  min-height: 4px;
+}
+
+.volume-bar.active {
+  background: linear-gradient(180deg, #ffd700, #f0a000);
+  box-shadow: 0 0 6px rgba(255,215,0,0.3);
+}
+
+.volume-pct {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffd700;
+  min-width: 50px;
+  text-align: right;
+  text-shadow: 0 0 10px rgba(255,215,0,0.3);
+}
+
+/* 难度 - 赛道风 */
+.diff-track {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diff-lane {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.diff-lane.easy {
+  background: rgba(46, 204, 113, 0.06);
+}
+.diff-lane.easy.active {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.4);
+}
+
+.diff-lane.medium {
+  background: rgba(241, 196, 15, 0.06);
+}
+.diff-lane.medium.active {
+  background: rgba(241, 196, 15, 0.12);
+  border-color: rgba(241, 196, 15, 0.4);
+}
+
+.diff-lane.hard {
+  background: rgba(231, 76, 60, 0.06);
+}
+.diff-lane.hard.active {
+  background: rgba(231, 76, 60, 0.12);
+  border-color: rgba(231, 76, 60, 0.4);
+}
+
+.diff-lane .lane-icon {
+  font-size: 22px;
+  width: 32px;
+  text-align: center;
+}
+
+.diff-lane .lane-info {
+  flex: 1;
+}
+
+.diff-lane .lane-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.diff-lane .lane-desc {
+  font-size: 11px;
+  opacity: 0.4;
+  margin-top: 2px;
+}
+
+.diff-lane .lane-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.diff-lane.easy.active .lane-check { border-color: #2ecc71; background: #2ecc71; }
+.diff-lane.medium.active .lane-check { border-color: #f1c40f; background: #f1c40f; }
+.diff-lane.hard.active .lane-check { border-color: #e74c3c; background: #e74c3c; }
+
+/* 退出按钮 - 游戏风 */
+.exit-btn-b {
+  margin: 4px 24px 24px;
+  width: calc(100% - 48px);
+  height: 46px;
+  border: 1px solid rgba(231,76,60,0.4);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(231,76,60,0.15), rgba(192,57,43,0.15));
+  color: #e74c3c;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.exit-btn-b:hover {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(231,76,60,0.3);
+}
+
+/* ========== 原始方案样式 ========== */
+.settings-old .old-header {
+  padding: 16px 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  text-align: center;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.settings-old .old-header h2 {
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.settings-old .old-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.settings-old .old-label {
+  font-size: 16px;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 10px;
+}
+
+.settings-old .old-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-old .old-slider {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 4px;
+  position: relative;
+}
+
+.settings-old .old-slider .fill {
+  height: 100%;
+  border-radius: 4px;
+  background: #ffd700;
+  width: 70%;
+  position: relative;
+}
+
+.settings-old .old-slider .fill::after {
+  content: '';
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffd700;
+}
+
+.settings-old .old-value {
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffd700;
+  min-width: 50px;
+}
+
+.settings-old .old-radio-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 24px;
+}
+
+.settings-old .old-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-old .old-radio-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-old .old-radio-circle.active {
+  border-color: #ffd700;
+}
+
+.settings-old .old-radio-circle.active::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffd700;
+}
+
+.settings-old .old-radio-label {
+  font-size: 14px;
+  color: #fff;
+}
+
+.settings-old .old-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+  margin-bottom: 20px;
+}
+
+.settings-old .old-exit {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+/* ========== 方案C: 横屏宽幅布局 ========== */
+.settings-c {
+  width: 560px;
+  background: linear-gradient(135deg, #141420, #0d0d1a);
+  border-radius: 20px;
+  border: 1px solid rgba(255,215,0,0.12);
+  padding: 0;
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.6),
+    0 0 60px rgba(255,215,0,0.04);
+  position: relative;
+}
+
+.settings-c .header {
+  position: relative;
+  padding: 20px 28px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(255,215,0,0.08);
+}
+
+.settings-c .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-c .header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.05));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.settings-c .header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255,215,0,0.2);
+}
+
+.settings-c .header .subtitle {
+  font-size: 10px;
+  color: rgba(255,215,0,0.35);
+  letter-spacing: 3px;
+  margin-top: 2px;
+}
+
+.settings-c .close-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255,107,107,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.settings-c .close-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(255,107,107,0.6); }
+
+/* 横屏主体：左右分栏 */
+.settings-c .body-row {
+  display: flex;
+  padding: 0;
+}
+
+.settings-c .left-col {
+  flex: 1;
+  padding: 24px 28px;
+  border-right: 1px solid rgba(255,215,0,0.06);
+}
+
+.settings-c .right-col {
+  flex: 1;
+  padding: 24px 28px;
+}
+
+.settings-c .section-title {
+  font-size: 13px;
+  color: rgba(255,215,0,0.6);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.settings-c .section-title .icon {
+  font-size: 16px;
+}
+
+/* 横屏音量 - 圆弧仪表盘 */
+.volume-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.gauge-ring {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #ffd700 0deg 252deg,
+    rgba(255,255,255,0.06) 252deg 360deg
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.gauge-ring::before {
+  content: '';
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #141420;
+}
+
+.gauge-center {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.gauge-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #ffd700;
+  text-shadow: 0 0 15px rgba(255,215,0,0.3);
+  line-height: 1;
+}
+
+.gauge-unit {
+  font-size: 11px;
+  color: rgba(255,215,0,0.4);
+  margin-top: 2px;
+}
+
+.gauge-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+}
+
+.gauge-slider {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  position: relative;
+  margin-top: 4px;
+}
+
+.gauge-slider .fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ffd700, #f0a000);
+  width: 70%;
+}
+
+.gauge-slider .fill::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffd700;
+  box-shadow: 0 0 8px rgba(255,215,0,0.4);
+}
+
+/* 横屏难度 - 横向卡片 */
+.diff-horizontal {
+  display: flex;
+  gap: 10px;
+}
+
+.diff-tile {
+  flex: 1;
+  padding: 16px 12px;
+  border-radius: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.diff-tile.easy {
+  background: rgba(46, 204, 113, 0.06);
+  border-color: rgba(46, 204, 113, 0.15);
+}
+.diff-tile.easy.active {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.15);
+  box-shadow: 0 0 25px rgba(46, 204, 113, 0.15);
+}
+
+.diff-tile.medium {
+  background: rgba(241, 196, 15, 0.06);
+  border-color: rgba(241, 196, 15, 0.15);
+}
+.diff-tile.medium.active {
+  border-color: #f1c40f;
+  background: rgba(241, 196, 15, 0.15);
+  box-shadow: 0 0 25px rgba(241, 196, 15, 0.15);
+}
+
+.diff-tile.hard {
+  background: rgba(231, 76, 60, 0.06);
+  border-color: rgba(231, 76, 60, 0.15);
+}
+.diff-tile.hard.active {
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.15);
+  box-shadow: 0 0 25px rgba(231, 76, 60, 0.15);
+}
+
+.diff-tile .tile-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.diff-tile .tile-label {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.diff-tile .tile-desc {
+  font-size: 10px;
+  opacity: 0.4;
+  line-height: 1.4;
+}
+
+.diff-tile .tile-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.diff-tile.active .tile-badge { opacity: 1; }
+.diff-tile.easy .tile-badge { background: #2ecc71; color: #fff; }
+.diff-tile.medium .tile-badge { background: #f1c40f; color: #1a1a2e; }
+.diff-tile.hard .tile-badge { background: #e74c3c; color: #fff; }
+
+/* 底部操作栏 */
+.settings-c .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-top: 1px solid rgba(255,215,0,0.06);
+}
+
+.footer-info {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+}
+
+.exit-btn-c {
+  padding: 10px 32px;
+  border: 1px solid rgba(231,76,60,0.4);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(231,76,60,0.12), rgba(192,57,43,0.12));
+  color: #e74c3c;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.exit-btn-c:hover {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(231,76,60,0.3);
+}
+</style>
+</head>
+<body>
+
+<!-- 原始方案 -->
+<div class="panel-wrapper">
+  <div class="panel-label">当前方案</div>
+  <div class="settings-old">
+    <div class="old-header">
+      <h2>系统设置</h2>
+      <div class="old-close">×</div>
+    </div>
+    <div class="old-label">音效大小</div>
+    <div class="old-slider-row">
+      <div class="old-slider"><div class="fill"></div></div>
+      <div class="old-value">70%</div>
+    </div>
+    <div class="old-label">游戏难度</div>
+    <div class="old-radio-row">
+      <div class="old-radio">
+        <div class="old-radio-circle"></div>
+        <span class="old-radio-label">简单</span>
+      </div>
+      <div class="old-radio">
+        <div class="old-radio-circle"></div>
+        <span class="old-radio-label">中等</span>
+      </div>
+      <div class="old-radio">
+        <div class="old-radio-circle active"></div>
+        <span class="old-radio-label">困难</span>
+      </div>
+    </div>
+    <div class="old-divider"></div>
+    <button class="old-exit">退出游戏</button>
+  </div>
+</div>
+
+<!-- 方案A: 毛玻璃质感 -->
+<div class="panel-wrapper">
+  <div class="panel-label">方案A: 毛玻璃质感</div>
+  <div class="settings-a">
+    <div class="header">
+      <h2>系统设置</h2>
+      <div class="close-btn">×</div>
+    </div>
+    <div class="section">
+      <div class="section-title"><span class="icon">🔊</span> 音效大小</div>
+      <div class="volume-row">
+        <div class="volume-slider"><div class="fill"></div></div>
+        <div class="volume-value">70%</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title"><span class="icon">⚔️</span> 游戏难度</div>
+      <div class="difficulty-cards">
+        <div class="diff-card easy">
+          <div class="diff-icon">🌱</div>
+          <div class="diff-label">简单</div>
+          <div class="diff-desc">新手入门</div>
+        </div>
+        <div class="diff-card medium active">
+          <div class="diff-icon">⚡</div>
+          <div class="diff-label">中等</div>
+          <div class="diff-desc">进阶挑战</div>
+        </div>
+        <div class="diff-card hard">
+          <div class="diff-icon">🔥</div>
+          <div class="diff-label">困难</div>
+          <div class="diff-desc">高手对决</div>
+        </div>
+      </div>
+    </div>
+    <button class="exit-btn-a">退出游戏</button>
+  </div>
+</div>
+
+<!-- 方案B: 游戏主题风 -->
+<div class="panel-wrapper">
+  <div class="panel-label">方案B: 游戏主题风</div>
+  <div class="settings-b">
+    <div class="header">
+      <h2>系统设置</h2>
+      <div class="subtitle">SETTINGS</div>
+      <div class="close-btn">×</div>
+    </div>
+    <div class="section">
+      <div class="section-title"><span class="icon">🔊</span> 音效大小</div>
+      <div class="volume-display">
+        <div class="volume-bars" id="volumeBars"></div>
+        <div class="volume-pct">70%</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title"><span class="icon">⚔️</span> 游戏难度</div>
+      <div class="diff-track">
+        <div class="diff-lane easy">
+          <div class="lane-icon">🌱</div>
+          <div class="lane-info">
+            <div class="lane-label">简单</div>
+            <div class="lane-desc">AI随机出牌，适合新手</div>
+          </div>
+          <div class="lane-check"></div>
+        </div>
+        <div class="diff-lane medium active">
+          <div class="lane-icon">⚡</div>
+          <div class="lane-info">
+            <div class="lane-label">中等</div>
+            <div class="lane-desc">AI有一定策略</div>
+          </div>
+          <div class="lane-check">✓</div>
+        </div>
+        <div class="diff-lane hard">
+          <div class="lane-icon">🔥</div>
+          <div class="lane-info">
+            <div class="lane-label">困难</div>
+            <div class="lane-desc">AI全力对抗，高手挑战</div>
+          </div>
+          <div class="lane-check"></div>
+        </div>
+      </div>
+    </div>
+    <button class="exit-btn-b">退出游戏</button>
+  </div>
+</div>
+
+<!-- 方案C: 横屏宽幅布局 -->
+<div class="panel-wrapper">
+  <div class="panel-label">方案C: 横屏宽幅布局</div>
+  <div class="settings-c">
+    <div class="header">
+      <div class="header-left">
+        <div class="header-icon">⚙️</div>
+        <div>
+          <h2>系统设置</h2>
+          <div class="subtitle">SETTINGS</div>
+        </div>
+      </div>
+      <div class="close-btn">×</div>
+    </div>
+    <div class="body-row">
+      <div class="left-col">
+        <div class="section-title"><span class="icon">🔊</span> 音效大小</div>
+        <div class="volume-gauge">
+          <div class="gauge-ring">
+            <div class="gauge-center">
+              <div class="gauge-value">70</div>
+              <div class="gauge-unit">VOLUME</div>
+            </div>
+          </div>
+          <div class="gauge-label">拖动调节音量</div>
+          <div class="gauge-slider"><div class="fill"></div></div>
+        </div>
+      </div>
+      <div class="right-col">
+        <div class="section-title"><span class="icon">⚔️</span> 游戏难度</div>
+        <div class="diff-horizontal">
+          <div class="diff-tile easy">
+            <div class="tile-badge">✓</div>
+            <div class="tile-icon">🌱</div>
+            <div class="tile-label">简单</div>
+            <div class="tile-desc">AI随机出牌<br>适合新手</div>
+          </div>
+          <div class="diff-tile medium active">
+            <div class="tile-badge">✓</div>
+            <div class="tile-icon">⚡</div>
+            <div class="tile-label">中等</div>
+            <div class="tile-desc">AI有策略<br>进阶挑战</div>
+          </div>
+          <div class="diff-tile hard">
+            <div class="tile-badge">✓</div>
+            <div class="tile-icon">🔥</div>
+            <div class="tile-label">困难</div>
+            <div class="tile-desc">AI全力对抗<br>高手对决</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-info">上大人字牌 v1.0</div>
+      <button class="exit-btn-c">退出游戏</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 生成音量条
+const bars = document.getElementById('volumeBars');
+const volume = 70;
+const totalBars = 20;
+for (let i = 0; i < totalBars; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'volume-bar' + (i < volume / 100 * totalBars ? ' active' : '');
+  bar.style.height = (6 + (i / totalBars) * 24) + 'px';
+  bars.appendChild(bar);
+}
+
+// 难度卡片交互
+document.querySelectorAll('.diff-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.diff-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+  });
+});
+
+// 难度赛道交互
+document.querySelectorAll('.diff-lane').forEach(lane => {
+  lane.addEventListener('click', () => {
+    document.querySelectorAll('.diff-lane').forEach(l => {
+      l.classList.remove('active');
+      l.querySelector('.lane-check').textContent = '';
+    });
+    lane.classList.add('active');
+    lane.querySelector('.lane-check').textContent = '✓';
+  });
+});
+
+// C方案难度卡片交互
+document.querySelectorAll('.diff-tile').forEach(tile => {
+  tile.addEventListener('click', () => {
+    document.querySelectorAll('.diff-tile').forEach(t => t.classList.remove('active'));
+    tile.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

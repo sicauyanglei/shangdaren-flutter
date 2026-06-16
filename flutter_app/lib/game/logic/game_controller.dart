@@ -5,6 +5,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../models/game_recorder.dart';
 import '../core/audio_manager.dart';
 import 'hu_calculator.dart';
 import 'ting_checker.dart';
@@ -61,6 +62,11 @@ class GameController {
   bool _isStartingRound = false;
   bool _isDealing = false;
   bool _isPaused = false;
+  bool _isFromTimeout = false;
+  // 人类玩家回合超时秒数（默认60秒）
+  int _humanTurnTimeout = 60;
+  // 标记上一局是否在托管状态下结束
+  bool _wasAutoHostingAtRoundEnd = false;
 
   Card? _pendingDrawCard;
   int? _pendingDrawPlayerId;
@@ -101,6 +107,10 @@ class GameController {
     print('=== GameController.startGame called ===');
     state.reset();
     _isStartingRound = false;
+    _humanTurnTimeout = 60;
+    _wasAutoHostingAtRoundEnd = false;
+    GameRecorder().setEnabled(AudioManager().recordingEnabled);
+    GameRecorder().clear();
     if (state.difficulty == 'hard') {
       aiController = AIController(strategy: AIStrategyHard());
     } else {
@@ -142,7 +152,23 @@ class GameController {
     if (_isStartingRound) return;
     _isStartingRound = true;
 
+    // 处理上一局托管状态对本局超时的影响
+    if (_wasAutoHostingAtRoundEnd) {
+      // 上一局在托管状态下结束：本局超时10秒，关闭托管功能
+      _humanTurnTimeout = 10;
+      AudioManager().setAutoHostingEnabled(false);
+      _wasAutoHostingAtRoundEnd = false;
+    }
+    // 重置托管状态
+    state.isAutoHosting = false;
+    state.timeoutCount = 0;
+
     state.roundNumber++;
+    GameRecorder().startRound(
+      state.roundNumber,
+      state.dealerIndex,
+      state.players,
+    );
     if (state.roundNumber > 8) {
       onShowSettlement?.call();
       _isStartingRound = false;
@@ -247,6 +273,7 @@ class GameController {
         final piaoOptions = [0, 5, 10, 20];
         final randomIndex = Random().nextInt(piaoOptions.length);
         player.piao = piaoOptions[randomIndex];
+        GameRecorder().recordPiao(player.id, player.piao);
         state.piaoSetCount++;
         state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
       } else {
@@ -272,6 +299,7 @@ class GameController {
     if (player.type != PlayerType.human) return;
 
     player.piao = piaoValue;
+    GameRecorder().recordPiao(player.id, piaoValue);
     state.piaoSetCount++;
     state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
 
@@ -323,6 +351,7 @@ class GameController {
             player.huCount = HuCalculator.calculateTotalHu(player);
           }
         }
+        GameRecorder().recordInitialHands(state.players);
         onStateChanged?.call();
         Future.delayed(const Duration(milliseconds: 300), () {
           if (!state.gameStarted) return;
@@ -438,6 +467,7 @@ class GameController {
     _pendingDrawCard = null;
     _pendingDrawPlayerId = null;
     player.addCard(card);
+    GameRecorder().recordDraw(player.id, card);
     onPlayerDraw?.call(1);
 
     final tingResult = TingChecker.checkTing(player);
@@ -510,6 +540,7 @@ class GameController {
     _pendingDrawPlayerId = null;
     state.isDrawing = false;
     player.addCard(card);
+    GameRecorder().recordDraw(player.id, card);
     onPlayerDraw?.call(player.id);
 
     final tingResult = TingChecker.checkTing(player);
@@ -585,6 +616,10 @@ class GameController {
     if (state.isDrawing) return;
     if (state.canChi || state.canPeng || state.canZhao || state.canHu) return;
 
+    // 手动出牌重置超时计数
+    if (!_isFromTimeout) {
+      state.timeoutCount = 0;
+    }
     final card = player.hand[cardIndex];
     state.canChi = false;
     state.canPeng = false;
@@ -629,6 +664,7 @@ class GameController {
     _pendingDiscardPlayerId = null;
     player.removeCard(card);
     player.discards.add(card);
+    GameRecorder().recordDiscard(player.id, card);
     _addToPublicCount(card.character, 1);
     state.lastDiscardedCard = card;
     state.lastDiscardPlayerIndex = player.id;
@@ -845,6 +881,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    state.timeoutCount = 0;
     final isZimo = !state.waitingForResponse;
     state.canChi = false;
     state.canPeng = false;
@@ -867,6 +904,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    state.timeoutCount = 0;
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -920,6 +958,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    state.timeoutCount = 0;
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -943,6 +982,7 @@ class GameController {
     );
     if (humanIndex < 0) return;
     stopCountdown();
+    state.timeoutCount = 0;
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -962,6 +1002,10 @@ class GameController {
 
   void respondPass() {
     final wasWaitingForResponse = state.waitingForResponse;
+    // 手动过牌重置超时计数（超时触发的过牌不重置）
+    if (!_isFromTimeout) {
+      state.timeoutCount = 0;
+    }
     state.canChi = false;
     state.canPeng = false;
     state.canZhao = false;
@@ -1047,7 +1091,13 @@ class GameController {
     _nextTurn();
   }
 
-  void startCountdown([int seconds = 30]) {
+  void startCountdown([int? seconds]) {
+    // 默认使用人类玩家回合超时秒数
+    seconds ??= _humanTurnTimeout;
+    // 托管状态下使用短倒计时，仅保留动画时间
+    if (state.isAutoHosting && (state.isMyTurn || state.waitingForResponse)) {
+      seconds = 2;
+    }
     _countdownTimerId++;
     final myId = _countdownTimerId;
     _countdownTimer?.cancel();
@@ -1098,8 +1148,23 @@ class GameController {
   }
 
   void _handleTimeout() {
+    // 非托管状态下累计超时次数，连续3次进入托管（需开启倒计时托管功能）
+    if (!state.isAutoHosting && AudioManager().autoHostingEnabled) {
+      state.timeoutCount++;
+      if (state.timeoutCount >= 3) {
+        state.isAutoHosting = true;
+      }
+    }
+    _isFromTimeout = true;
+    final useAiStrategy =
+        state.isAutoHosting && AudioManager().autoHostingStrategy == 'ai';
+
     if (state.waitingForResponse) {
-      respondPass();
+      if (useAiStrategy) {
+        _autoHostRespondToDiscard();
+      } else {
+        respondPass();
+      }
     } else if (state.isMyTurn) {
       // 超时时先清除招等操作状态，再出牌
       if (state.canZhao || state.canChi || state.canPeng || state.canHu) {
@@ -1111,6 +1176,35 @@ class GameController {
 
       final player = state.players[1];
 
+      if (useAiStrategy) {
+        // AI托管策略：检查自摸、招，然后用AI选择出牌
+        if (_canZimo(player)) {
+          _handleHu(player.id, isZimo: true, zimoCard: _lastDrawnCard);
+          _isFromTimeout = false;
+          return;
+        }
+        if (_canZhaoAfterDraw(player)) {
+          final candidates = _getZhaoCandidates(player);
+          bool shouldZhao = true;
+          for (final ch in candidates) {
+            if (!aiController.shouldZhaoFromHand(player, ch, state)) {
+              shouldZhao = false;
+              break;
+            }
+          }
+          if (shouldZhao) {
+            _handleZhaoFromHand(player);
+            _isFromTimeout = false;
+            return;
+          }
+        }
+        final card = aiController.selectDiscard(player, state);
+        _doDiscard(player, card);
+        _isFromTimeout = false;
+        return;
+      }
+
+      // 非AI托管：简单出牌（打出最后摸的牌或最后一张）
       if (_lastDrawnCard != null) {
         final drawnCardIndex = player.hand.indexWhere(
           (c) => c.id == _lastDrawnCard!.id,
@@ -1118,6 +1212,7 @@ class GameController {
         if (drawnCardIndex >= 0) {
           discardCard(drawnCardIndex);
           _lastDrawnCard = null;
+          _isFromTimeout = false;
           return;
         }
       }
@@ -1126,6 +1221,95 @@ class GameController {
         discardCard(player.hand.length - 1);
       }
     }
+    _isFromTimeout = false;
+  }
+
+  /// AI托管策略：响应其他玩家的出牌
+  void _autoHostRespondToDiscard() {
+    final player = state.players[1];
+    final card = state.lastDiscardedCard;
+    final discardPlayerId = state.lastDiscardPlayerIndex;
+    if (card == null || discardPlayerId == null) {
+      respondPass();
+      return;
+    }
+
+    // 检查胡牌（需满足听牌条件）
+    if (_canHuWith(player, card) && player.isTing) {
+      stopCountdown();
+      state.timeoutCount = 0;
+      state.canChi = false;
+      state.canPeng = false;
+      state.canZhao = false;
+      state.canHu = false;
+      state.waitingForResponse = false;
+      _clearPendingAIResponses();
+      onStateChanged?.call();
+      _handleHu(1, isZimo: false, dianpaoIndex: discardPlayerId);
+      return;
+    }
+
+    // 检查招
+    if (_canZhaoWith(player, card)) {
+      if (aiController.shouldZhao(player, card, state)) {
+        stopCountdown();
+        state.timeoutCount = 0;
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+        state.waitingForResponse = false;
+        _clearPendingAIResponses();
+        onStateChanged?.call();
+        _handleZhaoRespond(1, card, discardPlayerId);
+        return;
+      }
+    }
+
+    // 检查碰
+    if (_canPengWith(player, card)) {
+      if (aiController.shouldPeng(player, card, state)) {
+        stopCountdown();
+        state.timeoutCount = 0;
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+        state.waitingForResponse = false;
+        _clearPendingAIResponses();
+        onStateChanged?.call();
+        _handlePeng(1, card, discardPlayerId);
+        return;
+      }
+    }
+
+    // 检查吃
+    if (_canChiWith(player, 1, card, discardPlayerId)) {
+      if (aiController.shouldChi(player, card, state)) {
+        stopCountdown();
+        state.timeoutCount = 0;
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+        state.waitingForResponse = false;
+        _clearPendingAIResponses();
+        onStateChanged?.call();
+        _handleChi(1, card, discardPlayerId);
+        return;
+      }
+    }
+
+    respondPass();
+  }
+
+  /// 取消托管，恢复人类玩家手动操作
+  void cancelAutoHosting() {
+    state.isAutoHosting = false;
+    state.timeoutCount = 0;
+    // 取消托管后，下一局超时恢复60秒
+    _humanTurnTimeout = 60;
+    onStateChanged?.call();
   }
 
   void _nextTurn() {
@@ -1142,6 +1326,10 @@ class GameController {
   }) {
     if (state.showHuResult) return;
     stopCountdown();
+    // 记录本局是否在托管状态下结束
+    if (state.isAutoHosting) {
+      _wasAutoHostingAtRoundEnd = true;
+    }
     state.isHandlingHu = true;
     state.canChi = false;
     state.canPeng = false;
@@ -1241,6 +1429,32 @@ class GameController {
       'dealerIndex': state.dealerIndex,
     });
 
+    // 录制胡牌
+    if (isZimo) {
+      GameRecorder().recordZimo(
+        winnerIndex,
+        zimoCard ?? state.lastDiscardedCard!,
+        huTypeResult.name,
+        displayMultiplier,
+      );
+    } else {
+      GameRecorder().recordHu(
+        winnerIndex,
+        dianpaoIndex!,
+        state.lastDiscardedCard!,
+        huTypeResult.name,
+        displayMultiplier,
+      );
+    }
+    GameRecorder().endRound(
+      resultType: 'hu',
+      resultData: {
+        'winnerIndex': winnerIndex,
+        'huType': huTypeResult.name,
+        'method': method,
+      },
+    );
+
     // 庄家轮转延迟到胡牌面板关闭后执行，这里先记录下一局庄家
     if (winnerIndex != state.dealerIndex) {
       state.nextDealerIndex = (state.dealerIndex + 1) % 3;
@@ -1280,6 +1494,12 @@ class GameController {
   void _handleLiuju() {
     if (state.showLiujuResult) return;
     stopCountdown();
+    // 记录本局是否在托管状态下结束
+    if (state.isAutoHosting) {
+      _wasAutoHostingAtRoundEnd = true;
+    }
+    GameRecorder().recordLiuju();
+    GameRecorder().endRound(resultType: 'liuju');
     _audio.playLiuju(
       voiceType: AudioManager.voiceTypeFromGender(
         state.players[(state.lastDiscardPlayerIndex! + 1) % 3].gender,
@@ -1534,6 +1754,7 @@ class GameController {
         player.hand.remove(c);
       }
       _addToPublicCount(targetChar!, 4);
+      GameRecorder().recordZhaoFromHand(player.id, targetChar!, zhaoCards);
       onPlayerMeld?.call(zhaoCards, player.id);
       onStateChanged?.call();
       _pendingMeldAction = null;
@@ -1648,6 +1869,7 @@ class GameController {
         HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(newCards, playerIndex);
+        GameRecorder().recordZhao(playerIndex, card, discardPlayerId);
       } else {
         for (final c in zhaoCards.skip(1)) {
           player.hand.remove(c);
@@ -1662,6 +1884,7 @@ class GameController {
         HuCalculator.updateMeldHuCache(player);
         _addToPublicCount(card.character, 4);
         onPlayerMeld?.call(zhaoCards, playerIndex);
+        GameRecorder().recordZhao(playerIndex, card, discardPlayerId);
       }
 
       state.canChi = false;
@@ -1717,6 +1940,7 @@ class GameController {
       _addToPublicCount(matching[1].character, 1);
       player.hand.remove(matching[0]);
       player.hand.remove(matching[1]);
+      GameRecorder().recordPeng(playerIndex, card, discardPlayerId);
       onPlayerMeld?.call(pengCards, playerIndex);
 
       state.canChi = false;
@@ -1807,6 +2031,7 @@ class GameController {
       _addToPublicCount(chiCards[1].character, 1);
       player.hand.remove(chiCards[0]);
       player.hand.remove(chiCards[1]);
+      GameRecorder().recordChi(playerIndex, meldCards, card, discardPlayerId);
       onPlayerMeld?.call(meldCards, playerIndex);
 
       state.canChi = false;
