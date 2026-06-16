@@ -196,7 +196,7 @@ class GameOverlay extends StatelessWidget {
             ],
           ),
         ),
-        // "取消托管"按钮：显示在人类手牌区域右侧，默认与手牌区域上对齐
+        // "取消托管"按钮：横坐标按照人类玩家8组牌满宽度计算，间隔20px，不随手牌宽度移动
         // 如果遮挡了玩家2的组合牌/弃牌区域，自动往下移动
         if (gameState.isAutoHosting &&
             !gameState.showHuResult &&
@@ -204,9 +204,13 @@ class GameOverlay extends StatelessWidget {
           Builder(
             builder: (context) {
               final handTopY = _handTopY(player1?.hand ?? []);
-              final handW = _handWidth(player1?.hand ?? []);
-              final handRightX = (_designWidth + handW) / 2;
-              const buttonGap = 10.0;
+              // 按照8组牌满宽度计算，不随手牌实际宽度移动
+              const maxGroupCount = 8;
+              const fullHandW =
+                  maxGroupCount * _handCardW +
+                  (maxGroupCount - 1) * _handSentenceGap;
+              final handRightX = (_designWidth + fullHandW) / 2;
+              const buttonGap = 20.0;
               const buttonW = 210.0;
               const buttonH = 72.0;
               double buttonLeftX = handRightX + buttonGap;
