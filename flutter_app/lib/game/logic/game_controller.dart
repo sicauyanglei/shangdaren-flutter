@@ -460,6 +460,11 @@ class GameController {
     _pendingDrawPlayerId = null;
     player.addCard(card);
     GameRecorder().recordDraw(player.id, card);
+    // AI策略测试：记录人类玩家摸牌（最多保存3张）
+    state.humanDrawRecords.add(card.character);
+    if (state.humanDrawRecords.length > 3) {
+      state.humanDrawRecords.removeAt(0);
+    }
     onPlayerDraw?.call(1);
 
     final tingResult = TingChecker.checkTing(player);

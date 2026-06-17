@@ -47,6 +47,9 @@ class GameState {
   bool isAutoHosting;
   int timeoutCount;
 
+  // AI策略测试：人类玩家摸牌记录
+  List<String> humanDrawRecords;
+
   String? huResultWinnerName;
   int? huResultWinnerIndex;
   String? huResultMethod;
@@ -139,6 +142,7 @@ class GameState {
     this.hideTingBadge = false,
     this.isAutoHosting = false,
     this.timeoutCount = 0,
+    List<String>? humanDrawRecords,
     this.huResultWinnerName,
     this.huResultWinnerIndex,
     this.huResultMethod,
@@ -159,7 +163,8 @@ class GameState {
        deck = deck ?? [],
        roundHistory = roundHistory ?? [],
        zhaoCandidates = zhaoCandidates ?? [],
-       publicCardCount = publicCardCount ?? {};
+       publicCardCount = publicCardCount ?? {},
+       humanDrawRecords = humanDrawRecords ?? [];
 
   void reset() {
     players = [];
@@ -192,6 +197,7 @@ class GameState {
     hideTingBadge = false;
     isAutoHosting = false;
     timeoutCount = 0;
+    humanDrawRecords.clear();
     huResultWinnerName = null;
     huResultWinnerIndex = null;
     huResultMethod = null;
@@ -234,6 +240,7 @@ class GameState {
     }
     publicCardCount.clear();
     totalVisibleCards = 0;
+    humanDrawRecords.clear();
   }
 
   Player currentTurnPlayer() => players[currentPlayerIndex];

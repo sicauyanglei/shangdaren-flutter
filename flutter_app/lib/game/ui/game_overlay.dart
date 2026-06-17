@@ -160,7 +160,10 @@ class _GameOverlayState extends State<GameOverlay> {
       final label = labels[i]!;
       if (p.type == PlayerType.human) {
         final handStr = p.hand.map((c) => c.character).join();
-        buf.writeln('$label-组合牌"$meldsStr",弃牌"$discardsStr",手牌"$handStr"');
+        final drawStr = gs.humanDrawRecords.join();
+        buf.writeln(
+          '$label-组合牌"$meldsStr",弃牌"$discardsStr",手牌"$handStr"，摸牌记录"$drawStr"',
+        );
       } else {
         buf.writeln('$label-组合牌"$meldsStr",弃牌"$discardsStr"');
       }
