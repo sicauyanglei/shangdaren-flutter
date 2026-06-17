@@ -66,6 +66,13 @@ class AIStrategyHard extends AIStrategy {
   Map<String, int>? _cachedCharCount;
   int? _cacheOwnerId;
 
+  // 十对路线资格跟踪
+  // 记录每个玩家是否已获得十对路线资格（发牌后6对 或 前3回合内出现6对）
+  final Map<int, bool> _shiDuiEligible = {};
+  int? _lastRoundNumber;
+  // 当前决策玩家的十对路线是否启用
+  bool _currentShiDuiEnabled = false;
+
   String _tingCacheKey(Player player) {
     return _handCacheKey(player.hand, player.melds);
   }
@@ -84,6 +91,12 @@ class AIStrategyHard extends AIStrategy {
   }
 
   void _initCache(Player player, GameState state) {
+    // 检测新局开始，重置十对资格
+    if (_lastRoundNumber != state.roundNumber) {
+      _shiDuiEligible.clear();
+      _lastRoundNumber = state.roundNumber;
+    }
+
     _distanceCache.clear();
     _tingCache.clear();
     _huScoreCache.clear();
@@ -91,6 +104,52 @@ class AIStrategyHard extends AIStrategy {
     _cachedTotalUnknown = _totalUnknownCards(player, state);
     _cachedCharCount = _buildCharCount(player.hand);
     _cacheOwnerId = player.id;
+    _currentShiDuiEnabled = _isShiDuiEligible(player);
+  }
+
+  /// 检查玩家是否有资格走十对路线
+  /// 条件1：发牌后手牌至少6对（discards.length==0时检查）
+  /// 条件2：前3个回合内（discards.length<=3）手牌出现6对以上
+  /// 禁用条件：组合牌区已有牌
+  bool _isShiDuiEligible(Player player) {
+    // 组合牌区有牌，彻底不考虑十对路线
+    if (player.melds.isNotEmpty) return false;
+
+    // 已经获得资格
+    if (_shiDuiEligible[player.id] == true) return true;
+
+    final pairCount = _countHandPairsWithMelds(player);
+
+    // 前3个回合内（含发牌时）持续检查
+    if (player.discards.length <= 3) {
+      if (pairCount >= 6) {
+        _shiDuiEligible[player.id] = true;
+        return true;
+      }
+      return false;
+    }
+
+    // 超过3个回合且未达到6对，不再考虑十对路线
+    return false;
+  }
+
+  /// 从手牌和组合牌计算对子数（用于_distanceToTing中判断8对强制十对）
+  int _countPairsFromHandAndMelds(List<Card> hand, List<Meld> melds) {
+    final byChar = <String, int>{};
+    for (final card in hand) {
+      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
+    }
+    int pairs = 0;
+    for (final count in byChar.values) {
+      if (count == 2) pairs++;
+      if (count == 3) pairs++; // 三张可拆成1对+1单
+      if (count == 4) pairs += 2;
+    }
+    for (final meld in melds) {
+      if (meld.type == MeldType.kan) pairs++;
+      if (meld.type == MeldType.zhao) pairs += 2;
+    }
+    return pairs;
   }
 
   String _handCacheKey(List<Card> hand, List<Meld> melds) {
@@ -183,8 +242,11 @@ class AIStrategyHard extends AIStrategy {
     Map<String, int>? visibleCount,
     int? totalUnknown,
   }) {
+    // 必须有十对路线资格
+    if (!_isShiDuiEligible(player)) return -1;
+
     final pairCount = _countHandPairsWithMelds(player);
-    if (pairCount < 7) return -1;
+    if (pairCount < 6) return -1;
 
     final vc = visibleCount ?? _buildVisibleCharCount(player, state);
     final tu = totalUnknown ?? _totalUnknownCards(player, state);
@@ -1984,9 +2046,26 @@ class AIStrategyHard extends AIStrategy {
     final cached = _distanceCache[key];
     if (cached != null) return cached;
 
-    final pairDist = _distanceToTingShiDui(hand, melds);
-    final normalDist = _distanceToTingNormal(hand, melds);
-    int result = pairDist < normalDist ? pairDist : normalDist;
+    final pairs = _countPairsFromHandAndMelds(hand, melds);
+
+    // 组合牌区有牌时，彻底不考虑十对路线
+    // 十对路线未启用时，不考虑十对路线
+    // 8对以上时，强制走十对路线（不考虑其它胡牌类型）
+    final bool useShiDui = melds.isEmpty && _currentShiDuiEnabled;
+    final bool forceShiDui = useShiDui && pairs >= 8;
+
+    int result;
+    if (forceShiDui) {
+      // 8对以上，强制走十对路线
+      result = _distanceToTingShiDui(hand, melds);
+    } else if (useShiDui) {
+      final pairDist = _distanceToTingShiDui(hand, melds);
+      final normalDist = _distanceToTingNormal(hand, melds);
+      result = pairDist < normalDist ? pairDist : normalDist;
+    } else {
+      // 十对路线不可用，只走普通路线
+      result = _distanceToTingNormal(hand, melds);
+    }
 
     // 当结构距离较近时，检查胡数条件
     // 听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
@@ -2241,6 +2320,12 @@ class AIStrategyHard extends AIStrategy {
   bool shouldChi(Player player, Card card, GameState state) {
     _initCache(player, state);
 
+    // 8对以上强制走十对路线，不吃牌
+    if (_currentShiDuiEnabled &&
+        _countHandPairsWithMelds(player) >= 8) {
+      return false;
+    }
+
     if (_hasCompleteSentenceWithSingleCards(player, card)) {
       return false;
     }
@@ -2325,6 +2410,12 @@ class AIStrategyHard extends AIStrategy {
   @override
   bool shouldPeng(Player player, Card card, GameState state) {
     _initCache(player, state);
+
+    // 8对以上强制走十对路线，不碰牌
+    if (_currentShiDuiEnabled &&
+        _countHandPairsWithMelds(player) >= 8) {
+      return false;
+    }
 
     final hand = player.hand;
     final sameCharCount = hand
@@ -2529,6 +2620,12 @@ class AIStrategyHard extends AIStrategy {
   bool shouldZhao(Player player, Card card, GameState state) {
     _initCache(player, state);
 
+    // 8对以上强制走十对路线，不招别人出的牌
+    if (_currentShiDuiEnabled &&
+        _countHandPairsWithMelds(player) >= 8) {
+      return false;
+    }
+
     // 20张牌时不能招别人出的牌
     if (!_canOperate(player)) return false;
 
@@ -2538,6 +2635,12 @@ class AIStrategyHard extends AIStrategy {
   @override
   bool shouldZhaoFromHand(Player player, String character, GameState state) {
     _initCache(player, state);
+
+    // 8对以上强制走十对路线，不招自己手牌上的牌
+    if (_currentShiDuiEnabled &&
+        _countHandPairsWithMelds(player) >= 8) {
+      return false;
+    }
 
     // 19张牌时不能招自己手牌上的4张同字牌
     if (!_canZhaoFromHand(player, character)) return false;
