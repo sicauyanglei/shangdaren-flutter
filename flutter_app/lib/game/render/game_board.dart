@@ -729,7 +729,7 @@ class GameBoard extends Component {
         : 0.0;
 
     final startX = (designWidth - totalW) / 2;
-    final startY = designHeight - totalH + 60;
+    final startY = designHeight - totalH + 80;
 
     double curX = startX;
     for (final stacks in allStacks) {

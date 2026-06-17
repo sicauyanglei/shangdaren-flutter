@@ -45,7 +45,7 @@ double _handTopY(List<Card> hand) {
   final maxStacks = _maxStackCount(hand);
   if (maxStacks == 0) return _designHeight;
   final totalH = (maxStacks - 1) * _handStackVisible + _handCardH;
-  return _designHeight - totalH + 60;
+  return _designHeight - totalH + 80;
 }
 
 double _handWidth(List<Card> hand) {
