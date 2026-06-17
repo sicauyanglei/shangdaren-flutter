@@ -1800,6 +1800,11 @@ class AIStrategyHard extends AIStrategy {
         score += 20; // 精牌孤张价值更高
       } else if (_isYin(card)) {
         score += 3;
+        // 组1(上大人)/组8(福禄寿)的银牌有精句潜力（精句4胡 vs 普句0胡）
+        // 保留这些牌可等待精句，在胡数不足时尤其有价值
+        if (card.sentence == 1 || card.sentence == 8) {
+          score += 15; // 精句潜力加分
+        }
       }
     }
 
