@@ -219,6 +219,35 @@ class AIStrategyHard extends AIStrategy {
     return score;
   }
 
+  /// 评估黑元路线潜力：返回>0表示有黑元潜力
+  /// 黑元条件：无碰无招（或招但effectiveHasZhao=false），且所有牌都不属于组1/组8，且无"上"/"福"
+  double _evaluateHeiYuanPotential(Player player) {
+    // 有碰则不能黑元
+    final hasPeng = player.melds.any((m) => m.type == MeldType.kan);
+    if (hasPeng) return -1;
+
+    // 检查所有牌（手牌+组合牌）是否都属于组2-7，且无"上"/"福"
+    final allCards = [...player.hand, ...player.melds.expand((m) => m.cards)];
+    for (final c in allCards) {
+      if (c.sentence == 1 || c.sentence == 8) return -1;
+      if (c.character == '上' || c.character == '福') return -1;
+    }
+
+    // 满足黑元路线的基本条件，返回一个正值表示有潜力
+    // 潜力值与已有句数相关，越多句潜力越大
+    int sentenceCount = 0;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.ju) sentenceCount++;
+    }
+    // 手牌中的句数估算
+    final handRemaining = List<Card>.from(player.hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(handRemaining, handASet);
+    sentenceCount += handASet.length;
+
+    return 100.0 + sentenceCount * 50.0;
+  }
+
   double _evaluateHuScore(Player player) {
     final hash =
         player.hand.fold(0, (a, c) => a ^ c.id) ^
@@ -680,6 +709,9 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown: totalUnknown,
     );
 
+    // 黑元路线潜力（特殊胡牌类型，不受胡数>=11限制）
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+
     final availableChars = _buildAvailableChars(visibleCount);
 
     Card? bestTingCard;
@@ -760,6 +792,7 @@ class AIStrategyHard extends AIStrategy {
         isLate,
         shiDuiPotential,
         availableChars,
+        heiYuanPotential,
       );
 
       if (hand.length > 3) {
@@ -886,6 +919,7 @@ class AIStrategyHard extends AIStrategy {
     bool isLate,
     double shiDuiPotential,
     List<String> availableChars,
+    double heiYuanPotential,
   ) {
     final (potential, distToTing) = _evaluateHandPotentialAndDistance(
       testHand,
@@ -926,8 +960,9 @@ class AIStrategyHard extends AIStrategy {
     final huAfter = _evaluateHuScore(testPlayer);
     final huBefore = _evaluateHuScore(player);
     score += (huAfter - huBefore) * 20;
-    // 十对路线是特殊胡牌类型，不受胡数>=11限制
-    if (huBefore >= 11 && huAfter < 11 && shiDuiPotential <= 0) {
+    // 十对、黑元路线是特殊胡牌类型，不受胡数>=11限制
+    if (huBefore >= 11 && huAfter < 11 &&
+        shiDuiPotential <= 0 && heiYuanPotential <= 0) {
       // 出牌破坏了胡牌的胡数资格，重罚
       score -= 600;
     }
