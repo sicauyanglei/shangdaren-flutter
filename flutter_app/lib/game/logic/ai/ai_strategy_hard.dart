@@ -133,7 +133,8 @@ class AIStrategyHard extends AIStrategy {
     return false;
   }
 
-  /// 从手牌和组合牌计算对子数（用于_distanceToTing中判断8对强制十对）
+  /// 从手牌计算对子数（十对路线专用，不从组合牌算对子）
+  /// 十对要求是手牌10对，组合牌不参与十对计算
   int _countPairsFromHandAndMelds(List<Card> hand, List<Meld> melds) {
     final byChar = <String, int>{};
     for (final card in hand) {
@@ -145,10 +146,7 @@ class AIStrategyHard extends AIStrategy {
       if (count == 3) pairs++; // 三张可拆成1对+1单
       if (count == 4) pairs += 2;
     }
-    for (final meld in melds) {
-      if (meld.type == MeldType.kan) pairs++;
-      if (meld.type == MeldType.zhao) pairs += 2;
-    }
+    // 十对只看手牌，不从组合牌算对子
     return pairs;
   }
 
@@ -198,6 +196,8 @@ class AIStrategyHard extends AIStrategy {
     return pairs;
   }
 
+  /// 计算手牌中的对子数（十对路线专用，不从组合牌算对子）
+  /// 十对要求是手牌10对，组合牌不参与十对计算
   int _countHandPairsWithMelds(Player player) {
     final byChar = <String, int>{};
     for (final card in player.hand) {
@@ -209,10 +209,7 @@ class AIStrategyHard extends AIStrategy {
       if (count == 3) pairs++; // 三张可拆成1对+1单，十对路线中算1对
       if (count == 4) pairs += 2;
     }
-    for (final meld in player.melds) {
-      if (meld.type == MeldType.kan) pairs++;
-      if (meld.type == MeldType.zhao) pairs += 2;
-    }
+    // 十对只看手牌，不从组合牌算对子
     return pairs;
   }
 
@@ -2097,17 +2094,13 @@ class AIStrategyHard extends AIStrategy {
 
   /// 十对听牌距离（到听牌的距离，非到胡牌的距离）
   /// 十对听牌条件：手牌9对（即9对+1单张），所以9对=听牌（距离0）
+  /// 十对只看手牌，不从组合牌算对子
   int _distanceToTingShiDui(List<Card> hand, List<Meld> melds) {
     final byChar = <String, int>{};
     for (final card in hand) {
       byChar[card.character] = (byChar[card.character] ?? 0) + 1;
     }
-    // 计算已有刻/招中的对子数
-    int meldPairs = 0;
-    for (final m in melds) {
-      if (m.type == MeldType.kan) meldPairs += 1; // 刻=1对+1单
-      if (m.type == MeldType.zhao) meldPairs += 2; // 招=2对
-    }
+    // 十对只看手牌，不从组合牌算对子
 
     int pairs = 0;
     int singles = 0;
@@ -2124,7 +2117,6 @@ class AIStrategyHard extends AIStrategy {
         singles++;
       }
     }
-    pairs += meldPairs;
 
     // 十对听牌条件：9对=听牌，距离 = 9 - pairs
     // 9对时距离0（已听牌），10对时距离-1（已胡牌）也按0处理
