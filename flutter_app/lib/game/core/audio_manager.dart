@@ -16,7 +16,7 @@ class AudioManager {
   bool get tickEnabled => _tickEnabled;
   String _difficulty = 'hard';
   String get difficulty => _difficulty;
-  bool _recordingEnabled = true;
+  bool _recordingEnabled = false;
   bool get recordingEnabled => _recordingEnabled;
 
   bool _autoHostingEnabled = false;
@@ -27,7 +27,7 @@ class AudioManager {
   String get autoHostingStrategy => _autoHostingStrategy;
 
   // AI策略测试开关（默认打开）
-  bool _aiStrategyTestEnabled = true;
+  bool _aiStrategyTestEnabled = false;
   bool get aiStrategyTestEnabled => _aiStrategyTestEnabled;
 
   bool _initialized = false;
@@ -161,11 +161,11 @@ class AudioManager {
       _volume = prefs.getDouble('audio_volume') ?? 1.0;
       _tickEnabled = prefs.getBool('tick_enabled') ?? true;
       _difficulty = prefs.getString('difficulty') ?? 'hard';
-      _recordingEnabled = prefs.getBool('recording_enabled') ?? true;
+      _recordingEnabled = prefs.getBool('recording_enabled') ?? false;
       _autoHostingEnabled = prefs.getBool('auto_hosting_enabled') ?? false;
       _autoHostingStrategy = prefs.getString('auto_hosting_strategy') ?? 'ai';
       _aiStrategyTestEnabled =
-          prefs.getBool('ai_strategy_test_enabled') ?? true;
+          prefs.getBool('ai_strategy_test_enabled') ?? false;
     } catch (_) {}
   }
 
