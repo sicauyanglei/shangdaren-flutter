@@ -921,6 +921,17 @@ class AIStrategyHard extends AIStrategy {
 
     score += (10 - distToTing) * 120;
 
+    // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
+    // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
+    final huAfter = _evaluateHuScore(testPlayer);
+    final huBefore = _evaluateHuScore(player);
+    score += (huAfter - huBefore) * 20;
+    // 十对路线是特殊胡牌类型，不受胡数>=11限制
+    if (huBefore >= 11 && huAfter < 11 && shiDuiPotential <= 0) {
+      // 出牌破坏了胡牌的胡数资格，重罚
+      score -= 600;
+    }
+
     if (isLate) {
       score += (10 - distToTing) * 150;
       if (distToTing <= 2) {
