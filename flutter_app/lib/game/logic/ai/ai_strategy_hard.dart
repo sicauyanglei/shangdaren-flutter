@@ -1217,16 +1217,20 @@ class AIStrategyHard extends AIStrategy {
           score += 30;
         }
       } else {
-        // 句路线：保留同组搭子
+        // 句路线：保留同组搭子，优先出孤张/普单
         final sameGroup = player.hand
             .where((c) => c.sentence == cardToDiscard.sentence)
             .toList();
         final groupCharSet = sameGroup.map((c) => c.character).toSet();
         if (groupCharSet.length >= 2) {
+          // 搭子：保留
           score -= 30;
           if (groupCharSet.length >= 3) {
             score -= 20;
           }
+        } else {
+          // 孤张/普单：同组只有1种字，优先打出
+          score += 40;
         }
         final otherChars = _groupChars[cardToDiscard.sentence - 1]
             .where((ch) => ch != cardToDiscard.character)
@@ -1237,6 +1241,9 @@ class AIStrategyHard extends AIStrategy {
         }
         if (partnerRem > 0) {
           score -= partnerRem * 3;
+        } else if (groupCharSet.length == 1) {
+          // 孤张且同组其他字已出完，无进张价值，最优先打出
+          score += 30;
         }
         if (cardToDiscard.isJing) {
           score -= 20;
@@ -1258,6 +1265,17 @@ class AIStrategyHard extends AIStrategy {
       // 中局出对子中的一张代价较大
       if (discardCharCount >= 2) {
         score -= 15;
+      }
+      // 中局优先出孤张/普单（非十对路线）
+      if (discardCharCount == 1 && shiDuiPotential <= 0) {
+        final sameGroup = player.hand
+            .where((c) => c.sentence == cardToDiscard.sentence)
+            .toList();
+        final groupCharSet = sameGroup.map((c) => c.character).toSet();
+        if (groupCharSet.length == 1) {
+          // 孤张/普单：优先打出
+          score += 30;
+        }
       }
     }
 
