@@ -527,6 +527,7 @@ class AIStrategyHard extends AIStrategy {
     if (tingAfter.isTing) return 10000;
 
     final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
+    final normalBefore = _distanceToTingNormal(hand, player.melds);
     final newMelds = [...player.melds, newMeld];
     final totalUnknown = _totalUnknownCards(player, state);
     final (bestHand, distAfterDiscard) = _findBestDiscardAfterMeld(
@@ -536,7 +537,12 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown: totalUnknown,
     );
 
-    if (distAfterDiscard > distBefore) return -1;
+    if (distAfterDiscard > distBefore) {
+      // 吃牌可能破坏十对路线但改善普通路线
+      // 如果普通路线距离不增加，仍然允许吃牌
+      final normalAfter = _distanceToTingNormal(bestHand, newMelds);
+      if (normalAfter > normalBefore) return -1;
+    }
 
     double benefit = (distBefore - distAfterDiscard) * 300.0;
     if (distAfterDiscard == distBefore) benefit += 100;
@@ -667,7 +673,13 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown: totalUnknown,
     );
 
-    if (distAfterDiscard > distBefore) return -1;
+    if (distAfterDiscard > distBefore) {
+      // 吃牌可能破坏十对路线但改善普通路线
+      // 如果普通路线距离不增加，仍然允许吃牌
+      final normalBefore = _distanceToTingNormal(hand, player.melds);
+      final normalAfter = _distanceToTingNormal(bestHand, newMelds);
+      if (normalAfter > normalBefore) return -1;
+    }
 
     double benefit = (distBefore - distAfterDiscard) * 300.0;
 
