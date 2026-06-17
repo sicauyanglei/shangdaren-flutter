@@ -1649,6 +1649,11 @@ class AIStrategyHard extends AIStrategy {
     }
 
     int distance = neededMelds * 2 - usefulDuiKao;
+    // 修正：当靠/对数量超过需要的面子数时，多余部分仅用于听牌条件，
+    // 不应使距离低于neededMelds（仍需neededMelds张牌来完成面子）
+    if (neededMelds > 0 && distance < neededMelds) {
+      distance = neededMelds;
+    }
     if (distance < 0) distance = 0;
     if (distance > 10) distance = 10;
 
@@ -1699,6 +1704,15 @@ class AIStrategyHard extends AIStrategy {
           } else {
             // 没有进张的对价值很低
             score += 3;
+          }
+          // 对+同组单牌协同加分：对子+同组单牌有两条进张路线
+          // 摸同字成坎，或摸缺字成句，比单个靠更灵活
+          final duiSentence = meld.cards.first.sentence;
+          final hasSameGroupSingle = eSet.any(
+            (c) => c.sentence == duiSentence && c.character != ch,
+          );
+          if (hasSameGroupSingle) {
+            score += 45;
           }
         }
         if (meld.isJing) score += 20;
@@ -1968,6 +1982,12 @@ class AIStrategyHard extends AIStrategy {
       }
 
       int dist = neededMelds * 2 - usefulDuiKao - potentialKaoFromSingles;
+
+      // 修正：当靠/对数量超过需要的面子数时，多余部分仅用于听牌条件，
+      // 不应使距离低于neededMelds（仍需neededMelds张牌来完成面子）
+      if (neededMelds > 0 && dist < neededMelds) {
+        dist = neededMelds;
+      }
 
       // 修正：单钓听和普通听的距离应为0
       // 单钓听：neededMelds==0, eSet.length==1, dSet.isEmpty
