@@ -1706,13 +1706,24 @@ class AIStrategyHard extends AIStrategy {
             score += 3;
           }
           // 对+同组单牌协同加分：对子+同组单牌有两条进张路线
-          // 摸同字成坎，或摸缺字成句，比单个靠更灵活
+          // 摸同字成坎（已在对的评分中），摸缺字成句（此处加分）
+          // 句进张价值应与靠的进张价值对等(rem*20)，因为两者进张结果完全相同
           final duiSentence = meld.cards.first.sentence;
-          final hasSameGroupSingle = eSet.any(
-            (c) => c.sentence == duiSentence && c.character != ch,
-          );
-          if (hasSameGroupSingle) {
-            score += 45;
+          final sameGroupSingles = eSet
+              .where((c) => c.sentence == duiSentence && c.character != ch)
+              .toList();
+          if (sameGroupSingles.isNotEmpty) {
+            final groupChars = _groupChars[duiSentence - 1];
+            final presentChars = <String>{ch};
+            for (final s in sameGroupSingles) {
+              presentChars.add(s.character);
+            }
+            for (final gc in groupChars) {
+              if (!presentChars.contains(gc)) {
+                final missingRem = _remainingCount(gc, visibleCount);
+                score += missingRem * 20;
+              }
+            }
           }
         }
         if (meld.isJing) score += 20;
