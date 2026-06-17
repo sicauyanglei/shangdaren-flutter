@@ -2380,7 +2380,7 @@ class AIStrategyHard extends AIStrategy {
     // 20张牌时不能招别人出的牌
     if (!_canOperate(player)) return false;
 
-    return _evaluateZhaoBenefit(player, card.character, state);
+    return _evaluateZhaoBenefit(player, card.character, state, isFromOthers: true);
   }
 
   @override
@@ -2393,7 +2393,7 @@ class AIStrategyHard extends AIStrategy {
     return _evaluateZhaoBenefit(player, character, state);
   }
 
-  bool _evaluateZhaoBenefit(Player player, String character, GameState state) {
+  bool _evaluateZhaoBenefit(Player player, String character, GameState state, {bool isFromOthers = false}) {
     final hand = player.hand;
     final sameCharCount = hand.where((c) => c.character == character).length;
 
@@ -2406,7 +2406,9 @@ class AIStrategyHard extends AIStrategy {
       return false;
     }
 
-    if (sameCharCount >= 4) {
+    // 别人出牌时：手牌3张+别人1张=4张，可以招
+    // 自己手牌时：需要手牌有4张才能招
+    if (sameCharCount >= 4 || (isFromOthers && sameCharCount == 3)) {
       // 手牌中有4张同字，可以招
       final testHand = List<Card>.from(hand);
       final zhaoCards = testHand
@@ -2606,13 +2608,10 @@ class AIStrategyHard extends AIStrategy {
       return false;
     }
 
-    // sameCharCount == 3: 手牌中有3张同字
-    // 如果是shouldZhao（别人出牌），3张+别人1张=4张，可以招
-    // 如果是shouldZhaoFromHand（自己手牌），只有3张，不能招
-    // 这里无法区分调用来源，但shouldZhaoFromHand在sameCharCount==3时
-    // _canZhaoFromHand会返回true（不是4张），所以会进入这里
-    // 3张同字不能招，返回false
-    if (sameCharCount == 3) {
+    // sameCharCount == 3 且不是别人出牌（自己手牌场景）
+    // 自己手牌只有3张同字，不能招（需要4张）
+    // 别人出牌场景（isFromOthers=true）已在上面处理
+    if (sameCharCount == 3 && !isFromOthers) {
       return false;
     }
 
