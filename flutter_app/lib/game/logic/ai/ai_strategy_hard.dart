@@ -1801,9 +1801,20 @@ class AIStrategyHard extends AIStrategy {
       } else if (_isYin(card)) {
         score += 3;
         // 组1(上大人)/组8(福禄寿)的银牌有精句潜力（精句4胡 vs 普句0胡）
-        // 保留这些牌可等待精句，在胡数不足时尤其有价值
+        // 仅在总胡数不足11时才加分，鼓励保留银牌等待精句补足胡数
+        // 胡数已够时按正常估值，避免过度保留银牌
         if (card.sentence == 1 || card.sentence == 8) {
-          score += 15; // 精句潜力加分
+          final testPlayer = Player(
+            id: -1,
+            name: '',
+            type: PlayerType.ai,
+            hand: List<Card>.from(hand),
+            melds: List<Meld>.from(melds),
+          );
+          final totalHu = HuCalculator.calculateTotalHu(testPlayer);
+          if (totalHu < 11) {
+            score += 15; // 精句潜力加分
+          }
         }
       }
     }
