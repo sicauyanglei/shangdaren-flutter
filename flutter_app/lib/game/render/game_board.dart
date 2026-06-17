@@ -56,7 +56,7 @@ class GameBoard extends Component {
 
   static const double huAiHandCardW = 43.2;
   static const double huAiHandCardH = 179.2;
-  static const double huAiHandStackVisible = 35.0;
+  static const double huAiHandStackVisible = 40.0;
   static const double huAiHandSentenceGap = 0.0;
 
   static const double leftMaxW = 340.0;

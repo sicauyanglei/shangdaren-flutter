@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart' hide Card;
+import 'package:flutter/services.dart';
+import '../core/audio_manager.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
@@ -74,7 +76,7 @@ double _player2AreaBottomY(Player? player2) {
       discardRowCount * (_smallCardH + _discardRowGap);
 }
 
-class GameOverlay extends StatelessWidget {
+class GameOverlay extends StatefulWidget {
   final GameState gameState;
   final Map<int, int> displayScores;
   final VoidCallback? onChi;
@@ -85,6 +87,7 @@ class GameOverlay extends StatelessWidget {
   final VoidCallback? onPass;
   final VoidCallback? onSettings;
   final VoidCallback? onCancelAutoHosting;
+  final VoidCallback? onEnterAutoHosting;
   final void Function(int piaoValue)? onSetPiao;
   final VoidCallback? onNextRound;
   final VoidCallback? onShowSettlementFromButton;
@@ -102,6 +105,7 @@ class GameOverlay extends StatelessWidget {
     this.onPass,
     this.onSettings,
     this.onCancelAutoHosting,
+    this.onEnterAutoHosting,
     this.onSetPiao,
     this.onNextRound,
     this.onShowSettlementFromButton,
@@ -109,7 +113,71 @@ class GameOverlay extends StatelessWidget {
   });
 
   @override
+  State<GameOverlay> createState() => _GameOverlayState();
+}
+
+class _GameOverlayState extends State<GameOverlay> {
+  int _tapCount = 0;
+  Timer? _tapTimer;
+
+  @override
+  void dispose() {
+    _tapTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleBackgroundTap() {
+    if (!AudioManager().aiStrategyTestEnabled) {
+      _tapCount = 0;
+      return;
+    }
+    _tapCount++;
+    _tapTimer?.cancel();
+    if (_tapCount >= 3) {
+      _tapCount = 0;
+      _copyBoardInfoToClipboard();
+    } else {
+      _tapTimer = Timer(const Duration(seconds: 1), () {
+        _tapCount = 0;
+      });
+    }
+  }
+
+  void _copyBoardInfoToClipboard() {
+    final gs = widget.gameState;
+    final players = gs.players;
+    final buf = StringBuffer();
+    // 输出顺序：玩家1(0)、玩家2(2)、我(1)
+    final order = [0, 2, 1];
+    final labels = {0: '玩家1', 1: '我', 2: '玩家2'};
+    for (final i in order) {
+      if (i >= players.length) continue;
+      final p = players[i];
+      final meldsStr = p.melds
+          .map((m) => m.cards.map((c) => c.character).join())
+          .join(',');
+      final discardsStr = p.discards.map((c) => c.character).join();
+      final label = labels[i]!;
+      if (p.type == PlayerType.human) {
+        final handStr = p.hand.map((c) => c.character).join();
+        buf.writeln('$label-组合牌"$meldsStr",弃牌"$discardsStr",手牌"$handStr"');
+      } else {
+        buf.writeln('$label-组合牌"$meldsStr",弃牌"$discardsStr"');
+      }
+    }
+    final text = buf.toString().trimRight();
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('牌面信息已复制到剪贴板'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final gameState = widget.gameState;
     if (!gameState.gameStarted) {
       return const SizedBox.shrink();
     }
@@ -119,207 +187,222 @@ class GameOverlay extends StatelessWidget {
     final player1 = players.length > 1 ? players[1] : null;
     final player2 = players.length > 2 ? players[2] : null;
 
-    return Stack(
-      children: [
-        Positioned(
-          left: 9.6,
-          top: 4.8,
-          child: _MeasureSize(
-            playerIndex: 0,
-            onSizeChanged: (size) =>
-                onAvatarSizeChanged?.call(size.width, size.height, 0),
-            child: _AIPlayerInfo(
-              player: player0,
-              dealerIndex: gameState.dealerIndex,
-              currentPlayerIndex: gameState.currentPlayerIndex,
-              countdown:
-                  (gameState.currentPlayerIndex == 0 &&
-                      !gameState.isMyTurn &&
-                      !gameState.waitingForResponse)
-                  ? gameState.countdown
-                  : 0,
-              animatingScore: displayScores[0],
-            ),
-          ),
-        ),
-        Positioned(
-          right: 9.6,
-          top: 4.8,
-          child: _MeasureSize(
-            playerIndex: 2,
-            onSizeChanged: (size) =>
-                onAvatarSizeChanged?.call(size.width, size.height, 2),
-            child: _AIPlayerInfo(
-              player: player2,
-              dealerIndex: gameState.dealerIndex,
-              currentPlayerIndex: gameState.currentPlayerIndex,
-              countdown:
-                  (gameState.currentPlayerIndex == 2 &&
-                      !gameState.isMyTurn &&
-                      !gameState.waitingForResponse)
-                  ? gameState.countdown
-                  : 0,
-              animatingScore: displayScores[2],
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 5,
-          left: 10,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _MeasureSize(
-                playerIndex: 1,
-                onSizeChanged: (size) =>
-                    onAvatarSizeChanged?.call(size.width, size.height, 1),
-                child: _MyPlayerInfo(
-                  player: player1,
-                  gameState: gameState,
-                  onAvatarTap: onSettings,
-                  animatingScore: displayScores[1],
-                ),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _handleBackgroundTap,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 9.6,
+            top: 4.8,
+            child: _MeasureSize(
+              playerIndex: 0,
+              onSizeChanged: (size) =>
+                  widget.onAvatarSizeChanged?.call(size.width, size.height, 0),
+              child: _AIPlayerInfo(
+                player: player0,
+                dealerIndex: gameState.dealerIndex,
+                currentPlayerIndex: gameState.currentPlayerIndex,
+                countdown:
+                    (gameState.currentPlayerIndex == 0 &&
+                        !gameState.isMyTurn &&
+                        !gameState.waitingForResponse)
+                    ? gameState.countdown
+                    : 0,
+                animatingScore: widget.displayScores[0],
               ),
-              if (player1?.isTing == true &&
-                  !gameState.hideTingBadge &&
-                  !gameState.showHuResult &&
-                  !gameState.showLiujuResult)
-                Transform.translate(
-                  offset: const Offset(4, -4),
-                  child: GameArtButton(
-                    label: '听',
-                    type: GameButtonType.ting,
-                    onTap: null,
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
-        // "取消托管"按钮：横坐标按照人类玩家8组牌满宽度计算，间隔20px，不随手牌宽度移动
-        // 如果遮挡了玩家2的组合牌/弃牌区域，自动往下移动
-        if (gameState.isAutoHosting &&
-            !gameState.showHuResult &&
-            !gameState.showLiujuResult)
-          Builder(
-            builder: (context) {
-              final handTopY = _handTopY(player1?.hand ?? []);
-              // 按照8组牌满宽度计算，不随手牌实际宽度移动
-              const maxGroupCount = 8;
-              const fullHandW =
-                  maxGroupCount * _handCardW +
-                  (maxGroupCount - 1) * _handSentenceGap;
-              final handRightX = (_designWidth + fullHandW) / 2;
-              const buttonGap = 20.0;
-              const buttonW = 210.0;
-              const buttonH = 72.0;
-              double buttonLeftX = handRightX + buttonGap;
-              double buttonTopY = handTopY;
-              // 玩家2区域左边界
-              const player2LeftBound =
-                  _designWidth - _player2RightPadding - _player2MaxWidth;
-              final player2BottomY = _player2AreaBottomY(player2);
-              // 如果按钮与玩家2区域重叠，则往下移动到玩家2区域下方
-              if (buttonLeftX + buttonW > player2LeftBound &&
-                  buttonTopY + buttonH > _player2AvatarBottom &&
-                  buttonTopY < player2BottomY) {
-                buttonTopY = player2BottomY + 10.0;
-              }
-              return Positioned(
-                left: buttonLeftX,
-                top: buttonTopY,
-                child: GameArtButton(
-                  label: '取消托管',
-                  type: GameButtonType.hosting,
-                  onTap: onCancelAutoHosting,
-                ),
-              );
-            },
+          Positioned(
+            right: 9.6,
+            top: 4.8,
+            child: _MeasureSize(
+              playerIndex: 2,
+              onSizeChanged: (size) =>
+                  widget.onAvatarSizeChanged?.call(size.width, size.height, 2),
+              child: _AIPlayerInfo(
+                player: player2,
+                dealerIndex: gameState.dealerIndex,
+                currentPlayerIndex: gameState.currentPlayerIndex,
+                countdown:
+                    (gameState.currentPlayerIndex == 2 &&
+                        !gameState.isMyTurn &&
+                        !gameState.waitingForResponse)
+                    ? gameState.countdown
+                    : 0,
+                animatingScore: widget.displayScores[2],
+              ),
+            ),
           ),
-        Positioned(
-          bottom: _designHeight - _handTopY(player1?.hand ?? []) + 2,
-          left: 0,
-          right: 0,
-          child: Center(
+          Positioned(
+            bottom: 5,
+            left: 10,
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!gameState.isAutoHosting ||
-                    gameState.showHuResult ||
-                    gameState.showLiujuResult) ...[
-                  if (gameState.canHu && gameState.isZimoOpportunity)
-                    GameArtButton(
-                      label: '自摸',
-                      type: GameButtonType.zimo,
-                      onTap: onHu,
+                _MeasureSize(
+                  playerIndex: 1,
+                  onSizeChanged: (size) => widget.onAvatarSizeChanged?.call(
+                    size.width,
+                    size.height,
+                    1,
+                  ),
+                  child: _MyPlayerInfo(
+                    player: player1,
+                    gameState: gameState,
+                    onAvatarTap: widget.onSettings,
+                    animatingScore: widget.displayScores[1],
+                  ),
+                ),
+                if (player1?.isTing == true &&
+                    !gameState.hideTingBadge &&
+                    !gameState.showHuResult &&
+                    !gameState.showLiujuResult)
+                  Transform.translate(
+                    offset: const Offset(4, -4),
+                    child: GameArtButton(
+                      label: '听',
+                      type: GameButtonType.ting,
+                      onTap: null,
                     ),
-                  if (gameState.canHu &&
-                      gameState.isZimoOpportunity &&
-                      (gameState.canChi ||
-                          gameState.canPeng ||
-                          gameState.canZhao)) ...[
-                    const SizedBox(width: 14),
-                    ActionButtons(
-                      canChi: gameState.canChi,
-                      canPeng: gameState.canPeng,
-                      canZhao: gameState.canZhao,
-                      canHu: false,
-                      onChi: onChi,
-                      onPeng: onPeng,
-                      onZhao: onZhao,
-                      onHu: onHu,
-                      onPass: onPass,
-                    ),
-                  ],
-                  if (!gameState.isZimoOpportunity)
-                    ActionButtons(
-                      canChi: gameState.canChi,
-                      canPeng: gameState.canPeng,
-                      canZhao: gameState.canZhao,
-                      canHu: gameState.canHu && !gameState.isZimoOpportunity,
-                      onChi: onChi,
-                      onPeng: onPeng,
-                      onZhao: onZhao,
-                      onHu: onHu,
-                      onPass: onPass,
-                    ),
-                ],
+                  ),
               ],
             ),
           ),
-        ),
-        Positioned(
-          bottom: 9.6,
-          right: 9.6,
-          child: _RoundInfo(
-            roundNumber: gameState.roundNumber,
-            dealerName: gameState.players[gameState.dealerIndex].name,
-            showHuDisplay: gameState.showHuResult || gameState.showLiujuResult,
-            isLastRound: gameState.roundNumber >= 8,
-            isAutoHosting: gameState.isAutoHosting,
-            onNextRound: onNextRound,
-            onShowSettlement: onShowSettlementFromButton,
-            roundHistory: gameState.roundHistory,
-            players: gameState.players,
-          ),
-        ),
-        if (gameState.isPiaoPhase &&
-            gameState.piaoCurrentPlayerIndex < gameState.players.length &&
-            gameState.players[gameState.piaoCurrentPlayerIndex].type ==
-                PlayerType.human)
-          Positioned.fill(
-            child: Center(child: _PiaoSelectionPopup(onSetPiao: onSetPiao)),
-          ),
-        if (gameState.showZhaoSelection && gameState.zhaoCandidates.isNotEmpty)
-          Positioned.fill(
+          // 托管按钮：横坐标按照人类玩家8组牌满宽度计算，间隔20px，不随手牌宽度移动
+          // 如果遮挡了玩家2的组合牌/弃牌区域，自动往下移动
+          // AI策略测试开关打开时，显示"AI托管"/"取消托管"切换按钮
+          if (AudioManager().aiStrategyTestEnabled &&
+              !gameState.showHuResult &&
+              !gameState.showLiujuResult)
+            Builder(
+              builder: (context) {
+                final handTopY = _handTopY(player1?.hand ?? []);
+                // 按照8组牌满宽度计算，不随手牌实际宽度移动
+                const maxGroupCount = 8;
+                const fullHandW =
+                    maxGroupCount * _handCardW +
+                    (maxGroupCount - 1) * _handSentenceGap;
+                final handRightX = (_designWidth + fullHandW) / 2;
+                const buttonGap = 20.0;
+                const buttonW = 210.0;
+                const buttonH = 72.0;
+                double buttonLeftX = handRightX + buttonGap;
+                double buttonTopY = handTopY;
+                // 玩家2区域左边界
+                const player2LeftBound =
+                    _designWidth - _player2RightPadding - _player2MaxWidth;
+                final player2BottomY = _player2AreaBottomY(player2);
+                // 如果按钮与玩家2区域重叠，则往下移动到玩家2区域下方
+                if (buttonLeftX + buttonW > player2LeftBound &&
+                    buttonTopY + buttonH > _player2AvatarBottom &&
+                    buttonTopY < player2BottomY) {
+                  buttonTopY = player2BottomY + 10.0;
+                }
+                return Positioned(
+                  left: buttonLeftX,
+                  top: buttonTopY,
+                  child: GameArtButton(
+                    label: gameState.isAutoHosting ? '取消托管' : 'AI托管',
+                    type: GameButtonType.hosting,
+                    onTap: gameState.isAutoHosting
+                        ? widget.onCancelAutoHosting
+                        : widget.onEnterAutoHosting,
+                  ),
+                );
+              },
+            ),
+          Positioned(
+            bottom: _designHeight - _handTopY(player1?.hand ?? []) + 20,
+            left: 0,
+            right: 0,
             child: Center(
-              child: _ZhaoSelectionPopup(
-                candidates: gameState.zhaoCandidates,
-                onSelect: onSelectZhaoCharacter,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!gameState.isAutoHosting ||
+                      gameState.showHuResult ||
+                      gameState.showLiujuResult) ...[
+                    if (gameState.canHu && gameState.isZimoOpportunity)
+                      GameArtButton(
+                        label: '自摸',
+                        type: GameButtonType.zimo,
+                        onTap: widget.onHu,
+                      ),
+                    if (gameState.canHu &&
+                        gameState.isZimoOpportunity &&
+                        (gameState.canChi ||
+                            gameState.canPeng ||
+                            gameState.canZhao)) ...[
+                      const SizedBox(width: 14),
+                      ActionButtons(
+                        canChi: gameState.canChi,
+                        canPeng: gameState.canPeng,
+                        canZhao: gameState.canZhao,
+                        canHu: false,
+                        onChi: widget.onChi,
+                        onPeng: widget.onPeng,
+                        onZhao: widget.onZhao,
+                        onHu: widget.onHu,
+                        onPass: widget.onPass,
+                      ),
+                    ],
+                    if (!gameState.isZimoOpportunity)
+                      ActionButtons(
+                        canChi: gameState.canChi,
+                        canPeng: gameState.canPeng,
+                        canZhao: gameState.canZhao,
+                        canHu: gameState.canHu && !gameState.isZimoOpportunity,
+                        onChi: widget.onChi,
+                        onPeng: widget.onPeng,
+                        onZhao: widget.onZhao,
+                        onHu: widget.onHu,
+                        onPass: widget.onPass,
+                      ),
+                  ],
+                ],
               ),
             ),
           ),
-      ],
+          Positioned(
+            bottom: 9.6,
+            right: 9.6,
+            child: _RoundInfo(
+              roundNumber: gameState.roundNumber,
+              dealerName: gameState.players[gameState.dealerIndex].name,
+              showHuDisplay:
+                  gameState.showHuResult || gameState.showLiujuResult,
+              isLastRound: gameState.roundNumber >= 8,
+              isAutoHosting: gameState.isAutoHosting,
+              onNextRound: widget.onNextRound,
+              onShowSettlement: widget.onShowSettlementFromButton,
+              roundHistory: gameState.roundHistory,
+              players: gameState.players,
+              onTripleTap: _copyBoardInfoToClipboard,
+            ),
+          ),
+          if (gameState.isPiaoPhase &&
+              gameState.piaoCurrentPlayerIndex < gameState.players.length &&
+              gameState.players[gameState.piaoCurrentPlayerIndex].type ==
+                  PlayerType.human)
+            Positioned.fill(
+              child: Center(
+                child: _PiaoSelectionPopup(onSetPiao: widget.onSetPiao),
+              ),
+            ),
+          if (gameState.showZhaoSelection &&
+              gameState.zhaoCandidates.isNotEmpty)
+            Positioned.fill(
+              child: Center(
+                child: _ZhaoSelectionPopup(
+                  candidates: gameState.zhaoCandidates,
+                  onSelect: widget.onSelectZhaoCharacter,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -928,6 +1011,7 @@ class _RoundInfo extends StatefulWidget {
   final VoidCallback? onShowSettlement;
   final List<Map<String, dynamic>> roundHistory;
   final List<dynamic> players;
+  final VoidCallback? onTripleTap;
 
   const _RoundInfo({
     required this.roundNumber,
@@ -939,6 +1023,7 @@ class _RoundInfo extends StatefulWidget {
     this.onShowSettlement,
     this.roundHistory = const [],
     this.players = const [],
+    this.onTripleTap,
   });
 
   @override
@@ -948,6 +1033,8 @@ class _RoundInfo extends StatefulWidget {
 class _RoundInfoState extends State<_RoundInfo> {
   int _countdown = 60;
   Timer? _timer;
+  int _tapCount = 0;
+  Timer? _tapTimer;
 
   int get _nextRoundSeconds => widget.isAutoHosting ? 10 : 60;
 
@@ -964,7 +1051,18 @@ class _RoundInfoState extends State<_RoundInfo> {
   @override
   void dispose() {
     _timer?.cancel();
+    _tapTimer?.cancel();
     super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.onTripleTap == null) return;
+    if (!AudioManager().aiStrategyTestEnabled) {
+      _tapCount = 0;
+      return;
+    }
+    // AI策略测试开关打开时，单击即复制
+    widget.onTripleTap!();
   }
 
   void _startCountdown() {
@@ -1033,11 +1131,12 @@ class _RoundInfoState extends State<_RoundInfo> {
     }
 
     return GestureDetector(
-      onDoubleTap: () {
+      onLongPress: () {
         if (widget.roundNumber >= 2 && widget.roundHistory.isNotEmpty) {
           _showRoundHistory(context);
         }
       },
+      onTap: _handleTap,
       child: Container(
         height: 60,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

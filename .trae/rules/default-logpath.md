@@ -4,3 +4,4 @@
 miniapp 目录下的代码修改不需要编译和推送到bluestacks
 测试代码与release代码做隔离，测试代码不要影响release代码的运行
 每次 flutter_app 代码修改完成后，执行编译 release 版本，推送到bluestacks
+推送APK到bluestacks后，直接启动游戏，命令：adb -s 127.0.0.1:5555 shell am start -n com.shangdaren.game/.MainActivity

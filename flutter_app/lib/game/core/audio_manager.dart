@@ -25,6 +25,11 @@ class AudioManager {
   // 托管策略: 'ai' = AI托管策略, 'simple' = 非AI托管(简单出牌)
   String _autoHostingStrategy = 'ai';
   String get autoHostingStrategy => _autoHostingStrategy;
+
+  // AI策略测试开关（默认打开）
+  bool _aiStrategyTestEnabled = true;
+  bool get aiStrategyTestEnabled => _aiStrategyTestEnabled;
+
   bool _initialized = false;
 
   static const _audioFileMap = <String, String>{
@@ -145,6 +150,11 @@ class AudioManager {
     _saveSettings();
   }
 
+  void setAiStrategyTestEnabled(bool enabled) {
+    _aiStrategyTestEnabled = enabled;
+    _saveSettings();
+  }
+
   Future<void> loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -154,6 +164,8 @@ class AudioManager {
       _recordingEnabled = prefs.getBool('recording_enabled') ?? true;
       _autoHostingEnabled = prefs.getBool('auto_hosting_enabled') ?? false;
       _autoHostingStrategy = prefs.getString('auto_hosting_strategy') ?? 'ai';
+      _aiStrategyTestEnabled =
+          prefs.getBool('ai_strategy_test_enabled') ?? true;
     } catch (_) {}
   }
 
@@ -165,6 +177,7 @@ class AudioManager {
       prefs.setBool('recording_enabled', _recordingEnabled);
       prefs.setBool('auto_hosting_enabled', _autoHostingEnabled);
       prefs.setString('auto_hosting_strategy', _autoHostingStrategy);
+      prefs.setBool('ai_strategy_test_enabled', _aiStrategyTestEnabled);
     });
   }
 

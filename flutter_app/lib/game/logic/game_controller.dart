@@ -147,7 +147,12 @@ class GameController {
     _isStartingRound = true;
 
     // 重置托管状态（每局开始重新计数超时）
-    state.isAutoHosting = false;
+    // AI策略测试开关打开时，人类玩家自动进入托管状态
+    if (AudioManager().aiStrategyTestEnabled) {
+      state.isAutoHosting = true;
+    } else {
+      state.isAutoHosting = false;
+    }
     state.timeoutCount = 0;
 
     state.roundNumber++;
@@ -1297,6 +1302,17 @@ class GameController {
     state.isAutoHosting = false;
     state.timeoutCount = 0;
     onStateChanged?.call();
+  }
+
+  /// 手动进入托管状态（AI策略测试）
+  void enterAutoHosting() {
+    state.isAutoHosting = true;
+    state.timeoutCount = 0;
+    onStateChanged?.call();
+    // 立即触发托管逻辑
+    if (state.isMyTurn || state.waitingForResponse) {
+      _handleTimeout();
+    }
   }
 
   void _nextTurn() {

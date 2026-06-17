@@ -8,12 +8,14 @@ class SettingsScreen extends StatefulWidget {
   final bool initialRecordingEnabled;
   final bool initialAutoHostingEnabled;
   final String initialAutoHostingStrategy;
+  final bool initialAiStrategyTestEnabled;
   final ValueChanged<int>? onVolumeChanged;
   final ValueChanged<String>? onDifficultyChanged;
   final ValueChanged<bool>? onTickEnabledChanged;
   final ValueChanged<bool>? onRecordingEnabledChanged;
   final ValueChanged<bool>? onAutoHostingEnabledChanged;
   final ValueChanged<String>? onAutoHostingStrategyChanged;
+  final ValueChanged<bool>? onAiStrategyTestEnabledChanged;
   final VoidCallback? onExitGame;
   final VoidCallback? onClose;
 
@@ -25,12 +27,14 @@ class SettingsScreen extends StatefulWidget {
     this.initialRecordingEnabled = true,
     this.initialAutoHostingEnabled = false,
     this.initialAutoHostingStrategy = 'ai',
+    this.initialAiStrategyTestEnabled = true,
     this.onVolumeChanged,
     this.onDifficultyChanged,
     this.onTickEnabledChanged,
     this.onRecordingEnabledChanged,
     this.onAutoHostingEnabledChanged,
     this.onAutoHostingStrategyChanged,
+    this.onAiStrategyTestEnabledChanged,
     this.onExitGame,
     this.onClose,
   });
@@ -46,6 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _recordingEnabled;
   late bool _autoHostingEnabled;
   late String _autoHostingStrategy;
+  late bool _aiStrategyTestEnabled;
   bool _featureExpanded = false;
 
   @override
@@ -57,6 +62,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _recordingEnabled = widget.initialRecordingEnabled;
     _autoHostingEnabled = widget.initialAutoHostingEnabled;
     _autoHostingStrategy = widget.initialAutoHostingStrategy;
+    _aiStrategyTestEnabled = widget.initialAiStrategyTestEnabled;
   }
 
   @override
@@ -575,6 +581,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         ],
                                       ),
                                     ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  // AI策略测试
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _aiStrategyTestEnabled ? '🧪' : '🧫',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'AI策略测试',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.white.withOpacity(
+                                                  0.5,
+                                                ),
+                                                letterSpacing: 2,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _aiStrategyTestEnabled
+                                                  ? '启用AI策略测试功能'
+                                                  : '已关闭AI策略测试',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _buildToggle(_aiStrategyTestEnabled, (v) {
+                                        setState(
+                                          () => _aiStrategyTestEnabled = v,
+                                        );
+                                        widget.onAiStrategyTestEnabledChanged
+                                            ?.call(v);
+                                      }),
+                                    ],
                                   ),
                                 ],
                               ),

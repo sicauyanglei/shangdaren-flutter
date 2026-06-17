@@ -344,6 +344,7 @@ class _GameHomePageState extends State<GameHomePage>
                                   onSettings: () =>
                                       setState(() => _showSettings = true),
                                   onCancelAutoHosting: g.cancelAutoHosting,
+                                  onEnterAutoHosting: g.enterAutoHosting,
                                   onSetPiao: g.setPiao,
                                   onNextRound: _triggerNextOrSettlement,
                                   onShowSettlementFromButton:
@@ -400,6 +401,8 @@ class _GameHomePageState extends State<GameHomePage>
                   initialAutoHostingEnabled: AudioManager().autoHostingEnabled,
                   initialAutoHostingStrategy:
                       AudioManager().autoHostingStrategy,
+                  initialAiStrategyTestEnabled:
+                      AudioManager().aiStrategyTestEnabled,
                   initialDifficulty: AudioManager().difficulty,
                   onVolumeChanged: (v) {
                     AudioManager().setVolume(v / 100.0);
@@ -415,6 +418,9 @@ class _GameHomePageState extends State<GameHomePage>
                   },
                   onAutoHostingStrategyChanged: (strategy) {
                     AudioManager().setAutoHostingStrategy(strategy);
+                  },
+                  onAiStrategyTestEnabledChanged: (enabled) {
+                    AudioManager().setAiStrategyTestEnabled(enabled);
                   },
                   onDifficultyChanged: (d) {
                     AudioManager().setDifficulty(d);
