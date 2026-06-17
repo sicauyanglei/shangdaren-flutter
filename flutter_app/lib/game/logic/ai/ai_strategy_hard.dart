@@ -246,6 +246,125 @@ class AIStrategyHard extends AIStrategy {
     return 100.0 + sentenceCount * 50.0;
   }
 
+  /// 评估红元路线潜力：返回>0表示有红元潜力
+  /// 红元条件：无碰无招（或招但effectiveHasZhao=false），组合牌全是句
+  /// 组1/组8句>=2，上/福总数3-6张，6句+1靠结构
+  double _evaluateHongYuanPotential(Player player) {
+    final hasPeng = player.melds.any((m) => m.type == MeldType.kan);
+    final hasZhao = player.melds.any((m) => m.type == MeldType.zhao);
+    if (hasPeng || hasZhao) return -1;
+
+    // 组合牌必须全是句
+    if (player.melds.isNotEmpty &&
+        !player.melds.every((m) => m.type == MeldType.ju)) {
+      return -1;
+    }
+
+    int shangDaRenSentenceCount = 0;
+    int fuLuShouSentenceCount = 0;
+    int totalSentenceCount = 0;
+
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.ju) {
+        totalSentenceCount++;
+        final sentence = meld.cards.first.sentence;
+        if (sentence == 1) shangDaRenSentenceCount++;
+        if (sentence == 8) fuLuShouSentenceCount++;
+      }
+    }
+
+    // 手牌中的句数估算
+    final handRemaining = List<Card>.from(player.hand);
+    final usedIds = <int>{};
+    bool foundGroup = true;
+    while (foundGroup) {
+      foundGroup = false;
+      for (var s = 1; s <= 8; s++) {
+        final sentenceCards = handRemaining
+            .where((c) => c.sentence == s && !usedIds.contains(c.id))
+            .toList();
+        final pos0 = sentenceCards.where((c) => c.position == 0).toList();
+        final pos1 = sentenceCards.where((c) => c.position == 1).toList();
+        final pos2 = sentenceCards.where((c) => c.position == 2).toList();
+        if (pos0.isNotEmpty && pos1.isNotEmpty && pos2.isNotEmpty) {
+          usedIds.add(pos0.first.id);
+          usedIds.add(pos1.first.id);
+          usedIds.add(pos2.first.id);
+          foundGroup = true;
+          totalSentenceCount++;
+          if (s == 1) shangDaRenSentenceCount++;
+          if (s == 8) fuLuShouSentenceCount++;
+        }
+      }
+    }
+
+    final totalSpecialSentenceCount =
+        shangDaRenSentenceCount + fuLuShouSentenceCount;
+    if (totalSpecialSentenceCount < 2) return -1;
+
+    final allCards = [...player.hand, ...player.melds.expand((m) => m.cards)];
+    final shangCount = allCards.where((c) => c.character == '上').length;
+    final fuCount = allCards.where((c) => c.character == '福').length;
+    final shangFuCount = shangCount + fuCount;
+
+    if (shangFuCount < 3 || shangFuCount > 6) return -1;
+
+    // 红元潜力与特殊句数和上/福数量正相关
+    return 80.0 + totalSpecialSentenceCount * 40.0 + shangFuCount * 15.0;
+  }
+
+  /// 评估枯胡路线潜力：返回>0表示有枯胡潜力
+  /// 枯胡条件：无吃，有上/福，手牌无单张无4张，6坎+1对
+  double _evaluateKuHuPotential(Player player) {
+    final hasChi = player.melds.any((m) => m.type == MeldType.ju);
+    if (hasChi) return -1;
+
+    final allCards = [...player.hand, ...player.melds.expand((m) => m.cards)];
+    if (!allCards.any((c) => c.character == '上' || c.character == '福')) {
+      return -1;
+    }
+
+    final counts = <String, int>{};
+    for (final card in player.hand) {
+      counts[card.character] = (counts[card.character] ?? 0) + 1;
+    }
+
+    for (final count in counts.values) {
+      if (count == 1) return -1;
+      if (count >= 4) return -1;
+    }
+
+    int kanCount = 0;
+    int duiCount = 0;
+    int zhaoCount = 0;
+
+    for (final count in counts.values) {
+      if (count == 3) {
+        kanCount++;
+      } else if (count == 2) {
+        duiCount++;
+      }
+    }
+
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.kan) {
+        kanCount++;
+      } else if (meld.type == MeldType.zhao) {
+        zhaoCount++;
+      }
+    }
+
+    // 枯胡需要6坎+1对，评估接近程度
+    final totalKanZhao = kanCount + zhaoCount;
+    if (totalKanZhao + duiCount < 5) return -1;
+
+    // 距离目标：6坎+1对
+    final dist = (6 - totalKanZhao).abs() + (1 - duiCount).abs();
+    if (dist > 3) return -1;
+
+    return 120.0 - dist * 30.0;
+  }
+
   double _evaluateHuScore(Player player) {
     final key = _handCacheKey(player.hand, player.melds);
     final cached = _huScoreCache[key];
@@ -626,6 +745,15 @@ class AIStrategyHard extends AIStrategy {
         }
       }
 
+      // 单钓听限制：单钓听时，不能胡单钓的这张字（只能自摸）
+      // 降低单钓听的听牌数评估，因为点炮不可胡
+      if (tingResult.tingType == TingType.singleWait) {
+        // 单钓听只有自摸有效，点炮不可胡
+        // 将听牌数减半评估，因为点炮场景无法胡牌
+        tingCount = (tingCount * 0.5).ceil();
+        tingProb *= 0.5;
+      }
+
       final huScore = _evaluateHuScore(testPlayer);
 
       // 检查特殊胡型潜力（高胡数路线给予额外加分）
@@ -720,6 +848,10 @@ class AIStrategyHard extends AIStrategy {
 
     // 黑元路线潜力（特殊胡牌类型，不受胡数>=11限制）
     final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    // 红元路线潜力（特殊胡牌类型）
+    final hongYuanPotential = _evaluateHongYuanPotential(player);
+    // 枯胡路线潜力（特殊胡牌类型）
+    final kuHuPotential = _evaluateKuHuPotential(player);
 
     final availableChars = _buildAvailableChars(visibleCount);
 
@@ -802,6 +934,8 @@ class AIStrategyHard extends AIStrategy {
         shiDuiPotential,
         availableChars,
         heiYuanPotential,
+        hongYuanPotential,
+        kuHuPotential,
       );
 
       if (hand.length > 3) {
@@ -929,6 +1063,8 @@ class AIStrategyHard extends AIStrategy {
     double shiDuiPotential,
     List<String> availableChars,
     double heiYuanPotential,
+    double hongYuanPotential,
+    double kuHuPotential,
   ) {
     final (potential, distToTing) = _evaluateHandPotentialAndDistance(
       testHand,
@@ -969,9 +1105,10 @@ class AIStrategyHard extends AIStrategy {
     final huAfter = _evaluateHuScore(testPlayer);
     final huBefore = _evaluateHuScore(player);
     score += (huAfter - huBefore) * 20;
-    // 十对、黑元路线是特殊胡牌类型，不受胡数>=11限制
+    // 十对、黑元、红元、枯胡路线是特殊胡牌类型，不受胡数>=11限制
     if (huBefore >= 11 && huAfter < 11 &&
-        shiDuiPotential <= 0 && heiYuanPotential <= 0) {
+        shiDuiPotential <= 0 && heiYuanPotential <= 0 &&
+        hongYuanPotential <= 0 && kuHuPotential <= 0) {
       // 出牌破坏了胡牌的胡数资格，重罚
       score -= 600;
     }
@@ -1214,8 +1351,8 @@ class AIStrategyHard extends AIStrategy {
       if (i == player.id) continue;
       final other = state.players[i];
 
-      // 构建对手的可见牌统计（对手能看到自己的手牌）
-      final otherVisibleCount = _buildVisibleCharCount(other, state);
+      // 使用AI自己视角的剩余张数（不获取对手手牌信息）
+      final selfVisibleCount = myVisibleCount;
 
       // 如果对方已经听牌，出牌更危险
       if (other.isTing) {
@@ -1251,15 +1388,15 @@ class AIStrategyHard extends AIStrategy {
         danger += isLate ? 25 : 12;
 
         // 剩余张数越少，出这张牌越危险（对手可能在等这张）
-        // 使用对手视角的剩余张数更精确
-        final otherChRem = _remainingCount(
+        // 使用AI自己视角的剩余张数（不获取对手手牌）
+        final selfChRem = _remainingCount(
           cardToDiscard.character,
-          otherVisibleCount,
+          selfVisibleCount,
         );
-        if (otherChRem == 1) {
-          // 对手视角只剩1张（就是我出的这张），极危险
+        if (selfChRem == 1) {
+          // 自己视角只剩1张（就是我出的这张），极危险
           danger += isLate ? 50 : 30;
-        } else if (otherChRem == 2) {
+        } else if (selfChRem == 2) {
           danger += isLate ? 25 : 15;
         }
 
@@ -1274,15 +1411,15 @@ class AIStrategyHard extends AIStrategy {
         }
 
         // 对方听牌时，结合同组字的可见性评估
-        // 同组字在对手视角剩余越少，对手越可能在等这张
-        int groupRemFromOtherView = 0;
+        // 同组字在自己视角剩余越少，对手越可能在等这张
+        int groupRemFromSelfView = 0;
         for (final gc in sameGroupChars) {
-          groupRemFromOtherView += _remainingCount(gc, otherVisibleCount);
+          groupRemFromSelfView += _remainingCount(gc, selfVisibleCount);
         }
         // 同组剩余张数少，对手更可能需要这张
-        if (groupRemFromOtherView <= 2) {
+        if (groupRemFromSelfView <= 2) {
           danger += isLate ? 30 : 18;
-        } else if (groupRemFromOtherView <= 4) {
+        } else if (groupRemFromSelfView <= 4) {
           danger += isLate ? 15 : 8;
         }
       }
@@ -1790,6 +1927,18 @@ class AIStrategyHard extends AIStrategy {
       }
 
       int dist = neededMelds * 2 - usefulDuiKao - potentialKaoFromSingles;
+
+      // 修正：单钓听和普通听的距离应为0
+      // 单钓听：neededMelds==0, eSet.length==1, dSet.isEmpty
+      // 普通听：neededMelds==0, dSet.length==2, eSet.isEmpty
+      if (neededMelds == 0) {
+        if (eSet.length == 1 && dSet.isEmpty) {
+          dist = 0; // 单钓听
+        } else if (dSet.length == 2 && eSet.isEmpty) {
+          dist = 0; // 普通听
+        }
+      }
+
       if (dist < 0) dist = 0;
       if (dist > 10) dist = 10;
       if (dist < bestDist) bestDist = dist;
@@ -1875,9 +2024,15 @@ class AIStrategyHard extends AIStrategy {
 
   @override
   bool shouldChi(Player player, Card card, GameState state) {
+    _initCache(player, state);
+
     if (_hasCompleteSentenceWithSingleCards(player, card)) {
       return false;
     }
+
+    // 20张牌时不能吃
+    final totalCards = player.hand.length + player.melds.length * 3;
+    if (totalCards >= 20) return false;
 
     // 尝试所有可能的吃法，选最优
     final otherChars = _getOtherCharsInGroup(card);
@@ -1955,12 +2110,18 @@ class AIStrategyHard extends AIStrategy {
 
   @override
   bool shouldPeng(Player player, Card card, GameState state) {
+    _initCache(player, state);
+
     final hand = player.hand;
     final sameCharCount = hand
         .where((c) => c.character == card.character)
         .length;
 
-    if (sameCharCount < 1) return false;
+    if (sameCharCount < 2) return false;
+
+    // 20张牌时不能碰
+    final totalCards = player.hand.length + player.melds.length * 3;
+    if (totalCards >= 20) return false;
 
     // 截胡策略：其他玩家快听牌时，更积极碰牌
     final opponentNearTing = _hasOpponentNearTing(state, player.id);
@@ -2153,11 +2314,26 @@ class AIStrategyHard extends AIStrategy {
 
   @override
   bool shouldZhao(Player player, Card card, GameState state) {
+    _initCache(player, state);
+
+    // 20张牌时不能招别人出的牌
+    final totalCards = player.hand.length + player.melds.length * 3;
+    if (totalCards >= 20) return false;
+
     return _evaluateZhaoBenefit(player, card.character, state);
   }
 
   @override
   bool shouldZhaoFromHand(Player player, String character, GameState state) {
+    _initCache(player, state);
+
+    // 19张牌时不能招自己手牌上的4张同字牌
+    final totalCards = player.hand.length + player.melds.length * 3;
+    if (totalCards == 19) {
+      final sameCharCount = player.hand.where((c) => c.character == character).length;
+      if (sameCharCount >= 4) return false;
+    }
+
     return _evaluateZhaoBenefit(player, character, state);
   }
 
@@ -2383,7 +2559,80 @@ class AIStrategyHard extends AIStrategy {
     GameState state, {
     bool isZimo = false,
   }) {
+    // 单钓听限制：单钓听时，不能胡单钓的这张字（只能自摸）
+    if (!isZimo && player.isTing && player.tingCards.isNotEmpty) {
+      // 检查是否是单钓听
+      final hand = List<Card>.from(player.hand);
+      final basicResult = _checkBasicTing(hand);
+      if (basicResult.type == _BasicTingType.singleWait) {
+        // 单钓听时，不能胡单钓的这张字
+        final singleCard = basicResult.eSet.first;
+        if (card.character == singleCard.character) {
+          return false;
+        }
+      }
+    }
     return true;
+  }
+
+  // 辅助类和方法用于单钓听检查
+  static _BasicTingResult _checkBasicTing(List<Card> hand) {
+    final pairCount = _countPairs(hand);
+    if (pairCount >= 9) {
+      return _BasicTingResult(
+        met: true,
+        type: _BasicTingType.ninePairs,
+        dSet: [],
+        eSet: [],
+      );
+    }
+
+    final remaining = List<Card>.from(hand);
+    final aSet = <Meld>[];
+    final bSet = <Meld>[];
+    final cSet = <Meld>[];
+    final dSet = <Card>[];
+
+    HuCalculator.extractJu(remaining, aSet);
+    HuCalculator.extractKan(remaining, bSet);
+    HuCalculator.extractDuiAndKao(remaining, cSet);
+    dSet.addAll(remaining);
+
+    if (cSet.isEmpty && dSet.length == 1) {
+      return _BasicTingResult(
+        met: true,
+        type: _BasicTingType.singleWait,
+        dSet: cSet,
+        eSet: dSet,
+      );
+    }
+    if (cSet.length == 2 && dSet.isEmpty) {
+      return _BasicTingResult(
+        met: true,
+        type: _BasicTingType.pairWait,
+        dSet: cSet,
+        eSet: dSet,
+      );
+    }
+
+    return _BasicTingResult(
+      met: false,
+      type: _BasicTingType.none,
+      dSet: cSet,
+      eSet: dSet,
+    );
+  }
+
+  static int _countPairs(List<Card> hand) {
+    final byChar = <String, int>{};
+    for (final card in hand) {
+      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
+    }
+    int pairs = 0;
+    for (final count in byChar.values) {
+      pairs += count ~/ 2;
+    }
+    return pairs;
   }
 
   Map<String, int> _buildCharCount(List<Card> hand) {
@@ -2394,4 +2643,20 @@ class AIStrategyHard extends AIStrategy {
     return result;
   }
 
+}
+
+// 基本听牌结果辅助类
+enum _BasicTingType { none, ninePairs, singleWait, pairWait }
+
+class _BasicTingResult {
+  final bool met;
+  final _BasicTingType type;
+  final List<Meld> dSet;
+  final List<Card> eSet;
+  _BasicTingResult({
+    required this.met,
+    required this.type,
+    required this.dSet,
+    required this.eSet,
+  });
 }
