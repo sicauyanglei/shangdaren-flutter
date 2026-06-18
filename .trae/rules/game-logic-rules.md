@@ -5,7 +5,7 @@
    - 自摸判断(_canZimo)和点炮判断(_canHuWith)统一使用HuCalculator.canHu，不要单独实现结构检查
    - HuCalculator.canHu必须先检查结构条件(_checkStructural)，结构不满足直接返回false，不能只靠胡数判断
 2. 靠(半靠)提取规则
-   - 靠的定义是"同组不同2张(不含上/福)"，不要求position相邻
+   - 靠的定义是"同门不同2张(不含上/福)"，不要求position相邻
    - pos0+pos1、pos1+pos2、pos0+pos2 都是合法的靠组合
    - extractDuiAndKao中提取靠时，必须遍历所有不同position的组合，不能只检查相邻position
 3. 分数计算规则
