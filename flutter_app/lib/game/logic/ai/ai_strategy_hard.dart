@@ -538,16 +538,14 @@ class AIStrategyHard extends AIStrategy {
       final chCount = hand.where((c) => c.character == ch).length;
 
       // 检查该字是否参与了已有的句组合
-      final inJu =
-          handASet0.any((m) => m.cards.any((c) => c.character == ch));
+      final inJu = handASet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         consumptionCost += 80;
       }
 
       // 检查该字是否参与了已有的坎组合（3张同字）
       // 吃掉1张会破坏坎，坎在手牌=3胡，损失很大
-      final inKan =
-          handCSet0.any((m) => m.cards.any((c) => c.character == ch));
+      final inKan = handCSet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inKan) {
         // 破坏坎的代价：3胡损失 + 重组困难
         consumptionCost += 100;
@@ -684,8 +682,7 @@ class AIStrategyHard extends AIStrategy {
       final chCount = hand.where((c) => c.character == ch).length;
 
       // 检查该字是否参与了已有的句组合
-      final inJu =
-          handASet0.any((m) => m.cards.any((c) => c.character == ch));
+      final inJu = handASet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         // 吃牌破坏了已有的句，代价很高
         consumptionCost += 80;
@@ -693,8 +690,7 @@ class AIStrategyHard extends AIStrategy {
 
       // 检查该字是否参与了已有的坎组合（3张同字）
       // 吃掉1张会破坏坎，坎在手牌=3胡，损失很大
-      final inKan =
-          handCSet0.any((m) => m.cards.any((c) => c.character == ch));
+      final inKan = handCSet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inKan) {
         // 破坏坎的代价：3胡损失 + 重组困难
         consumptionCost += 100;
@@ -1264,6 +1260,23 @@ class AIStrategyHard extends AIStrategy {
 
     double score = potential;
 
+    // 门结构评分补充（按 men-structure-score.md 规则）
+    // 计算出牌后所有门的结构总分变化，作为细粒度门级评估
+    final menScoreAfter = _evaluateAllMenStructure(
+      testHand,
+      player.melds,
+      visibleCount,
+      totalUnknown,
+    );
+    final menScoreBefore = _evaluateAllMenStructure(
+      player.hand,
+      player.melds,
+      visibleCount,
+      totalUnknown,
+    );
+    // 门结构分变化作为补充评分，权重适中避免覆盖主评分
+    score += (menScoreAfter - menScoreBefore) * 0.3;
+
     if (distToTing <= 4) {
       score += _lookaheadScore(
         testHand,
@@ -1294,8 +1307,9 @@ class AIStrategyHard extends AIStrategy {
       final discardGroupCards = player.hand
           .where((c) => c.sentence == discardGroup)
           .toList();
-      final discardGroupCharSet =
-          discardGroupCards.map((c) => c.character).toSet();
+      final discardGroupCharSet = discardGroupCards
+          .map((c) => c.character)
+          .toSet();
       if (discardGroupCharSet.length == 3) {
         // 出牌前该组是完整句，出牌后会破坏它
         // 惩罚力度：距离越近越不应该拆句
@@ -1355,15 +1369,15 @@ class AIStrategyHard extends AIStrategy {
       final discardGroupCards = player.hand
           .where((c) => c.sentence == discardGroup)
           .toList();
-      final discardGroupCharSet =
-          discardGroupCards.map((c) => c.character).toSet();
+      final discardGroupCharSet = discardGroupCards
+          .map((c) => c.character)
+          .toSet();
       final discardCountInGroup = discardGroupCards
           .where((c) => c.character == cardToDiscard.character)
           .length;
       final groupCharCount = <String, int>{};
       for (final c in discardGroupCards) {
-        groupCharCount[c.character] =
-            (groupCharCount[c.character] ?? 0) + 1;
+        groupCharCount[c.character] = (groupCharCount[c.character] ?? 0) + 1;
       }
       final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
       final isShiDui = shiDuiPotential > 0;
@@ -1651,8 +1665,7 @@ class AIStrategyHard extends AIStrategy {
     );
     // 完整的句（3种字都有）不参与组进张效率比较，避免拆句
     // 即使同组还有多余对子，句已完整属于强组，进张少不代表弱组
-    final discardGroupIsCompleteSentence =
-        discardGroupCharSet.length == 3;
+    final discardGroupIsCompleteSentence = discardGroupCharSet.length == 3;
     if ((discardGroupCharSet.length >= 2 || discardGroupHasPair) &&
         !discardGroupIsCompleteSentence) {
       // 计算出牌所在组的进张数
@@ -2548,6 +2561,227 @@ class AIStrategyHard extends AIStrategy {
     return totalScore;
   }
 
+  /// 门结构评分（按 men-structure-score.md 规则）
+  /// 计算指定门的手牌结构分，考虑牌型胡数、结构完整度、进张概率
+  /// sentence: 门号(1-8)
+  /// hand: 手牌（全部门，方法内部按sentence筛选）
+  /// melds: 组合牌（全部门，方法内部按sentence筛选）
+  /// visibleCount: 已知牌计数
+  /// totalUnknown: 未知牌总数
+  double _evaluateMenStructure(
+    int sentence,
+    List<Card> hand,
+    List<Meld> melds,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    // 筛选该门的手牌和组合牌
+    final menHand = hand.where((c) => c.sentence == sentence).toList();
+    final menMelds = melds
+        .where((m) => m.cards.first.sentence == sentence)
+        .toList();
+
+    final isJingMen = sentence == 1 || sentence == 8;
+    final groupChars = _groupChars[sentence - 1];
+
+    // 按字统计手牌张数
+    final byChar = <String, int>{};
+    for (final card in menHand) {
+      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
+    }
+
+    double score = 0;
+
+    // 1. 组合牌分（已完成的句/坎/招）
+    for (final meld in menMelds) {
+      switch (meld.type) {
+        case MeldType.zhao:
+          score += meld.isJing ? 200 : 100; // 精招200 / 普招100
+          break;
+        case MeldType.kan:
+          score += meld.isJing ? 150 : 50; // 精坎150 / 普坎(组合)50
+          break;
+        case MeldType.ju:
+          score += meld.isJing ? 90 : 50; // 精句90 / 普句50
+          break;
+        default:
+          break;
+      }
+    }
+
+    // 2. 手牌结构分（最优拆解）
+    // 按张数分布计算，考虑招/坎/句/对/靠/单
+
+    // 2.1 招（4张同字）
+    for (final ch in groupChars) {
+      if ((byChar[ch] ?? 0) >= 4) {
+        score += isJingMen && (ch == '上' || ch == '福') ? 200 : 100;
+      }
+    }
+
+    // 2.2 坎（3张同字，手牌）
+    for (final ch in groupChars) {
+      final cnt = byChar[ch] ?? 0;
+      if (cnt >= 3 && cnt < 4) {
+        score += isJingMen && (ch == '上' || ch == '福') ? 150 : 60;
+      }
+    }
+
+    // 2.3 句（3字各1张）
+    final hasAllThree = groupChars.every((ch) => (byChar[ch] ?? 0) >= 1);
+    if (hasAllThree) {
+      score += isJingMen ? 90 : 50;
+    }
+
+    // 2.4 对（2张同字，非金对）
+    for (final ch in groupChars) {
+      final cnt = byChar[ch] ?? 0;
+      if (cnt == 2) {
+        if (isJingMen && (ch == '上' || ch == '福')) {
+          score += 100; // 金对
+        } else if (isJingMen &&
+            (ch == '大' || ch == '人' || ch == '禄' || ch == '寿')) {
+          score += 20; // 银对
+        } else {
+          score += 20; // 普对
+        }
+      }
+    }
+
+    // 2.5 靠（2字各1张，非完整句）
+    // 只有当3字不齐全时才评估靠
+    if (!hasAllThree) {
+      final presentChars = groupChars
+          .where((ch) => (byChar[ch] ?? 0) >= 1)
+          .toList();
+      if (presentChars.length == 2) {
+        final missingChar = _findMissingCharForSentence(presentChars);
+        if (missingChar != null) {
+          final rem = _remainingCount(missingChar, visibleCount);
+          final isJingKao =
+              isJingMen &&
+              (presentChars.contains('上') || presentChars.contains('福'));
+          if (isJingKao) {
+            score += 50; // 精靠
+          } else if (isJingMen &&
+              (presentChars.contains('大') ||
+                  presentChars.contains('人') ||
+                  presentChars.contains('禄') ||
+                  presentChars.contains('寿'))) {
+            score += 10; // 银靠
+          } else {
+            score += 10; // 普靠
+          }
+          // 进张期望分
+          if (rem > 0 && totalUnknown > 0) {
+            score += (rem / totalUnknown) * 50;
+          }
+        }
+      }
+    }
+
+    // 2.6 单张
+    for (final ch in groupChars) {
+      final cnt = byChar[ch] ?? 0;
+      if (cnt == 1) {
+        // 检查是否在靠或句中已计算
+        final presentChars = groupChars
+            .where((c) => (byChar[c] ?? 0) >= 1)
+            .toList();
+        if (presentChars.length >= 2) continue; // 已在靠/句中
+
+        if (isJingMen && (ch == '上' || ch == '福')) {
+          score += 40; // 精单
+        } else if (isJingMen &&
+            (ch == '大' || ch == '人' || ch == '禄' || ch == '寿')) {
+          score += 0; // 银单
+        } else {
+          score += 0; // 普单
+          // 孤张进张概率低，略微减分
+          final otherChars = groupChars.where((c) => c != ch).toList();
+          int partnerRem = 0;
+          for (final oc in otherChars) {
+            partnerRem += _remainingCount(oc, visibleCount);
+          }
+          if (partnerRem == 0) {
+            score -= 20; // 无进张可能的孤张
+          }
+        }
+      }
+    }
+
+    // 3. 进张期望分（所有可能进张的结构提升）
+    // 模拟摸到每张可能的牌后的结构分提升
+    for (final ch in groupChars) {
+      final rem = _remainingCount(ch, visibleCount);
+      if (rem <= 0 || totalUnknown <= 0) continue;
+
+      final prob = rem / totalUnknown;
+      if (prob < 0.01) continue;
+
+      // 模拟摸到该牌后的结构
+      final simByChar = Map<String, int>.from(byChar);
+      simByChar[ch] = (simByChar[ch] ?? 0) + 1;
+
+      // 计算摸牌后的结构分（简化版，只看关键变化）
+      double improvement = 0;
+
+      // 摸到后成对（1->2）
+      if ((byChar[ch] ?? 0) == 1) {
+        improvement += isJingMen && (ch == '上' || ch == '福') ? 100 : 20;
+      }
+      // 摸到后成坎（2->3）
+      else if ((byChar[ch] ?? 0) == 2) {
+        improvement += isJingMen && (ch == '上' || ch == '福') ? 150 : 60;
+      }
+      // 摸到后成招（3->4）
+      else if ((byChar[ch] ?? 0) == 3) {
+        improvement += isJingMen && (ch == '上' || ch == '福') ? 200 : 100;
+      }
+      // 摸到后成句/靠（0->1，且其他字有牌）
+      else if ((byChar[ch] ?? 0) == 0) {
+        final presentChars = groupChars
+            .where((c) => (byChar[c] ?? 0) >= 1)
+            .toList();
+        if (presentChars.length == 2) {
+          // 成句
+          improvement += isJingMen ? 90 : 50;
+        } else if (presentChars.length == 1) {
+          // 成靠
+          improvement +=
+              isJingMen &&
+                  (presentChars.contains('上') || presentChars.contains('福'))
+              ? 50
+              : 10;
+        }
+      }
+
+      score += prob * improvement;
+    }
+
+    return score;
+  }
+
+  /// 计算所有门的结构总分
+  double _evaluateAllMenStructure(
+    List<Card> hand,
+    List<Meld> melds,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    double total = 0;
+    for (int s = 1; s <= 8; s++) {
+      total += _evaluateMenStructure(
+        s,
+        hand,
+        melds,
+        visibleCount,
+        totalUnknown,
+      );
+    }
+    return total;
+  }
+
   String? _findMissingCharForSentence(List<String> existingChars) {
     if (existingChars.length != 2) return null;
     final sentence = _charSentenceMap[existingChars.first];
@@ -2607,8 +2841,7 @@ class AIStrategyHard extends AIStrategy {
     _initCache(player, state);
 
     // 8对以上强制走十对路线，不吃牌
-    if (_currentShiDuiEnabled &&
-        _countHandPairsWithMelds(player) >= 8) {
+    if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
       return false;
     }
 
@@ -2715,8 +2948,7 @@ class AIStrategyHard extends AIStrategy {
     _initCache(player, state);
 
     // 8对以上强制走十对路线，不碰牌
-    if (_currentShiDuiEnabled &&
-        _countHandPairsWithMelds(player) >= 8) {
+    if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
       return false;
     }
 
@@ -2790,21 +3022,22 @@ class AIStrategyHard extends AIStrategy {
         // 只有确实不破坏句子的碰才碰；同句组有2+2冗余时例外（如化三三千千，碰三还剩千千对子）
         if (inJu) {
           final selfHu = _evaluateHuScore(player);
-          final isNextToDraw = state.lastDiscardPlayerIndex != null &&
+          final isNextToDraw =
+              state.lastDiscardPlayerIndex != null &&
               (state.lastDiscardPlayerIndex! + 1) % 3 == player.id;
           if (selfHu < 11 && isNextToDraw) {
             // 检查同句组是否有冗余对子（碰掉该字后，同句组其他字还有对子）
             final pengSentence = card.sentence;
             final otherCharCounts = <String, int>{};
             for (final c in hand) {
-              if (c.sentence == pengSentence &&
-                  c.character != card.character) {
+              if (c.sentence == pengSentence && c.character != card.character) {
                 otherCharCounts[c.character] =
                     (otherCharCounts[c.character] ?? 0) + 1;
               }
             }
-            final hasRedundancyPair =
-                otherCharCounts.values.any((cnt) => cnt >= 2);
+            final hasRedundancyPair = otherCharCounts.values.any(
+              (cnt) => cnt >= 2,
+            );
             // 无冗余对子（如化三三千，碰三后只剩化千靠），不碰
             if (!hasRedundancyPair) return false;
           }
@@ -3009,8 +3242,7 @@ class AIStrategyHard extends AIStrategy {
     _initCache(player, state);
 
     // 8对以上强制走十对路线，不招别人出的牌
-    if (_currentShiDuiEnabled &&
-        _countHandPairsWithMelds(player) >= 8) {
+    if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
       return false;
     }
 
@@ -3018,7 +3250,9 @@ class AIStrategyHard extends AIStrategy {
     if (!_canOperate(player)) return false;
 
     final hand = player.hand;
-    final sameCharCount = hand.where((c) => c.character == card.character).length;
+    final sameCharCount = hand
+        .where((c) => c.character == card.character)
+        .length;
 
     // 别人出牌时，手牌3张+出牌1张=4张，可以招
     // 这种情况_evaluateZhaoBenefit会因sameCharCount==3返回false
@@ -3133,8 +3367,7 @@ class AIStrategyHard extends AIStrategy {
     _initCache(player, state);
 
     // 8对以上强制走十对路线，不招自己手牌上的牌
-    if (_currentShiDuiEnabled &&
-        _countHandPairsWithMelds(player) >= 8) {
+    if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
       return false;
     }
 
