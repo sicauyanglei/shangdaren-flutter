@@ -210,6 +210,9 @@ class GameController {
     _meldActionVersion++;
     stopCountdown();
 
+    // 清空摸牌记录，避免新一局包含上一局数据
+    state.humanDrawRecords.clear();
+
     state.deck = Card.createDeck();
     state.deck.shuffle();
 
