@@ -1489,8 +1489,10 @@ class AIStrategyHard extends AIStrategy {
     if (huBefore < 11 && huLoss > 0) {
       // 胡数不足11时，每损失1胡的代价更大
       score -= huLoss * 50;
-    } else {
-      score -= huLoss * 20;
+    } else if (huLoss > 0) {
+      // 胡数够了(>=11)时，损失精靠/精对等高胡数牌型仍需重罚
+      // 精靠4胡、金对8胡等破坏代价大，权重提高到40
+      score -= huLoss * 40;
     }
     // 十对、黑元、红元、枯胡路线是特殊胡牌类型，不受胡数>=11限制
     if (huBefore >= 11 &&
