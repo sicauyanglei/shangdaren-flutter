@@ -2615,6 +2615,30 @@ class AIStrategyHard extends AIStrategy {
       );
       // 碰牌破坏句/靠时，结合剩余张数评估损失
       if (inJu || inKao) {
+        // 自己胡数较少且快轮到自己摸牌时，对破坏句子的碰牌更保守
+        // 只有确实不破坏句子的碰才碰；同句组有2+2冗余时例外（如化三三千千，碰三还剩千千对子）
+        if (inJu) {
+          final selfHu = _evaluateHuScore(player);
+          final isNextToDraw = state.lastDiscardPlayerIndex != null &&
+              (state.lastDiscardPlayerIndex! + 1) % 3 == player.id;
+          if (selfHu < 11 && isNextToDraw) {
+            // 检查同句组是否有冗余对子（碰掉该字后，同句组其他字还有对子）
+            final pengSentence = card.sentence;
+            final otherCharCounts = <String, int>{};
+            for (final c in hand) {
+              if (c.sentence == pengSentence &&
+                  c.character != card.character) {
+                otherCharCounts[c.character] =
+                    (otherCharCounts[c.character] ?? 0) + 1;
+              }
+            }
+            final hasRedundancyPair =
+                otherCharCounts.values.any((cnt) => cnt >= 2);
+            // 无冗余对子（如化三三千，碰三后只剩化千靠），不碰
+            if (!hasRedundancyPair) return false;
+          }
+        }
+
         final visibleCount = _buildVisibleCharCount(player, state);
 
         // 计算被破坏的句/靠中缺失字的剩余张数
