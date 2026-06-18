@@ -2516,6 +2516,35 @@ class AIStrategyHard extends AIStrategy {
     final opponentNearTing = _hasOpponentNearTing(state, player.id);
 
     if (sameCharCount >= 2) {
+      // 如果手牌中已有3张同字（坎），碰牌会破坏坎，几乎总是不划算
+      // 坎在手牌=3胡，碰后坎在组合牌=2胡，净损失1胡，且剩余1张单牌大概率被丢弃
+      // 除非碰后听牌
+      if (sameCharCount >= 3) {
+        final testHand3 = List<Card>.from(hand);
+        final matching3 = testHand3
+            .where((c) => c.character == card.character)
+            .take(2)
+            .toList();
+        for (final m in matching3) {
+          testHand3.remove(m);
+        }
+        final newMeld3 = Meld(
+          cards: [card, ...matching3],
+          type: MeldType.kan,
+          isJing: card.isJing,
+        );
+        final testPlayer3 = Player(
+          id: player.id,
+          name: player.name,
+          type: player.type,
+          hand: testHand3,
+          melds: [...player.melds, newMeld3],
+        );
+        final tingAfter3 = _checkTingCached(testPlayer3);
+        if (!tingAfter3.isTing) return false;
+        // 碰后听牌才碰，继续往下评估
+      }
+
       // 检查碰牌是否会破坏手牌中已有的句/靠组合
       final remaining = List<Card>.from(hand);
       final aSet = <Meld>[];

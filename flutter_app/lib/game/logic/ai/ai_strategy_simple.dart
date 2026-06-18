@@ -178,6 +178,10 @@ class AIStrategySimple extends AIStrategy {
         .where((c) => c.character == card.character)
         .length;
 
+    // 手牌已有3张同字（坎），碰牌会破坏坎，不碰
+    // 坎在手牌=3胡，碰后坎在组合牌=2胡，净损失1胡
+    if (sameCharCount >= 3) return false;
+
     if (sameCharCount >= 2) return true;
 
     if (sameCharCount == 1) {
