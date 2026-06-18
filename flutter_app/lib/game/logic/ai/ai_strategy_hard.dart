@@ -1364,9 +1364,10 @@ class AIStrategyHard extends AIStrategy {
     final discardGroupHasPair = discardGroupCharSet.any(
       (ch) => discardGroupCards.where((c) => c.character == ch).length >= 2,
     );
-    // 完整的句（3种字都有且无对子）不参与组进张效率比较，避免拆句
+    // 完整的句（3种字都有）不参与组进张效率比较，避免拆句
+    // 即使同组还有多余对子，句已完整属于强组，进张少不代表弱组
     final discardGroupIsCompleteSentence =
-        discardGroupCharSet.length == 3 && !discardGroupHasPair;
+        discardGroupCharSet.length == 3;
     if ((discardGroupCharSet.length >= 2 || discardGroupHasPair) &&
         !discardGroupIsCompleteSentence) {
       // 计算出牌所在组的进张数
