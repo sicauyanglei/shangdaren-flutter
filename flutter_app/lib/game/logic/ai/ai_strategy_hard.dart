@@ -1343,10 +1343,64 @@ class AIStrategyHard extends AIStrategy {
 
     score += (10 - distToTing) * 120;
 
+    // 胡数不足时的出牌优先级规则
+    // 优先级从高到低：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
+    // 特殊胡牌类型(黑元)时，对子+靠优先拆对子
+    final huBefore = _evaluateHuScore(player);
+    if (huBefore < 11 &&
+        shiDuiPotential <= 0 &&
+        hongYuanPotential <= 0 &&
+        kuHuPotential <= 0) {
+      final discardGroup = cardToDiscard.sentence;
+      final discardGroupCards = player.hand
+          .where((c) => c.sentence == discardGroup)
+          .toList();
+      final discardGroupCharSet =
+          discardGroupCards.map((c) => c.character).toSet();
+      final discardCountInGroup = discardGroupCards
+          .where((c) => c.character == cardToDiscard.character)
+          .length;
+      final groupCharCount = <String, int>{};
+      for (final c in discardGroupCards) {
+        groupCharCount[c.character] =
+            (groupCharCount[c.character] ?? 0) + 1;
+      }
+      final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
+      final isHeiYuan = heiYuanPotential > 0;
+
+      if (discardGroupCharSet.length == 1) {
+        // 普单(孤张)：同组只有1种字，最优先打出
+        score += 200;
+      } else if (discardGroupCharSet.length == 3) {
+        // 普句多一张：3种字都有，其中1种字有2张(对子+完整句)
+        // 出对子中多出的那张，不破坏句，第二优先
+        if (discardCountInGroup >= 2) {
+          score += 120;
+        }
+      } else if (discardGroupCharSet.length == 2) {
+        if (!hasPairInGroup) {
+          // 普靠：2种字各1张，第三优先(出会破坏靠)
+          // 这里不加分，靠破坏靠惩罚控制
+        } else {
+          // 对子+靠：1种字2张+1种字1张
+          if (isHeiYuan) {
+            // 黑元路线：优先拆对子(出对子中的字)
+            if (discardCountInGroup >= 2) {
+              score += 80;
+            }
+          } else {
+            // 非黑元：优先保留对子，出靠的那张(单张)
+            if (discardCountInGroup == 1) {
+              score += 60;
+            }
+          }
+        }
+      }
+    }
+
     // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
     final huAfter = _evaluateHuScore(testPlayer);
-    final huBefore = _evaluateHuScore(player);
     final huLoss = huBefore - huAfter;
     // 胡数损失权重：胡数越低，损失越严重（离11胡资格越远）
     if (huBefore < 11 && huLoss > 0) {
