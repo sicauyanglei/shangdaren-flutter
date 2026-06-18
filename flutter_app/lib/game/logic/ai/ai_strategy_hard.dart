@@ -1257,13 +1257,42 @@ class AIStrategyHard extends AIStrategy {
       score -= 20;
     }
 
+    // 破坏完整句惩罚：出牌导致手牌中某个完整句被拆散时，施加惩罚
+    // 完整句是已确定的面子，拆散它意味着需要重新摸牌来补回，代价很大
+    {
+      final discardGroup = cardToDiscard.sentence;
+      final discardGroupCards = player.hand
+          .where((c) => c.sentence == discardGroup)
+          .toList();
+      final discardGroupCharSet =
+          discardGroupCards.map((c) => c.character).toSet();
+      if (discardGroupCharSet.length == 3) {
+        // 出牌前该组是完整句，出牌后会破坏它
+        // 惩罚力度：距离越近越不应该拆句
+        if (quickDist <= 2) {
+          score -= 300;
+        } else if (quickDist <= 4) {
+          score -= 200;
+        } else {
+          score -= 100;
+        }
+      }
+    }
+
     score += (10 - distToTing) * 120;
 
     // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
     final huAfter = _evaluateHuScore(testPlayer);
     final huBefore = _evaluateHuScore(player);
-    score += (huAfter - huBefore) * 20;
+    final huLoss = huBefore - huAfter;
+    // 胡数损失权重：胡数越低，损失越严重（离11胡资格越远）
+    if (huBefore < 11 && huLoss > 0) {
+      // 胡数不足11时，每损失1胡的代价更大
+      score -= huLoss * 50;
+    } else {
+      score -= huLoss * 20;
+    }
     // 十对、黑元、红元、枯胡路线是特殊胡牌类型，不受胡数>=11限制
     if (huBefore >= 11 &&
         huAfter < 11 &&
