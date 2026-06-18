@@ -2864,6 +2864,24 @@ class AIStrategyHard extends AIStrategy {
         );
         final tingCheck = _checkTingCached(testPlayerCheck);
 
+        // 胡数够了(>=11)时，破坏完整句的碰牌门槛更高
+        // 只有碰后听牌或距离改善才碰，不为增加胡数破坏句子
+        if (inJu) {
+          final selfHu = _evaluateHuScore(player);
+          if (selfHu >= 11 && !tingCheck.isTing) {
+            final distBeforeCheck = _distanceToTing(
+              List<Card>.from(hand),
+              player.melds,
+            );
+            final distAfterCheck = _distanceToTing(testHandCheck, [
+              ...player.melds,
+              newMeldCheck,
+            ]);
+            // 胡数够了，距离没改善(distAfter >= distBefore)不碰
+            if (distAfterCheck >= distBeforeCheck) return false;
+          }
+        }
+
         if (missingRem == 0) {
           // 缺失字已出完，无法重组，必须碰后听牌才碰
           if (!tingCheck.isTing) return false;
