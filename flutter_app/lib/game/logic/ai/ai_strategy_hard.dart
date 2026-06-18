@@ -2882,19 +2882,26 @@ class AIStrategyHard extends AIStrategy {
     // 吃后听牌（bestBenefit>=10000）时允许吃
     if (player.isTing) return bestBenefit >= 10000;
 
-    // 破坏完整句保护：吃牌会破坏手牌中已有的完整句（3种字都有）时，
+    // 破坏完整句保护：吃牌会破坏手牌中已有的纯单张完整句（3种字都只有1张）时，
     // 除非吃后听牌，否则不吃
+    // 注意：只有当3种字都只有1张时才是真正的"纯单张完整句"，
+    // 有2张以上的情况吃牌只是把句转移到组合牌区，不构成破坏
     if (bestBenefit < 10000) {
       final cardSentence = card.sentence;
-      final sentenceChars = player.hand
+      final sentenceCards = player.hand
           .where((c) => c.sentence == cardSentence)
-          .map((c) => c.character)
-          .toSet();
-      // 手牌中该组3种字都有=完整句，吃牌会消耗其中2种，破坏句
+          .toList();
+      final sentenceChars = sentenceCards.map((c) => c.character).toSet();
+      // 手牌中该组3种字都有=完整句
       if (sentenceChars.length == 3) {
-        // 检查吃后是否听牌（bestBenefit>=10000表示听牌）
-        // 已经在上方判断过bestBenefit<10000，所以这里不吃
-        return false;
+        // 检查是否是纯单张完整句（每字都只有1张）
+        final allSingle = sentenceChars.every(
+          (ch) => sentenceCards.where((c) => c.character == ch).length == 1,
+        );
+        // 只有纯单张完整句才保护，有2张以上的允许吃（句转移到组合牌区）
+        if (allSingle) {
+          return false;
+        }
       }
     }
 
