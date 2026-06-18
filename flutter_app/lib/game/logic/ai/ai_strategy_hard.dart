@@ -1409,7 +1409,11 @@ class AIStrategyHard extends AIStrategy {
       } else if (isHeiYuan) {
         // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
         if (discardGroupCharSet.length == 1) {
-          score += 200; // 孤张最优先
+          if (discardCountInGroup == 1) {
+            score += 200; // 真正的孤张最优先
+          } else if (discardCountInGroup >= 2) {
+            score += 100; // 优先拆对子
+          }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
@@ -1429,10 +1433,16 @@ class AIStrategyHard extends AIStrategy {
         // 红元路线：组1/组8句优先保留，优先出非组1/8的孤张
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
         if (discardGroupCharSet.length == 1) {
-          if (isGroup18) {
-            score += 100; // 组1/8孤张，仍可凑句，次优
-          } else {
-            score += 200; // 非组1/8孤张，最优先
+          if (discardCountInGroup == 1) {
+            // 真正的孤张
+            if (isGroup18) {
+              score += 100; // 组1/8孤张，仍可凑句，次优
+            } else {
+              score += 200; // 非组1/8孤张，最优先
+            }
+          } else if (discardCountInGroup >= 2) {
+            // 对子，红元路线保留对子
+            score -= 30;
           }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
@@ -1477,7 +1487,15 @@ class AIStrategyHard extends AIStrategy {
       } else {
         // 默认普通胡牌路线：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
         if (discardGroupCharSet.length == 1) {
-          score += 200; // 普单(孤张)最优先
+          // 注意：length==1不一定是孤张，可能是对子(2张同字)或坎(3张同字)
+          // 只有真正的单张(1张)才加200分，对子/坎不应加此分
+          if (discardCountInGroup == 1) {
+            score += 200; // 普单(孤张)最优先
+          } else if (discardCountInGroup >= 2) {
+            // 对子或坎，出牌会破坏对子/坎，不加分
+            // 对子价值由_evaluateHandPotentialAndDistance中的对子评分体现
+            score -= 50; // 破坏对子/坎的惩罚
+          }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
