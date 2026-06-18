@@ -383,6 +383,7 @@ class GameController {
     }
 
     final player = state.currentTurnPlayer();
+    GameLogger.d('PENG_DEBUG', '_startTurn: currentPlayerIndex=${state.currentPlayerIndex}, player type=${player.type}, _skipDraw=$_skipDraw, dealerIndex=${state.dealerIndex}, _hasDealerPlayedFirstTurn=$_hasDealerPlayedFirstTurn');
 
     if (player.type == PlayerType.ai) {
       state.isMyTurn = false;
@@ -400,6 +401,8 @@ class GameController {
         _processAITurn(player);
       });
     } else {
+      final humanTotal = _getTotalCardCount(state.players[1]);
+      GameLogger.d('PENG_DEBUG', '_startTurn human: _skipDraw=$_skipDraw, humanTotal=$humanTotal, handCount=${state.players[1].hand.length}, meldCount=${state.players[1].melds.length}');
       if (_skipDraw) {
         _skipDraw = false;
         state.isMyTurn = true;
@@ -415,13 +418,14 @@ class GameController {
         _checkMyActionsAfterDraw(skipZimoCheck: true);
         onStateChanged?.call();
         startCountdown();
-      } else if (_getTotalCardCount(state.players[1]) >= 20) {
+      } else if (humanTotal >= 20) {
         state.isMyTurn = true;
         state.isDrawing = false;
         _checkMyActionsAfterDraw(skipZimoCheck: true);
         onStateChanged?.call();
         startCountdown();
       } else {
+        GameLogger.d('PENG_DEBUG', '_startTurn -> calling _drawCardForHuman (humanTotal=$humanTotal < 20)');
         _drawCardForHuman();
       }
     }
@@ -685,10 +689,20 @@ class GameController {
     _pendingCheckResponseCard = card;
     _pendingCheckResponsePlayerId = player.id;
     final version = ++_checkResponseVersion;
+    GameLogger.d('PENG_DEBUG', '_completeDiscard: scheduling _checkResponses for card=${card.character}, player=${player.id}, version=$version');
     Future.delayed(const Duration(milliseconds: 800), () {
-      if (_isPaused || !state.gameStarted) return;
-      if (_checkResponseVersion != version) return;
-      if (state.showHuResult || state.showLiujuResult) return;
+      if (_isPaused || !state.gameStarted) {
+        GameLogger.d('PENG_DEBUG', '_checkResponses SKIPPED: isPaused=$_isPaused, gameStarted=${state.gameStarted}');
+        return;
+      }
+      if (_checkResponseVersion != version) {
+        GameLogger.d('PENG_DEBUG', '_checkResponses SKIPPED: version mismatch (current=$_checkResponseVersion, expected=$version)');
+        return;
+      }
+      if (state.showHuResult || state.showLiujuResult) {
+        GameLogger.d('PENG_DEBUG', '_checkResponses SKIPPED: showHuResult=${state.showHuResult}, showLiujuResult=${state.showLiujuResult}');
+        return;
+      }
       _checkResponses(card, player.id);
     });
   }
@@ -698,12 +712,22 @@ class GameController {
     _pendingCheckResponseCard = null;
     _pendingCheckResponsePlayerId = null;
 
+    // [DEBUG] 碰牌问题诊断日志
+    GameLogger.d('PENG_DEBUG', '=== _checkResponses START ===');
+    GameLogger.d('PENG_DEBUG', 'discarded card: ${card.character} (s=${card.sentence}, p=${card.position}), discardPlayerId=$discardPlayerId');
+
     final responses = <int, List<String>>{};
 
     for (int i = 0; i < state.players.length; i++) {
       if (i == discardPlayerId) continue;
       final p = state.players[i];
       final actions = <String>[];
+
+      // [DEBUG] 记录每个玩家的手牌信息
+      final handChars = p.hand.map((c) => c.character).join();
+      final totalCount = _getTotalCardCount(p);
+      final matchCount = p.hand.where((c) => c.character == card.character).length;
+      GameLogger.d('PENG_DEBUG', 'player$i: type=${p.type}, handCount=${p.hand.length}, meldCount=${p.melds.length}, totalCount=$totalCount, matchCount($card)=${matchCount}, hand=$handChars, isTing=${p.isTing}');
 
       if (_canHuWith(p, card) && p.isTing) {
         actions.add('hu');
@@ -740,6 +764,7 @@ class GameController {
         }
       }
 
+      GameLogger.d('PENG_DEBUG', 'player$i actions: $actions');
       responses[i] = actions;
     }
 
@@ -849,10 +874,12 @@ class GameController {
     }
 
     if (humanResponses.isEmpty) {
+      GameLogger.d('PENG_DEBUG', 'humanResponses is EMPTY -> calling _nextTurn() (no peng button shown)');
       _nextTurn();
       return;
     }
 
+    GameLogger.d('PENG_DEBUG', 'humanResponses=$humanResponses, deferredAI=$deferredAI');
     _pendingAIResponses = deferredAI.isNotEmpty ? deferredAI : null;
     _pendingResponseCard = card;
     _pendingResponseDiscardPlayerId = discardPlayerId;
@@ -866,6 +893,7 @@ class GameController {
       if (action == 'peng') state.canPeng = true;
       if (action == 'chi') state.canChi = true;
     }
+    GameLogger.d('PENG_DEBUG', 'Showing buttons: canHu=${state.canHu}, canPeng=${state.canPeng}, canZhao=${state.canZhao}, canChi=${state.canChi}');
     state.waitingForResponse = true;
     state.isMyTurn = true;
     onStateChanged?.call();
@@ -2124,11 +2152,13 @@ class GameController {
   }
 
   bool _canPengWith(Player player, Card card) {
-    if (_getTotalCardCount(player) >= 20) return false;
+    final totalCount = _getTotalCardCount(player);
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
-    return count >= 2;
+    final result = totalCount < 20 && count >= 2;
+    GameLogger.d('PENG_DEBUG', '_canPengWith: player type=${player.type}, card=${card.character}, totalCount=$totalCount, matchCount=$count, result=$result');
+    return result;
   }
 
   bool _canZhaoWith(Player player, Card card) {
@@ -2209,8 +2239,10 @@ class GameController {
 
     final allPresent = charCount.values.every((count) => count >= 1);
     final allSingle = charCount.values.every((count) => count == 1);
+    final result = allPresent && allSingle && groupChars.contains(card.character);
 
-    return allPresent && allSingle && groupChars.contains(card.character);
+    GameLogger.d('PENG_DEBUG', '_hasCompleteSentenceWithSingleCards: card=${card.character}, sentence=$sentence, charCount=$charCount, allPresent=$allPresent, allSingle=$allSingle, result=$result');
+    return result;
   }
 
   void _addToPublicCount(String character, int count) {
