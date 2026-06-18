@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Card;
+import '../core/atlas_loader.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/player.dart';
@@ -49,6 +50,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
   static const double meldToDiscardGap = 1.0;
   static const double avatarToMeldGap = 6.0;
   static const double aiHandToMeldGap = 2.0;
+  static const double aiHandStackVisible = 15.0;
   static const double leftMaxW = 340.0;
   static const double rightMaxW = 280.0;
 
@@ -647,12 +649,17 @@ class _ReplayScreenState extends State<ReplayScreen> {
   Widget _buildLeftMeldsAndDiscards(int playerIndex) {
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
+    final hand = _hands[playerIndex];
     return SizedBox(
       width: leftMaxW,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (hand.isNotEmpty) ...[
+            _buildAIHandBacks(hand.length, isRight: false, maxWidth: leftMaxW),
+            const SizedBox(height: aiHandToMeldGap),
+          ],
           if (melds.isNotEmpty) ...[
             _buildMeldsArea(melds, isRight: false),
             const SizedBox(height: meldToDiscardGap),
@@ -667,12 +674,17 @@ class _ReplayScreenState extends State<ReplayScreen> {
   Widget _buildRightMeldsAndDiscards(int playerIndex) {
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
+    final hand = _hands[playerIndex];
     return SizedBox(
       width: rightMaxW,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (hand.isNotEmpty) ...[
+            _buildAIHandBacks(hand.length, isRight: true, maxWidth: rightMaxW),
+            const SizedBox(height: aiHandToMeldGap),
+          ],
           if (melds.isNotEmpty) ...[
             _buildMeldsArea(melds, isRight: true),
             const SizedBox(height: meldToDiscardGap),
@@ -706,6 +718,59 @@ class _ReplayScreenState extends State<ReplayScreen> {
           // 手牌
           _buildMainHand(hand),
         ],
+      ),
+    );
+  }
+
+  /// AI玩家手牌背面 - 与GameBoard._renderPlayerAIHand一致
+  /// 卡牌折叠显示，每张牌偏移aiHandStackVisible(15px)
+  Widget _buildAIHandBacks(int count, {required bool isRight, required double maxWidth}) {
+    if (count <= 0) return const SizedBox.shrink();
+    final totalWidth = (count - 1) * aiHandStackVisible + meldCardW;
+    double step;
+    if (totalWidth <= maxWidth) {
+      step = aiHandStackVisible;
+    } else {
+      step = (maxWidth - meldCardW) / (count - 1);
+    }
+    final actualWidth = (count - 1) * step + meldCardW;
+    return SizedBox(
+      width: actualWidth,
+      height: meldCardH,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (int i = 0; i < count; i++)
+            Positioned(
+              left: isRight ? (count - 1 - i) * step : i * step,
+              top: 0,
+              child: _buildCardBack(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardBack() {
+    return Container(
+      width: meldCardW,
+      height: meldCardH,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 2,
+            offset: const Offset(1, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Image.asset(
+        'assets/html/images/back.png',
+        width: meldCardW,
+        height: meldCardH,
+        fit: BoxFit.fill,
       ),
     );
   }
@@ -795,23 +860,22 @@ class _ReplayScreenState extends State<ReplayScreen> {
   }
 
   Widget _buildMeldCard(Card card) {
+    final pinyin = AtlasLoader.charToPinyin[card.character];
     return Container(
       width: meldCardW,
       height: meldCardH,
       decoration: BoxDecoration(
-        color: Colors.white,
         borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: _cardBorderColor(card.character), width: 1),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        card.character,
-        style: TextStyle(
-          fontSize: 18,
-          color: _cardTextColor(card.character),
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      clipBehavior: Clip.hardEdge,
+      child: pinyin != null
+          ? Image.asset(
+              'assets/html/images/s/$pinyin.png',
+              width: meldCardW,
+              height: meldCardH,
+              fit: BoxFit.contain,
+            )
+          : Container(color: Colors.white),
     );
   }
 
@@ -853,26 +917,22 @@ class _ReplayScreenState extends State<ReplayScreen> {
   }
 
   Widget _buildDiscardCard(Card card) {
+    final pinyin = AtlasLoader.charToPinyin[card.character];
     return Container(
       width: smallCardW,
       height: smallCardH,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
         borderRadius: BorderRadius.circular(2),
-        border: Border.all(
-          color: _cardBorderColor(card.character).withOpacity(0.6),
-          width: 0.5,
-        ),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        card.character,
-        style: TextStyle(
-          fontSize: 14,
-          color: _cardTextColor(card.character),
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      clipBehavior: Clip.hardEdge,
+      child: pinyin != null
+          ? Image.asset(
+              'assets/html/images/s/$pinyin.png',
+              width: smallCardW,
+              height: smallCardH,
+              fit: BoxFit.contain,
+            )
+          : Container(color: Colors.white.withOpacity(0.85)),
     );
   }
 
@@ -906,6 +966,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
       for (int ci = 0; ci < sortedChars.length; ci++) {
         final chars = charGroups[sortedChars[ci]]!;
         for (int i = 0; i < chars.length; i++) {
+          final pinyin = AtlasLoader.charToPinyin[chars[i].character];
           cardWidgets.add(
             Positioned(
               top: ci * handStackVisible,
@@ -914,22 +975,24 @@ class _ReplayScreenState extends State<ReplayScreen> {
                 width: handCardW,
                 height: handCardH,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: _cardBorderColor(chars[i].character),
-                    width: 1.5,
-                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.4),
+                      blurRadius: 6,
+                      offset: const Offset(3, 3),
+                    ),
+                  ],
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  chars[i].character,
-                  style: TextStyle(
-                    fontSize: 32,
-                    color: _cardTextColor(chars[i].character),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                clipBehavior: Clip.hardEdge,
+                child: pinyin != null
+                    ? Image.asset(
+                        'assets/html/images/$pinyin.png',
+                        width: handCardW,
+                        height: handCardH,
+                        fit: BoxFit.fill,
+                      )
+                    : Container(color: Colors.white),
               ),
             ),
           );
@@ -1172,45 +1235,5 @@ class _ReplayScreenState extends State<ReplayScreen> {
         ),
       ),
     );
-  }
-
-  static Color _cardTextColor(String char) {
-    if (char == '上' ||
-        char == '大' ||
-        char == '人' ||
-        char == '福' ||
-        char == '禄' ||
-        char == '寿') {
-      return const Color(0xFFCC0000);
-    }
-    if (char == '化' ||
-        char == '三' ||
-        char == '千' ||
-        char == '七' ||
-        char == '十' ||
-        char == '土') {
-      return const Color(0xFF006600);
-    }
-    return const Color(0xFF333333);
-  }
-
-  static Color _cardBorderColor(String char) {
-    if (char == '上' ||
-        char == '大' ||
-        char == '人' ||
-        char == '福' ||
-        char == '禄' ||
-        char == '寿') {
-      return const Color(0xFFFF4444);
-    }
-    if (char == '化' ||
-        char == '三' ||
-        char == '千' ||
-        char == '七' ||
-        char == '十' ||
-        char == '土') {
-      return const Color(0xFF33BB33);
-    }
-    return const Color(0xFF666666);
   }
 }
