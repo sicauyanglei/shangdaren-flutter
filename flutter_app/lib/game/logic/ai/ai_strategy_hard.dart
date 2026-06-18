@@ -1343,14 +1343,14 @@ class AIStrategyHard extends AIStrategy {
 
     score += (10 - distToTing) * 120;
 
-    // 胡数不足时的出牌优先级规则
-    // 优先级从高到低：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
-    // 特殊胡牌类型(黑元)时，对子+靠优先拆对子
+    // 胡数不足时的出牌优先级规则（按胡牌类型灵活调整）
+    // 默认(普通胡牌)：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
+    // 十对：保留对子，优先出孤张/普单，绝不出对子
+    // 黑元：无碰无招，优先拆对子(避免对子变碰破坏黑元资格)
+    // 红元：组1/组8句优先保留，优先出非组1/8的孤张
+    // 枯胡：6坎+1对，优先出靠/句中的单张，保留对子和坎
     final huBefore = _evaluateHuScore(player);
-    if (huBefore < 11 &&
-        shiDuiPotential <= 0 &&
-        hongYuanPotential <= 0 &&
-        kuHuPotential <= 0) {
+    if (huBefore < 11) {
       final discardGroup = cardToDiscard.sentence;
       final discardGroupCards = player.hand
           .where((c) => c.sentence == discardGroup)
@@ -1366,30 +1366,113 @@ class AIStrategyHard extends AIStrategy {
             (groupCharCount[c.character] ?? 0) + 1;
       }
       final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
+      final isShiDui = shiDuiPotential > 0;
       final isHeiYuan = heiYuanPotential > 0;
+      final isHongYuan = hongYuanPotential > 0;
+      final isKuHu = kuHuPotential > 0;
 
-      if (discardGroupCharSet.length == 1) {
-        // 普单(孤张)：同组只有1种字，最优先打出
-        score += 200;
-      } else if (discardGroupCharSet.length == 3) {
-        // 普句多一张：3种字都有，其中1种字有2张(对子+完整句)
-        // 出对子中多出的那张，不破坏句，第二优先
-        if (discardCountInGroup >= 2) {
-          score += 120;
-        }
-      } else if (discardGroupCharSet.length == 2) {
-        if (!hasPairInGroup) {
-          // 普靠：2种字各1张，第三优先(出会破坏靠)
-          // 这里不加分，靠破坏靠惩罚控制
-        } else {
-          // 对子+靠：1种字2张+1种字1张
-          if (isHeiYuan) {
-            // 黑元路线：优先拆对子(出对子中的字)
+      if (isShiDui) {
+        // 十对路线：保留对子，优先出孤张
+        if (discardGroupCharSet.length == 1) {
+          score += 250; // 孤张最优先
+        } else if (discardGroupCharSet.length == 3) {
+          if (discardCountInGroup >= 2) {
+            score += 100; // 普句多一张，出多余的对子张
+          } else {
+            score -= 50; // 出单张会破坏句，但十对不需要句
+          }
+        } else if (discardGroupCharSet.length == 2) {
+          if (hasPairInGroup) {
             if (discardCountInGroup >= 2) {
-              score += 80;
+              score -= 100; // 十对路线绝不出对子
+            } else {
+              score += 150; // 出靠的单张，保留对子
             }
           } else {
-            // 非黑元：优先保留对子，出靠的那张(单张)
+            score += 80; // 普靠，出一张变孤张
+          }
+        }
+      } else if (isHeiYuan) {
+        // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
+        if (discardGroupCharSet.length == 1) {
+          score += 200; // 孤张最优先
+        } else if (discardGroupCharSet.length == 3) {
+          if (discardCountInGroup >= 2) {
+            score += 120; // 普句多一张
+          }
+        } else if (discardGroupCharSet.length == 2) {
+          if (hasPairInGroup) {
+            if (discardCountInGroup >= 2) {
+              score += 100; // 优先拆对子
+            } else {
+              score += 30; // 保留对子次之
+            }
+          } else {
+            score += 50; // 普靠
+          }
+        }
+      } else if (isHongYuan) {
+        // 红元路线：组1/组8句优先保留，优先出非组1/8的孤张
+        final isGroup18 = discardGroup == 1 || discardGroup == 8;
+        if (discardGroupCharSet.length == 1) {
+          if (isGroup18) {
+            score += 100; // 组1/8孤张，仍可凑句，次优
+          } else {
+            score += 200; // 非组1/8孤张，最优先
+          }
+        } else if (discardGroupCharSet.length == 3) {
+          if (discardCountInGroup >= 2) {
+            if (isGroup18) {
+              score += 60; // 组1/8句多一张，保留句优先
+            } else {
+              score += 120; // 非组1/8句多一张
+            }
+          }
+        } else if (discardGroupCharSet.length == 2) {
+          if (hasPairInGroup) {
+            if (discardCountInGroup == 1) {
+              score += 60; // 保留对子，出靠单张
+            }
+          }
+        }
+      } else if (isKuHu) {
+        // 枯胡路线：6坎+1对，保留对子和坎，优先出靠/句中的单张
+        if (discardGroupCharSet.length == 1) {
+          // 孤张在枯胡路线中价值低(枯胡不要单张)，但出掉可减少手牌
+          // 如果该字有3张(坎)，不出；2张(对子)，不出；1张，出
+          final selfCount = groupCharCount[cardToDiscard.character] ?? 0;
+          if (selfCount == 1) {
+            score += 200; // 单张最优先出
+          }
+        } else if (discardGroupCharSet.length == 2) {
+          if (hasPairInGroup) {
+            if (discardCountInGroup == 1) {
+              score += 100; // 出靠的单张，保留对子
+            } else {
+              score -= 150; // 枯胡保留对子，不出对子
+            }
+          } else {
+            score += 80; // 普靠，出一张
+          }
+        } else if (discardGroupCharSet.length == 3) {
+          // 句在枯胡路线中价值低(枯胡要坎不要句)
+          if (discardCountInGroup == 1) {
+            score += 120; // 出句中的单张
+          }
+        }
+      } else {
+        // 默认普通胡牌路线：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
+        if (discardGroupCharSet.length == 1) {
+          score += 200; // 普单(孤张)最优先
+        } else if (discardGroupCharSet.length == 3) {
+          if (discardCountInGroup >= 2) {
+            score += 120; // 普句多一张
+          }
+        } else if (discardGroupCharSet.length == 2) {
+          if (!hasPairInGroup) {
+            // 普靠：不加分，靠破坏靠惩罚控制
+          } else {
+            // 对子+靠：保留对子，出靠的单张
             if (discardCountInGroup == 1) {
               score += 60;
             }
