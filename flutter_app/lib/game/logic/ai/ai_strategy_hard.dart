@@ -1307,24 +1307,35 @@ class AIStrategyHard extends AIStrategy {
           score -= 100;
         }
       } else if (discardGroupCharSet.length == 2) {
-        // 出牌前该组是靠(搭子，2种不同字)
-        // 只有出单张(手牌中该字只有1张)才会破坏靠
-        final discardCountInGroup = discardGroupCards
-            .where((c) => c.character == cardToDiscard.character)
-            .length;
-        if (discardCountInGroup == 1) {
-          // 出这张牌会破坏靠，检查缺失字的剩余张数
-          final missingChars = _groupChars[discardGroup - 1]
-              .where((ch) => !discardGroupCharSet.contains(ch))
-              .toList();
-          int missingRem = 0;
-          for (final ch in missingChars) {
-            missingRem += _remainingCount(ch, visibleCount);
-          }
-          if (missingRem > 0) {
-            // 靠有进张价值(能摸缺字成句)，破坏它有代价
-            // 进张越多，靠越有价值，惩罚越大
-            score -= 80 + missingRem * 15;
+        // 出牌前该组有2种不同字，可能是靠或对子+单张
+        // 只有真正的靠(2种字各1张，无对子)出单张才破坏靠
+        final hasPairInGroup = discardGroupCharSet.any(
+          (ch) => discardGroupCards.where((c) => c.character == ch).length >= 2,
+        );
+        if (!hasPairInGroup) {
+          final discardCountInGroup = discardGroupCards
+              .where((c) => c.character == cardToDiscard.character)
+              .length;
+          if (discardCountInGroup == 1) {
+            // 出这张牌会破坏靠，检查缺失字的剩余张数
+            final missingChars = _groupChars[discardGroup - 1]
+                .where((ch) => !discardGroupCharSet.contains(ch))
+                .toList();
+            int missingRem = 0;
+            for (final ch in missingChars) {
+              missingRem += _remainingCount(ch, visibleCount);
+            }
+            if (missingRem > 0) {
+              // 靠有进张价值(能摸缺字成句)，破坏它有代价
+              // 惩罚力度：距离越近越不应该拆靠
+              if (quickDist <= 2) {
+                score -= 200 + missingRem * 20;
+              } else if (quickDist <= 4) {
+                score -= 150 + missingRem * 15;
+              } else {
+                score -= 100 + missingRem * 10;
+              }
+            }
           }
         }
       }
