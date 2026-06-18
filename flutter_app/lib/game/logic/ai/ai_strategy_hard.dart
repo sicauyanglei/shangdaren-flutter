@@ -1297,7 +1297,14 @@ class AIStrategyHard extends AIStrategy {
           // 搭子：保留
           score -= 30;
           if (groupCharSet.length >= 3) {
-            score -= 20;
+            // 完整句：出对子中的一张不破坏句，不额外惩罚
+            // 只有出单张（会破坏句）才额外惩罚
+            final discardCountInGroup = sameGroup
+                .where((c) => c.character == cardToDiscard.character)
+                .length;
+            if (discardCountInGroup < 2) {
+              score -= 20;
+            }
           }
         } else {
           // 孤张/普单：同组只有1种字，优先打出
@@ -1333,16 +1340,17 @@ class AIStrategyHard extends AIStrategy {
         charCount[c.character] = (charCount[c.character] ?? 0) + 1;
       }
       final discardCharCount = charCount[cardToDiscard.character] ?? 0;
+      final sameGroup = player.hand
+          .where((c) => c.sentence == cardToDiscard.sentence)
+          .toList();
+      final groupCharSet = sameGroup.map((c) => c.character).toSet();
       // 中局出对子中的一张代价较大
-      if (discardCharCount >= 2) {
+      // 但完整句（3种字）中的多余对子，出掉不破坏句，代价较小
+      if (discardCharCount >= 2 && groupCharSet.length < 3) {
         score -= 15;
       }
       // 中局优先出孤张/普单（非十对路线）
       if (discardCharCount == 1 && shiDuiPotential <= 0) {
-        final sameGroup = player.hand
-            .where((c) => c.sentence == cardToDiscard.sentence)
-            .toList();
-        final groupCharSet = sameGroup.map((c) => c.character).toSet();
         if (groupCharSet.length == 1) {
           // 孤张/普单：优先打出
           score += 30;
