@@ -2,12 +2,19 @@ import 'ai_strategy.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
+import '../hu_calculator.dart';
 
 class AIStrategySimple extends AIStrategy {
   @override
   Card selectDiscard(Player player, GameState state) {
     final hand = player.hand;
     if (hand.length <= 1) return hand.first;
+
+    // 确保meldHuCount已正确初始化
+    if (player.melds.isNotEmpty && player.meldHuCount == 0) {
+      HuCalculator.updateMeldHuCache(player);
+    }
+    final huBefore = HuCalculator.calculateTotalHu(player);
 
     final charCount = _buildCharCount(hand);
     final groupCharSet = _buildGroupCharSet(hand);
@@ -30,6 +37,54 @@ class AIStrategySimple extends AIStrategy {
       } else {
         isolated.add(card);
       }
+    }
+
+    // 胡数资格保护：如果出牌前胡数>=11，过滤掉会导致胡数<11的牌
+    final safeCards = <Card>[];
+    if (huBefore >= 11) {
+      for (final card in hand) {
+        final testHand = List<Card>.from(hand);
+        testHand.remove(card);
+        final testPlayer = Player(
+          id: player.id,
+          name: player.name,
+          type: player.type,
+          hand: testHand,
+          melds: player.melds,
+        );
+        HuCalculator.updateMeldHuCache(testPlayer);
+        final huAfter = HuCalculator.calculateTotalHu(testPlayer);
+        if (huAfter >= 11) {
+          safeCards.add(card);
+        }
+      }
+    }
+
+    // 如果有安全牌，优先从安全牌中选择
+    if (safeCards.isNotEmpty) {
+      // 从安全牌中筛选孤张
+      final safeIsolated = isolated.where(safeCards.contains).toList();
+      if (safeIsolated.isNotEmpty) {
+        safeIsolated.sort(
+          (a, b) => _discardPriority(b).compareTo(_discardPriority(a)),
+        );
+        return safeIsolated.first;
+      }
+      // 从安全牌中筛选靠
+      final safeKao = kao.where(safeCards.contains).toList();
+      if (safeKao.isNotEmpty) {
+        safeKao.sort((a, b) => _discardPriority(b).compareTo(_discardPriority(a)));
+        return safeKao.first;
+      }
+      // 从安全牌中筛选对子
+      final safeDui = dui.where(safeCards.contains).toList();
+      if (safeDui.isNotEmpty) {
+        safeDui.sort((a, b) => _discardPriority(b).compareTo(_discardPriority(a)));
+        return safeDui.first;
+      }
+      // 安全牌中随机选一张
+      safeCards.sort((a, b) => _discardPriority(b).compareTo(_discardPriority(a)));
+      return safeCards.first;
     }
 
     if (isolated.isNotEmpty) {

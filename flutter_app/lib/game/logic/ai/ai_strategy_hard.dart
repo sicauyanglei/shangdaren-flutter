@@ -433,6 +433,10 @@ class AIStrategyHard extends AIStrategy {
     final key = _handCacheKey(player.hand, player.melds);
     final cached = _huScoreCache[key];
     if (cached != null) return cached;
+    // 确保meldHuCount已正确初始化，避免新建Player对象时meldHuCount=0导致胡数计算错误
+    if (player.melds.isNotEmpty && player.meldHuCount == 0) {
+      HuCalculator.updateMeldHuCache(player);
+    }
     final result = HuCalculator.calculateTotalHu(player) * 1.0;
     _huScoreCache[key] = result;
     return result;
@@ -793,6 +797,19 @@ class AIStrategyHard extends AIStrategy {
     final totalUnknown =
         _cachedTotalUnknown ?? _totalUnknownCards(player, state);
 
+    // 出牌前的胡数，用于胡数资格保护
+    final huBefore = _evaluateHuScore(player);
+    // 检查特殊胡牌类型潜力（十对、黑元、红元、枯胡不受胡数>=11限制）
+    final shiDuiPotential = _evaluateShiDuiPotential(
+      player,
+      state,
+      visibleCount: visibleCount,
+      totalUnknown: totalUnknown,
+    );
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    final hongYuanPotential = _evaluateHongYuanPotential(player);
+    final kuHuPotential = _evaluateKuHuPotential(player);
+
     // 对每张手牌，模拟出牌后检查听牌结果
     Card? bestCard;
     int bestTingCount = -1;
@@ -815,6 +832,17 @@ class AIStrategyHard extends AIStrategy {
 
       final tingResult = _checkTingCached(testPlayer);
       if (!tingResult.isTing) continue;
+
+      // 胡数资格保护：出牌破坏胡数资格时跳过（特殊胡牌类型除外）
+      final huAfter = _evaluateHuScore(testPlayer);
+      if (huBefore >= 11 &&
+          huAfter < 11 &&
+          shiDuiPotential <= 0 &&
+          heiYuanPotential <= 0 &&
+          hongYuanPotential <= 0 &&
+          kuHuPotential <= 0) {
+        continue;
+      }
 
       // 计算听牌进张数和进张概率
       int tingCount = 0;
@@ -839,10 +867,12 @@ class AIStrategyHard extends AIStrategy {
         tingProb *= 0.5;
       }
 
-      final huScore = _evaluateHuScore(testPlayer);
+      // 复用前面计算的huAfter，避免重复计算
+      final huScore = huAfter;
 
       // 检查特殊胡型潜力（高胡数路线给予额外加分）
-      final totalHu = HuCalculator.calculateTotalHu(testPlayer);
+      // 使用_evaluateHuScore确保meldHuCount已正确初始化
+      final totalHu = huScore.toInt();
       double specialHuBonus = 0;
       if (totalHu >= 20)
         specialHuBonus += 150;
@@ -997,11 +1027,27 @@ class AIStrategyHard extends AIStrategy {
           }
           final huScore = _evaluateHuScore(testPlayer);
 
-          if (tingRem > bestTingRem ||
-              (tingRem == bestTingRem && tingProb > bestTingProb) ||
-              (tingRem == bestTingRem &&
-                  tingProb == bestTingProb &&
-                  huScore > bestTingHu)) {
+          // 胡数资格保护：听牌但胡数不足时，降低听牌评分
+          // 特殊胡牌类型（十对、黑元、红元、枯胡）不受胡数>=11限制
+          double huQualifyPenalty = 0;
+          bool huQualifyMet = true;
+          if (huScore < 11 &&
+              shiDuiPotential <= 0 &&
+              heiYuanPotential <= 0 &&
+              hongYuanPotential <= 0 &&
+              kuHuPotential <= 0) {
+            // 听牌但胡数不足，无法胡牌，大幅降低评分
+            huQualifyPenalty = -8000;
+            huQualifyMet = false;
+          }
+
+          // 只有胡数资格满足时，才考虑作为bestTingCard
+          if (huQualifyMet &&
+              (tingRem > bestTingRem ||
+                  (tingRem == bestTingRem && tingProb > bestTingProb) ||
+                  (tingRem == bestTingRem &&
+                      tingProb == bestTingProb &&
+                      huScore > bestTingHu))) {
             bestTingCard = card;
             bestTingRem = tingRem;
             bestTingProb = tingProb;
@@ -1013,6 +1059,7 @@ class AIStrategyHard extends AIStrategy {
           tingScore += effectiveTingCount * 200;
           tingScore += huScore * 10;
           if (isLate) tingScore += 3000;
+          tingScore += huQualifyPenalty;
           scored.add(MapEntry(card, tingScore));
           continue;
         }
@@ -1984,6 +2031,10 @@ class AIStrategyHard extends AIStrategy {
             hand: List<Card>.from(hand),
             melds: List<Meld>.from(melds),
           );
+          // 确保meldHuCount已正确初始化
+          if (testPlayer.melds.isNotEmpty) {
+            HuCalculator.updateMeldHuCache(testPlayer);
+          }
           final totalHu = HuCalculator.calculateTotalHu(testPlayer);
           if (totalHu < 11) {
             score += 15; // 精句潜力加分
@@ -2084,6 +2135,10 @@ class AIStrategyHard extends AIStrategy {
         hand: List<Card>.from(hand),
         melds: List<Meld>.from(melds),
       );
+      // 确保meldHuCount已正确初始化
+      if (testPlayer.melds.isNotEmpty) {
+        HuCalculator.updateMeldHuCache(testPlayer);
+      }
       final totalHu = HuCalculator.calculateTotalHu(testPlayer);
       final isShiDui = _countHandPairsWithMelds(testPlayer) >= 7;
       final isHeiYuan = _evaluateHeiYuanPotential(testPlayer) > 0;
