@@ -50,7 +50,11 @@ class _ReplayScreenState extends State<ReplayScreen> {
   static const double meldToDiscardGap = 1.0;
   static const double avatarToMeldGap = 6.0;
   static const double aiHandToMeldGap = 2.0;
-  static const double aiHandStackVisible = 15.0;
+  // AI玩家手牌正面显示尺寸 - 与GameBoard.huAiHand*一致
+  static const double aiHandCardW = 43.2;
+  static const double aiHandCardH = 179.2;
+  static const double aiHandStackVisibleFace = 40.0;
+  static const double aiHandSentenceGap = 0.0;
   static const double leftMaxW = 340.0;
   static const double rightMaxW = 280.0;
 
@@ -657,7 +661,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hand.isNotEmpty) ...[
-            _buildAIHandBacks(hand.length, isRight: false, maxWidth: leftMaxW),
+            _buildAIHand(hand, isRight: false),
             const SizedBox(height: aiHandToMeldGap),
           ],
           if (melds.isNotEmpty) ...[
@@ -682,7 +686,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hand.isNotEmpty) ...[
-            _buildAIHandBacks(hand.length, isRight: true, maxWidth: rightMaxW),
+            _buildAIHand(hand, isRight: true),
             const SizedBox(height: aiHandToMeldGap),
           ],
           if (melds.isNotEmpty) ...[
@@ -722,39 +726,80 @@ class _ReplayScreenState extends State<ReplayScreen> {
     );
   }
 
-  /// AI玩家手牌背面 - 与GameBoard._renderPlayerAIHand一致
-  /// 卡牌折叠显示，每张牌偏移aiHandStackVisible(15px)
-  Widget _buildAIHandBacks(int count, {required bool isRight, required double maxWidth}) {
-    if (count <= 0) return const SizedBox.shrink();
-    final totalWidth = (count - 1) * aiHandStackVisible + meldCardW;
-    double step;
-    if (totalWidth <= maxWidth) {
-      step = aiHandStackVisible;
-    } else {
-      step = (maxWidth - meldCardW) / (count - 1);
+  /// AI玩家手牌正面显示 - 与GameBoard._renderAIHand一致
+  /// 按sentence分组，同字竖向叠放(偏移40px)，组间水平间距0px
+  Widget _buildAIHand(List<Card> cards, {required bool isRight}) {
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    // 按sentence分组
+    final sentenceGroups = <int, List<Card>>{};
+    for (final card in cards) {
+      sentenceGroups.putIfAbsent(card.sentence, () => []).add(card);
     }
-    final actualWidth = (count - 1) * step + meldCardW;
-    return SizedBox(
-      width: actualWidth,
-      height: meldCardH,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (int i = 0; i < count; i++)
-            Positioned(
-              left: isRight ? (count - 1 - i) * step : i * step,
-              top: 0,
-              child: _buildCardBack(),
-            ),
+    final sortedSentences = sentenceGroups.keys.toList()..sort();
+
+    final List<Widget> sentenceWidgets = [];
+    for (final sKey in sortedSentences) {
+      final group = sentenceGroups[sKey]!;
+      // 按字分组叠放
+      final charGroups = <String, List<Card>>{};
+      for (final c in group) {
+        charGroups.putIfAbsent(c.character, () => []).add(c);
+      }
+      // 按position排序
+      final sortedChars = charGroups.keys.toList()
+        ..sort((a, b) {
+          final pa = charGroups[a]!.first.position;
+          final pb = charGroups[b]!.first.position;
+          return pa.compareTo(pb);
+        });
+
+      final List<Widget> stackWidgets = [];
+      for (int ci = 0; ci < sortedChars.length; ci++) {
+        final chars = charGroups[sortedChars[ci]]!;
+        stackWidgets.add(
+          Positioned(
+            top: ci * aiHandStackVisibleFace,
+            left: 0,
+            child: _buildAIHandCard(chars[0], chars.length),
+          ),
+        );
+      }
+
+      final maxStack = sortedChars.length;
+      final groupH = maxStack > 0
+          ? (maxStack - 1) * aiHandStackVisibleFace + aiHandCardH
+          : 0.0;
+
+      sentenceWidgets.add(
+        SizedBox(
+          width: aiHandCardW,
+          height: groupH,
+          child: Stack(clipBehavior: Clip.none, children: stackWidgets),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        for (int i = 0; i < sentenceWidgets.length; i++) ...[
+          if (i > 0) const SizedBox(width: aiHandSentenceGap),
+          sentenceWidgets[i],
         ],
-      ),
+      ],
     );
   }
 
-  Widget _buildCardBack() {
+  /// AI玩家手牌单张卡牌 - 使用手牌图片缩放显示，多张时显示数量徽章
+  Widget _buildAIHandCard(Card card, int stackCount) {
+    final pinyin = AtlasLoader.charToPinyin[card.character];
+    final badgeR = aiHandCardW * 0.35;
     return Container(
-      width: meldCardW,
-      height: meldCardH,
+      width: aiHandCardW,
+      height: aiHandCardH,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(3),
         boxShadow: [
@@ -766,11 +811,41 @@ class _ReplayScreenState extends State<ReplayScreen> {
         ],
       ),
       clipBehavior: Clip.hardEdge,
-      child: Image.asset(
-        'assets/html/images/back.png',
-        width: meldCardW,
-        height: meldCardH,
-        fit: BoxFit.fill,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (pinyin != null)
+            Image.asset(
+              'assets/html/images/$pinyin.png',
+              width: aiHandCardW,
+              height: aiHandCardH,
+              fit: BoxFit.fill,
+            )
+          else
+            Container(color: Colors.white),
+          if (stackCount > 1)
+            Positioned(
+              left: aiHandCardW - badgeR * 2,
+              top: 0,
+              child: Container(
+                width: badgeR * 2,
+                height: badgeR * 2,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF4444),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$stackCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: badgeR * 0.9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
