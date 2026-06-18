@@ -2687,8 +2687,22 @@ class AIStrategyHard extends AIStrategy {
             ]);
             if (distAfter > distBefore) return false;
           }
+        } else {
+          // 缺失字多(>2)，重组容易，但仍需评估碰后听牌距离
+          // 破坏完整句的代价较高，碰后距离不能增加
+          if (!tingCheck.isTing) {
+            final distBefore = _distanceToTing(
+              List<Card>.from(hand),
+              player.melds,
+            );
+            final distAfter = _distanceToTing(testHandCheck, [
+              ...player.melds,
+              newMeldCheck,
+            ]);
+            // 破坏句后距离增加，不碰
+            if (distAfter > distBefore) return false;
+          }
         }
-        // 缺失字多(>2)，重组容易，按正常逻辑判断
       }
 
       final testHand = List<Card>.from(hand);
@@ -2766,22 +2780,9 @@ class AIStrategyHard extends AIStrategy {
       // 碰后进张数减少太多时不碰
       if (entryAfterPeng < entryBefore * 0.7) return false;
 
-      // 判断是否马上轮到自己摸牌（出牌玩家是自己的上家）
-      // 出牌顺序逆时针：下一个摸牌玩家 = (lastDiscardPlayerIndex + 1) % 3
-      // 如果马上轮到自己摸牌，碰牌的"抢先"价值为0，门槛应更高
-      final isNextToDraw = state.lastDiscardPlayerIndex != null &&
-          (state.lastDiscardPlayerIndex! + 1) % 3 == player.id;
-
       // 碰牌增加面子，倾向碰（放宽条件：手牌<=14即可）
       // 截胡策略：对手快听牌时更积极碰
       if (opponentNearTing) return true;
-
-      // 马上轮到自己摸牌时，不碰（不碰也能摸牌，碰牌反而暴露信息）
-      // 除非碰后手牌很少（<=12），结构明显改善
-      if (isNextToDraw) {
-        return testHand.length <= 12;
-      }
-
       return testHand.length <= 14;
     }
 
