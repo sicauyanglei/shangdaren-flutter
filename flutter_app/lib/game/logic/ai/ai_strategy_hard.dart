@@ -526,20 +526,35 @@ class AIStrategyHard extends AIStrategy {
     // 评估吃牌前被消耗的牌在其他组合中的价值
     double consumptionCost = 0;
     final visibleCount = _buildVisibleCharCount(player, state);
+
+    // 一次性提取手牌的所有组合，避免重复计算
+    final handRemaining0 = List<Card>.from(hand);
+    final handASet0 = <Meld>[];
+    final handCSet0 = <Meld>[];
+    HuCalculator.extractJu(handRemaining0, handASet0);
+    HuCalculator.extractKan(handRemaining0, handCSet0);
+
     for (final ch in neededChars) {
       final chCount = hand.where((c) => c.character == ch).length;
 
       // 检查该字是否参与了已有的句组合
-      final handRemaining = List<Card>.from(hand);
-      final handASet = <Meld>[];
-      HuCalculator.extractJu(handRemaining, handASet);
-      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
+      final inJu =
+          handASet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         consumptionCost += 80;
       }
 
+      // 检查该字是否参与了已有的坎组合（3张同字）
+      // 吃掉1张会破坏坎，坎在手牌=3胡，损失很大
+      final inKan =
+          handCSet0.any((m) => m.cards.any((c) => c.character == ch));
+      if (inKan) {
+        // 破坏坎的代价：3胡损失 + 重组困难
+        consumptionCost += 100;
+      }
+
       // 检查该字是否有对子，吃掉会破坏对子
-      if (chCount >= 2 && !inJu) {
+      if (chCount >= 2 && !inJu && !inKan) {
         final rem = _remainingCount(ch, visibleCount);
         consumptionCost += 20 + rem * 5;
       }
@@ -551,7 +566,7 @@ class AIStrategyHard extends AIStrategy {
       if (sameGroupInHand.isNotEmpty && chCount < 2) {
         consumptionCost += 30;
       }
-      if (chCount >= 2) {
+      if (chCount >= 2 && !inKan) {
         consumptionCost -= 20;
       }
 
@@ -657,21 +672,36 @@ class AIStrategyHard extends AIStrategy {
     // 评估吃牌前被消耗的牌在其他组合中的价值
     double consumptionCost = 0;
     final visibleCount = _buildVisibleCharCount(player, state);
+
+    // 一次性提取手牌的所有组合，避免重复计算
+    final handRemaining0 = List<Card>.from(hand);
+    final handASet0 = <Meld>[];
+    final handCSet0 = <Meld>[];
+    HuCalculator.extractJu(handRemaining0, handASet0);
+    HuCalculator.extractKan(handRemaining0, handCSet0);
+
     for (final ch in neededChars) {
       final chCount = hand.where((c) => c.character == ch).length;
 
       // 检查该字是否参与了已有的句组合
-      final handRemaining = List<Card>.from(hand);
-      final handASet = <Meld>[];
-      HuCalculator.extractJu(handRemaining, handASet);
-      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
+      final inJu =
+          handASet0.any((m) => m.cards.any((c) => c.character == ch));
       if (inJu) {
         // 吃牌破坏了已有的句，代价很高
         consumptionCost += 80;
       }
 
+      // 检查该字是否参与了已有的坎组合（3张同字）
+      // 吃掉1张会破坏坎，坎在手牌=3胡，损失很大
+      final inKan =
+          handCSet0.any((m) => m.cards.any((c) => c.character == ch));
+      if (inKan) {
+        // 破坏坎的代价：3胡损失 + 重组困难
+        consumptionCost += 100;
+      }
+
       // 检查该字是否有对子，吃掉会破坏对子
-      if (chCount >= 2 && !inJu) {
+      if (chCount >= 2 && !inJu && !inKan) {
         // 对子被吃掉1张变单张，损失对子价值
         final rem = _remainingCount(ch, visibleCount);
         // 对子变坎的进张数，如果进张多损失更大
@@ -686,7 +716,7 @@ class AIStrategyHard extends AIStrategy {
         consumptionCost += 30;
       }
       // 如果该字在手牌中有2张以上，吃掉1张损失较小
-      if (chCount >= 2) {
+      if (chCount >= 2 && !inKan) {
         consumptionCost -= 20;
       }
 
@@ -2445,7 +2475,24 @@ class AIStrategyHard extends AIStrategy {
 
     if (bestBenefit < 0) return false;
 
+    // 吃后听牌（bestBenefit>=10000）时允许吃
     if (player.isTing) return bestBenefit >= 10000;
+
+    // 破坏完整句保护：吃牌会破坏手牌中已有的完整句（3种字都有）时，
+    // 除非吃后听牌，否则不吃
+    if (bestBenefit < 10000) {
+      final cardSentence = card.sentence;
+      final sentenceChars = player.hand
+          .where((c) => c.sentence == cardSentence)
+          .map((c) => c.character)
+          .toSet();
+      // 手牌中该组3种字都有=完整句，吃牌会消耗其中2种，破坏句
+      if (sentenceChars.length == 3) {
+        // 检查吃后是否听牌（bestBenefit>=10000表示听牌）
+        // 已经在上方判断过bestBenefit<10000，所以这里不吃
+        return false;
+      }
+    }
 
     // 截胡策略：其他玩家快听牌时，更积极吃牌加速自己
     if (_hasOpponentNearTing(state, player.id)) {
@@ -2867,10 +2914,15 @@ class AIStrategyHard extends AIStrategy {
     // 19张牌时不能招自己手牌上的4张同字牌
     if (!_canZhaoFromHand(player, character)) return false;
 
-    return _evaluateZhaoBenefit(player, character, state);
+    return _evaluateZhaoBenefit(player, character, state, isFromHand: true);
   }
 
-  bool _evaluateZhaoBenefit(Player player, String character, GameState state) {
+  bool _evaluateZhaoBenefit(
+    Player player,
+    String character,
+    GameState state, {
+    bool isFromHand = false,
+  }) {
     final hand = player.hand;
     final sameCharCount = hand.where((c) => c.character == character).length;
 
@@ -3084,12 +3136,12 @@ class AIStrategyHard extends AIStrategy {
     }
 
     // sameCharCount == 3: 手牌中有3张同字
-    // 如果是shouldZhao（别人出牌），3张+别人1张=4张，可以招
-    // 如果是shouldZhaoFromHand（自己手牌），只有3张，不能招
-    // 这里无法区分调用来源，但shouldZhaoFromHand在sameCharCount==3时
-    // _canZhaoFromHand会返回true（不是4张），所以会进入这里
-    // 3张同字不能招，返回false
+    // shouldZhao（别人出牌）：3张+别人1张=4张，可以招（已在shouldZhao中单独处理）
+    // shouldZhaoFromHand（自己手牌）：只有3张，不能招（招需要4张）
     if (sameCharCount == 3) {
+      // isFromHand=true表示招自己手牌，3张不够，返回false
+      // isFromHand=false理论上不会走到这里（shouldZhao已处理==3的情况）
+      // 但作为安全兜底，也返回false
       return false;
     }
 
