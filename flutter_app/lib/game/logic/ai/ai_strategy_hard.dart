@@ -2743,6 +2743,114 @@ class AIStrategyHard extends AIStrategy {
     // 20张牌时不能招别人出的牌
     if (!_canOperate(player)) return false;
 
+    final hand = player.hand;
+    final sameCharCount = hand.where((c) => c.character == card.character).length;
+
+    // 别人出牌时，手牌3张+出牌1张=4张，可以招
+    // 这种情况_evaluateZhaoBenefit会因sameCharCount==3返回false
+    // 需要单独处理：模拟招牌后的效果
+    if (sameCharCount == 3) {
+      final testHand = List<Card>.from(hand);
+      final zhaoCards = testHand
+          .where((c) => c.character == card.character)
+          .take(3)
+          .toList();
+      for (final c in zhaoCards) {
+        testHand.remove(c);
+      }
+      // 招牌：4张同字移到组合牌区（手牌3张+出牌1张）
+      final newMeld = Meld(
+        cards: [card, ...zhaoCards],
+        type: MeldType.zhao,
+        isJing: card.isJing,
+      );
+      final testPlayer = Player(
+        id: player.id,
+        name: player.name,
+        type: player.type,
+        hand: testHand,
+        melds: [...player.melds, newMeld],
+      );
+      HuCalculator.updateMeldHuCache(testPlayer);
+
+      final tingAfter = _checkTingCached(testPlayer);
+      if (tingAfter.isTing) return true;
+      if (player.isTing && !tingAfter.isTing) return false;
+
+      final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
+      final distAfter = _distanceToTing(testHand, [...player.melds, newMeld]);
+      if (distAfter > distBefore + 1) return false;
+
+      // 比较招vs碰的胡数
+      final huZhao = _evaluateHuScore(testPlayer);
+
+      // 碰牌模拟：手牌取2张+出牌1张=3张坎
+      final pengHand = List<Card>.from(hand);
+      final pengCards = pengHand
+          .where((c) => c.character == card.character)
+          .take(2)
+          .toList();
+      for (final c in pengCards) {
+        pengHand.remove(c);
+      }
+      final pengMeld = Meld(
+        cards: [card, ...pengCards],
+        type: MeldType.kan,
+        isJing: card.isJing,
+      );
+      final pengPlayer = Player(
+        id: player.id,
+        name: player.name,
+        type: player.type,
+        hand: pengHand,
+        melds: [...player.melds, pengMeld],
+      );
+      HuCalculator.updateMeldHuCache(pengPlayer);
+      final huPeng = _evaluateHuScore(pengPlayer);
+      final distPeng = _distanceToTing(pengHand, [...player.melds, pengMeld]);
+
+      // 招比碰胡数更高或距离更短时，选择招
+      if (huZhao >= huPeng && distAfter <= distPeng) return true;
+      if (huZhao > huPeng + 4) return true;
+      if (distAfter < distPeng) return true;
+
+      // 招后补摸一张牌可能改善，倾向招
+      final visibleCount =
+          _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+      final totalUnknown =
+          _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+      double drawImproveProb = 0;
+      final handGroups = <int>{};
+      for (final c in testHand) {
+        handGroups.add(c.sentence);
+      }
+      for (final ch in _allChars) {
+        final sentence = _charSentenceMap[ch];
+        if (sentence == null || !handGroups.contains(sentence)) continue;
+        final rem = _remainingCount(ch, visibleCount);
+        if (rem <= 0 || totalUnknown <= 0) continue;
+        final prob = rem / totalUnknown;
+        final position = _charPositionMap[ch] ?? -1;
+        if (position < 0) continue;
+        final simHand = List<Card>.from(testHand)
+          ..add(
+            Card(
+              id: -100,
+              character: ch,
+              sentence: sentence,
+              position: position,
+            ),
+          );
+        final simDist = _distanceToTing(simHand, [...player.melds, newMeld]);
+        if (simDist < distAfter) {
+          drawImproveProb += prob * (distAfter - simDist);
+        }
+      }
+      if (drawImproveProb > 0.3) return true;
+
+      return false;
+    }
+
     return _evaluateZhaoBenefit(player, card.character, state);
   }
 
