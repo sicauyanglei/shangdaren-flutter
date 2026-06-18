@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>回放窗口界面展示</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: "Microsoft YaHei", sans-serif;
+  }
+  .replay-window {
+    width: 1280px;
+    height: 720px;
+    position: relative;
+    background: radial-gradient(ellipse at center, #1a5c2e 0%, #0d3d1a 50%, #062810 100%);
+    overflow: hidden;
+    transform-origin: top left;
+  }
+
+  /* 卡牌基础样式 */
+  .card {
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border-radius: 3px;
+    box-shadow: 1px 2px 3px rgba(0,0,0,0.4);
+    user-select: none;
+  }
+  .card-red { color: #CC0000; border: 1px solid #FF4444; }
+  .card-green { color: #006600; border: 1px solid #33BB33; }
+  .card-black { color: #333333; border: 1px solid #666666; }
+
+  /* 手牌（主视角）60x224 */
+  .hand-card {
+    width: 60px;
+    height: 224px;
+    font-size: 32px;
+    border-radius: 6px;
+    box-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+  }
+
+  /* AI手牌 43.2x179.2 */
+  .ai-hand-card {
+    width: 43.2px;
+    height: 179.2px;
+    font-size: 24px;
+    border-radius: 3px;
+    position: relative;
+  }
+  .ai-hand-card .badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 30px;
+    height: 30px;
+    background: #FF4444;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+  /* 弃牌 28x48 */
+  .discard-card {
+    width: 28px;
+    height: 48px;
+    font-size: 14px;
+    border-radius: 2px;
+  }
+
+  /* 组合牌 34x56 */
+  .meld-card {
+    width: 34px;
+    height: 56px;
+    font-size: 18px;
+    border-radius: 3px;
+  }
+
+  /* 头像区域 */
+  .avatar-area {
+    min-width: 250px;
+    padding: 14px 20px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 24px;
+    border: 2px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    position: relative;
+    border: 3px solid;
+  }
+  .avatar.dealer {
+    background: linear-gradient(135deg, #ffd700, #daa520);
+    border-color: #ffd700;
+    box-shadow: 0 0 15px rgba(255,215,0,0.7);
+    color: #333;
+  }
+  .avatar.female {
+    background: linear-gradient(135deg, #8b4789, #6a2c6a);
+    border-color: #b06aab;
+    color: #fff;
+  }
+  .avatar.male {
+    background: linear-gradient(135deg, #4a7c59, #2d5a3d);
+    border-color: #6b9b7a;
+    color: #fff;
+  }
+  .avatar-label {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 12px;
+    border-radius: 6px;
+    font-size: 16px;
+    color: #fff;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  .avatar-label.dealer { background: #ff6b6b; }
+  .avatar-label.idle { background: #4ecdc4; }
+  .player-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .player-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .player-name {
+    font-size: 24px;
+    font-weight: bold;
+    color: #fff;
+  }
+  .piao-badge {
+    padding: 4px 10px;
+    background: #ff6b6b;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .player-stats {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .stat-box {
+    display: flex;
+    align-items: center;
+    background: rgba(0,0,0,0.4);
+    border-radius: 8px;
+    padding: 2px 4px;
+  }
+  .stat-icon { font-size: 20px; margin: 0 2px; }
+  .stat-card-count { font-size: 24px; color: #ffd700; }
+  .stat-score { font-size: 24px; }
+  .stat-score.positive { color: #4ecdc4; }
+  .stat-score.negative { color: #ff6b6b; }
+
+  /* 布局区域 */
+  .player-area {
+    position: absolute;
+  }
+  .left-area { left: 9.6px; top: 4.8px; }
+  .right-area { right: 9.6px; top: 4.8px; }
+  .bottom-area { left: 10px; bottom: 5px; }
+
+  .melds-discards-area {
+    position: absolute;
+  }
+  .left-melds-discards { left: 9.6px; top: 118.8px; width: 340px; }
+  .right-melds-discards { right: 9.6px; top: 118.8px; width: 280px; }
+  .bottom-melds-discards { left: 10px; bottom: 118.8px; width: 340px; }
+
+  .melds-row {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 1px;
+  }
+  .meld-group {
+    display: flex;
+    position: relative;
+    margin-right: 2px;
+  }
+  .meld-group .meld-card {
+    margin-left: -17px;
+  }
+  .meld-group .meld-card:first-child {
+    margin-left: 0;
+  }
+  .discards-row {
+    display: flex;
+    gap: 1px;
+    margin-bottom: 0;
+  }
+  .discards-row .discard-card {
+    margin-left: 1px;
+  }
+  .discards-row .discard-card:first-child {
+    margin-left: 0;
+  }
+
+  .right-area .melds-row,
+  .right-area .discards-row,
+  .right-melds-discards .melds-row,
+  .right-melds-discards .discards-row {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+  }
+
+  /* 手牌区域 */
+  .hand-area {
+    display: flex;
+    gap: 2px;
+    align-items: flex-start;
+  }
+  .hand-sentence {
+    position: relative;
+    width: 60px;
+  }
+  .hand-sentence .hand-card {
+    position: absolute;
+    left: 0;
+  }
+
+  /* AI手牌区域 */
+  .ai-hand-area {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+  }
+  .ai-hand-sentence {
+    position: relative;
+    width: 43.2px;
+  }
+  .ai-hand-sentence .ai-hand-card {
+    position: absolute;
+    left: 0;
+  }
+
+  /* 状态文字 */
+  .status-text {
+    position: absolute;
+    top: 288px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.4);
+    padding: 4px 12px;
+    border-radius: 8px;
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+  }
+
+  /* 控制栏 */
+  .controls {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .controls-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .ctrl-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid;
+  }
+  .ctrl-btn.play {
+    background: rgba(78,205,196,0.2);
+    border-color: rgba(78,205,196,0.5);
+    color: #4ecdc4;
+  }
+  .ctrl-btn.speed {
+    padding: 4px 8px;
+  }
+  .ctrl-btn.speed.active {
+    background: rgba(255,215,0,0.3);
+    border-color: #ffd700;
+    color: #ffd700;
+    font-weight: bold;
+  }
+  .ctrl-btn.speed:not(.active) {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5);
+  }
+  .ctrl-btn.stop {
+    background: rgba(255,68,68,0.2);
+    border-color: rgba(255,68,68,0.5);
+    color: #FF4444;
+  }
+  .ctrl-btn.view {
+    padding: 4px 8px;
+  }
+  .ctrl-btn.view.active {
+    background: rgba(255,215,0,0.3);
+    border-color: #ffd700;
+    color: #ffd700;
+    font-weight: bold;
+  }
+  .ctrl-btn.view:not(.active) {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5);
+  }
+  .info-tag {
+    padding: 3px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: bold;
+    border: 1px solid;
+  }
+  .info-tag.round {
+    background: rgba(78,205,196,0.25);
+    border-color: rgba(78,205,196,0.6);
+    color: #4ecdc4;
+  }
+  .info-tag.replay {
+    background: rgba(255,68,68,0.25);
+    border-color: rgba(255,68,68,0.6);
+    color: #FF6666;
+  }
+
+  .label-section {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+<div class="replay-window" id="replayWindow">
+
+  <!-- 标题说明 -->
+  <div class="label-section">回放窗口界面展示（主视角：我）</div>
+
+  <!-- 左上 - 玩家1 头像 -->
+  <div class="player-area left-area">
+    <div class="avatar-area">
+      <div class="avatar male">
+        👨‍🌾
+        <div class="avatar-label idle">闲家</div>
+      </div>
+      <div class="player-info">
+        <div class="player-name-row">
+          <span class="player-name">玩家1</span>
+          <span class="piao-badge">飘2</span>
+        </div>
+        <div class="player-stats">
+          <div class="stat-box">
+            <span class="stat-icon">🃏</span>
+            <span class="stat-card-count">19</span>
+          </div>
+          <div class="stat-box" style="margin-left:2px;">
+            <span class="stat-icon">💰</span>
+            <span class="stat-score negative">-15</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 左上 - 玩家1 组合牌+弃牌+手牌 -->
+  <div class="melds-discards-area left-melds-discards">
+    <!-- AI手牌正面显示 -->
+    <div class="ai-hand-area" style="margin-bottom: 2px;">
+      <div class="ai-hand-sentence" style="height: 219.2px;">
+        <div class="card ai-hand-card card-red" style="top:0;">
+          上
+          <div class="badge">2</div>
+        </div>
+        <div class="card ai-hand-card card-red" style="top:40px;">大</div>
+        <div class="card ai-hand-card card-red" style="top:80px;">人</div>
+      </div>
+      <div class="ai-hand-sentence" style="height: 179.2px;">
+        <div class="card ai-hand-card card-black" style="top:0;">丘</div>
+        <div class="card ai-hand-card card-black" style="top:40px;">乙</div>
+      </div>
+      <div class="ai-hand-sentence" style="height: 179.2px;">
+        <div class="card ai-hand-card card-green" style="top:0;">化</div>
+      </div>
+    </div>
+    <!-- 组合牌 -->
+    <div class="melds-row" style="margin-top:2px;">
+      <div class="meld-group">
+        <div class="card meld-card card-red">上</div>
+        <div class="card meld-card card-red">大</div>
+        <div class="card meld-card card-red">人</div>
+      </div>
+      <div class="meld-group">
+        <div class="card meld-card card-black">丘</div>
+        <div class="card meld-card card-black">乙</div>
+        <div class="card meld-card card-black">己</div>
+      </div>
+    </div>
+    <!-- 弃牌 -->
+    <div class="discards-row" style="margin-top:1px;">
+      <div class="card discard-card card-red">福</div>
+      <div class="card discard-card card-green">三</div>
+      <div class="card discard-card card-black">九</div>
+      <div class="card discard-card card-red">禄</div>
+      <div class="card discard-card card-green">十</div>
+    </div>
+  </div>
+
+  <!-- 右上 - 玩家2 头像 -->
+  <div class="player-area right-area">
+    <div class="avatar-area">
+      <div class="avatar female dealer">
+        👩‍🌾
+        <div class="avatar-label dealer">庄家</div>
+      </div>
+      <div class="player-info">
+        <div class="player-name-row">
+          <span class="player-name">玩家2</span>
+        </div>
+        <div class="player-stats">
+          <div class="stat-box">
+            <span class="stat-icon">🃏</span>
+            <span class="stat-card-count">20</span>
+          </div>
+          <div class="stat-box" style="margin-left:2px;">
+            <span class="stat-icon">💰</span>
+            <span class="stat-score positive">+30</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右上 - 玩家2 组合牌+弃牌+手牌 -->
+  <div class="melds-discards-area right-melds-discards">
+    <!-- AI手牌正面显示（从右往左） -->
+    <div class="ai-hand-area" style="margin-bottom: 2px; flex-direction: row-reverse;">
+      <div class="ai-hand-sentence" style="height: 219.2px;">
+        <div class="card ai-hand-card card-red" style="top:0;">福</div>
+        <div class="card ai-hand-card card-red" style="top:40px;">
+          禄
+          <div class="badge">3</div>
+        </div>
+        <div class="card ai-hand-card card-red" style="top:80px;">寿</div>
+      </div>
+      <div class="ai-hand-sentence" style="height: 179.2px;">
+        <div class="card ai-hand-card card-black">佳</div>
+        <div class="card ai-hand-card card-black">作</div>
+      </div>
+    </div>
+    <!-- 组合牌（从右往左） -->
+    <div class="melds-row" style="margin-top:2px;">
+      <div class="meld-group">
+        <div class="card meld-card card-red">福</div>
+        <div class="card meld-card card-red">禄</div>
+        <div class="card meld-card card-red">寿</div>
+      </div>
+    </div>
+    <!-- 弃牌（从右往左） -->
+    <div class="discards-row" style="margin-top:1px;">
+      <div class="card discard-card card-green">千</div>
+      <div class="card discard-card card-black">子</div>
+      <div class="card discard-card card-red">大</div>
+      <div class="card discard-card card-green">七</div>
+    </div>
+  </div>
+
+  <!-- 底部 - 我 头像 -->
+  <div class="player-area bottom-area">
+    <div class="avatar-area">
+      <div class="avatar male">
+        👨‍🌾
+        <div class="avatar-label idle">闲家</div>
+      </div>
+      <div class="player-info">
+        <div class="player-name-row">
+          <span class="player-name">我</span>
+          <span class="piao-badge">飘1</span>
+        </div>
+        <div class="player-stats">
+          <div class="stat-box">
+            <span class="stat-icon">🃏</span>
+            <span class="stat-card-count">20</span>
+          </div>
+          <div class="stat-box" style="margin-left:2px;">
+            <span class="stat-icon">💰</span>
+            <span class="stat-score negative">-15</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部 - 我 组合牌+弃牌+手牌 -->
+  <div class="melds-discards-area bottom-melds-discards">
+    <!-- 弃牌在上方 -->
+    <div class="discards-row">
+      <div class="card discard-card card-red">上</div>
+      <div class="card discard-card card-green">三</div>
+      <div class="card discard-card card-black">己</div>
+      <div class="card discard-card card-red">寿</div>
+      <div class="card discard-card card-green">土</div>
+      <div class="card discard-card card-black">八</div>
+    </div>
+    <!-- 组合牌 -->
+    <div class="melds-row" style="margin-top:1px;">
+      <div class="meld-group">
+        <div class="card meld-card card-green">化</div>
+        <div class="card meld-card card-green">三</div>
+        <div class="card meld-card card-green">千</div>
+      </div>
+      <div class="meld-group">
+        <div class="card meld-card card-black">尔</div>
+        <div class="card meld-card card-black">小</div>
+        <div class="card meld-card card-black">生</div>
+      </div>
+    </div>
+    <!-- 手牌 -->
+    <div class="hand-area" style="margin-top:2px;">
+      <div class="hand-sentence" style="height: 288px;">
+        <div class="card hand-card card-red" style="top:0;">上</div>
+        <div class="card hand-card card-red" style="top:64px;">
+          大
+          <div class="badge" style="width:36px;height:36px;font-size:20px;background:#FF4444;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;position:absolute;top:2px;right:2px;">2</div>
+        </div>
+        <div class="card hand-card card-red" style="top:128px;">人</div>
+      </div>
+      <div class="hand-sentence" style="height: 224px;">
+        <div class="card hand-card card-black" style="top:0;">丘</div>
+        <div class="card hand-card card-black" style="top:64px;">乙</div>
+      </div>
+      <div class="hand-sentence" style="height: 224px;">
+        <div class="card hand-card card-green" style="top:0;">七</div>
+        <div class="card hand-card card-green" style="top:64px;">十</div>
+      </div>
+      <div class="hand-sentence" style="height: 160px;">
+        <div class="card hand-card card-black">九</div>
+      </div>
+      <div class="hand-sentence" style="height: 160px;">
+        <div class="card hand-card card-red">福</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态文字 -->
+  <div class="status-text">玩家2 出牌 - 15/48</div>
+
+  <!-- 控制栏 -->
+  <div class="controls">
+    <div class="controls-row">
+      <div class="ctrl-btn play">
+        <span>▶</span> 播放
+      </div>
+      <div class="ctrl-btn speed">1x</div>
+      <div class="ctrl-btn speed active">2x</div>
+      <div class="ctrl-btn speed">3x</div>
+      <div class="ctrl-btn stop">
+        <span>■</span> 结束
+      </div>
+    </div>
+    <div class="controls-row">
+      <div class="ctrl-btn view">玩家1</div>
+      <div class="ctrl-btn view active">我</div>
+      <div class="ctrl-btn view">玩家2</div>
+      <div class="info-tag round">第3局</div>
+      <div class="info-tag replay">回放模式</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // 自适应缩放
+  function fitWindow() {
+    const win = document.getElementById('replayWindow');
+    const scaleX = window.innerWidth / 1280;
+    const scaleY = window.innerHeight / 720;
+    const scale = Math.min(scaleX, scaleY);
+    win.style.transform = `scale(${scale})`;
+  }
+  window.addEventListener('resize', fitWindow);
+  fitWindow();
+</script>
+</body>
+</html>
