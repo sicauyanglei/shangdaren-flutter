@@ -1402,15 +1402,27 @@ class AIStrategyHard extends AIStrategy {
           .map((c) => c.character)
           .toSet();
       if (discardGroupCharSet.length == 3) {
-        // 出牌前该组是完整句
+        // 出牌前该组有3种不同字，需判断是"完整句"还是"坎/招+靠"结构
+        // 检查组内是否有坎/招（3张或4张同字）
+        final groupCharCountForJu = <String, int>{};
+        for (final c in discardGroupCards) {
+          groupCharCountForJu[c.character] =
+              (groupCharCountForJu[c.character] ?? 0) + 1;
+        }
+        final hasKanOrZhaoInGroup =
+            groupCharCountForJu.values.any((cnt) => cnt >= 3);
         // 检查出的牌在该组中是否有冗余（2张以上）
         final discardCountInGroup = discardGroupCards
             .where((c) => c.character == cardToDiscard.character)
             .length;
-        if (discardCountInGroup >= 2) {
-          // 出的牌有冗余，出1张后句仍然完整，不惩罚
+        if (hasKanOrZhaoInGroup) {
+          // 坎/招+靠结构（如佳佳佳作亡），不是完整句
+          // 出单张不会破坏句（本来就没有句），只把靠变单张，不惩罚
+          // 出坎/招中的牌会破坏坎/招，由胡数损失惩罚处理
+        } else if (discardCountInGroup >= 2) {
+          // 真正的完整句，出的牌有冗余，出1张后句仍然完整，不惩罚
         } else {
-          // 出的牌只有1张，出牌后会破坏句
+          // 真正的完整句，出的牌只有1张，出牌后会破坏句
           // 惩罚力度：距离越近越不应该拆句
           if (quickDist <= 2) {
             score -= 300;
@@ -1619,6 +1631,9 @@ class AIStrategyHard extends AIStrategy {
         if (discardGroupCharSet.length == 1) {
           score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
+          // 检查组内是否有坎/招（3张或4张同字）
+          final hasKanOrZhaoInGroup =
+              groupCharCount.values.any((cnt) => cnt >= 3);
           if (discardCountInGroup >= 2) {
             // 检查是否所有字都有2张（如七七十十生生）
             // 这种情况出任何一张是拆对子，不是"句多一张"
@@ -1641,7 +1656,12 @@ class AIStrategyHard extends AIStrategy {
                 score += 120; // 普句多一张
               }
             }
+          } else if (hasKanOrZhaoInGroup) {
+            // 坎/招+靠结构（如佳佳佳作亡），出靠中的单张
+            // 保留坎/招的胡数，出单张是正确策略，与出孤张同等优先
+            score += 200;
           }
+          // else: 真正的句，出单张会破坏句，不加分（由破坏句惩罚控制）
         } else if (discardGroupCharSet.length == 2) {
           if (!hasPairInGroup) {
             // 普靠：不加分，靠破坏靠惩罚控制
