@@ -1060,6 +1060,9 @@ class AIStrategyHard extends AIStrategy {
         continue;
       }
       if (_isPartOfKan(card, hand)) {
+        // 手牌中3张同字（手牌坎），出1张变对子，损失3胡
+        // 不完全禁止，让huLoss惩罚覆盖3胡损失
+        // 特殊情况下可出（如出该牌能保留精句，比出其他牌破坏精句更优时）
         // 十对路线中，坎的字牌剩余为0时（无法变招），允许拆坎变对子
         if (shiDuiPotential > 0) {
           final kanRem = _remainingCount(card.character, visibleCount);
@@ -1070,8 +1073,16 @@ class AIStrategyHard extends AIStrategy {
             continue;
           }
         } else {
-          scored.add(MapEntry(card, -5000));
-          continue;
+          // 非十对路线：手牌坎出1张变对子，不跳过
+          // huLoss惩罚（3胡*50=150分）已覆盖损失，继续评估
+          final cc = _cachedCharCount ?? _buildCharCount(hand);
+          final charCount = cc[card.character] ?? 0;
+          if (charCount > 3) {
+            // 4张以上由_isPartOfZhao处理，此处不应到达
+            scored.add(MapEntry(card, -5000));
+            continue;
+          }
+          // charCount == 3：手牌坎，继续评估
         }
       }
 
@@ -1602,32 +1613,39 @@ class AIStrategyHard extends AIStrategy {
             // 普靠：不加分，靠破坏靠惩罚控制
           } else {
             // 对子+靠：保留对子，出靠的单张
+            // 对子+靠：检查对子的剩余张数，判断是否为"死对子"
+            final pairChar = groupCharCount.entries
+                .firstWhere((e) => e.value >= 2)
+                .key;
+            final pairRem = _remainingCount(pairChar, visibleCount);
             if (discardCountInGroup == 1) {
-              // 检查该靠是否有精句潜力(门1/8，缺失字是精字上/福)
-              // 或当前靠本身是精靠(含上/福)，出精字不仅破坏靠还损失精靠4胡
-              final missingChars = _groupChars[discardGroup - 1]
-                  .where((ch) => !discardGroupCharSet.contains(ch))
-                  .toList();
-              final isJingJuKao =
-                  (discardGroup == 1 || discardGroup == 8) &&
-                  missingChars.any((ch) => ch == '上' || ch == '福');
-              final isJingKao =
-                  (discardGroup == 1 || discardGroup == 8) &&
-                  discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
-              if (isJingJuKao || isJingKao) {
-                // 精句潜力靠或精靠的单张，施加惩罚保护
-                // 此处已在 huBefore < 11 块内，胡数不足时精句/精靠4胡尤其珍贵
-                score -= 150;
+              // 出靠的单张，保留对子
+              if (pairRem > 0) {
+                // 检查该靠是否有精句潜力(门1/8，缺失字是精字上/福)
+                // 或当前靠本身是精靠(含上/福)，出精字不仅破坏靠还损失精靠4胡
+                final missingChars = _groupChars[discardGroup - 1]
+                    .where((ch) => !discardGroupCharSet.contains(ch))
+                    .toList();
+                final isJingJuKao =
+                    (discardGroup == 1 || discardGroup == 8) &&
+                    missingChars.any((ch) => ch == '上' || ch == '福');
+                final isJingKao =
+                    (discardGroup == 1 || discardGroup == 8) &&
+                    discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
+                if (isJingJuKao || isJingKao) {
+                  // 精句潜力靠或精靠的单张，施加惩罚保护
+                  // 此处已在 huBefore < 11 块内，胡数不足时精句/精靠4胡尤其珍贵
+                  score -= 150;
+                } else {
+                  score += 60;
+                }
               } else {
-                score += 60;
+                // 对子剩余为0（死对子），保留它无碰坎价值
+                // 出靠单张保留死对子不加分，反而应该拆死对子
+                score -= 30;
               }
             } else {
               // discardCountInGroup >= 2：拆对子
-              // 检查对子的字是否还有剩余张数（能否碰成坎获胡数）
-              final pairRem = _remainingCount(
-                cardToDiscard.character,
-                visibleCount,
-              );
               if (pairRem > 0) {
                 // 对子可以碰成坎获得胡数
                 // 胡数越少，拆对子越不划算（依赖胡数的胡牌类型）
@@ -1636,8 +1654,11 @@ class AIStrategyHard extends AIStrategy {
                     ? 3.0
                     : (huBefore < 11 ? 2.0 : 1.0);
                 score -= (120 * huWeight).roundToDouble();
+              } else {
+                // 死对子（剩余0张），无法碰成坎，保留无意义
+                // 拆死对子加分，优先打出
+                score += 80;
               }
-              // pairRem == 0 时无法碰成坎，拆对子不惩罚
             }
           }
         }
@@ -1672,12 +1693,27 @@ class AIStrategyHard extends AIStrategy {
         score += 200;
       } else if (discardGroupCharSet.length == 2) {
         if (hasPairInGroup) {
+          // 检查对子是否为死对子（剩余0张，无法碰成坎）
+          final pairChar = groupCharCount.entries
+              .firstWhere((e) => e.value >= 2)
+              .key;
+          final pairRem = _remainingCount(pairChar, visibleCount);
           if (discardCountInGroup == 1) {
             // 对子+单张：出单张，保留对子
-            score += 150;
+            if (pairRem > 0) {
+              score += 150;
+            } else {
+              // 死对子，保留无碰坎价值，不加分
+              score += 20;
+            }
           } else {
-            // 拆对子：惩罚（对子可碰成坎获胡数）
-            score -= 100;
+            // 拆对子
+            if (pairRem > 0) {
+              score -= 100; // 惩罚（对子可碰成坎获胡数）
+            } else {
+              // 死对子，拆掉不惩罚，反而加分
+              score += 80;
+            }
           }
         } else {
           // 普靠：出一张变孤张
@@ -3400,7 +3436,11 @@ class AIStrategyHard extends AIStrategy {
       if (tingAfter.isTing) return true;
       if (player.isTing && !tingAfter.isTing) return false;
 
-      final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
+      // 碰牌后十对路线不可用（melds不为空），碰前距离应使用普通路线距离比较
+      // 避免十对距离(较小)与普通距离(较大)的不公平比较导致不碰
+      final distBefore = _currentShiDuiEnabled && player.melds.isEmpty
+          ? _distanceToTingNormal(List<Card>.from(hand), player.melds)
+          : _distanceToTing(List<Card>.from(hand), player.melds);
       final newMelds = [...player.melds, newMeld];
       final (_, distAfterDiscard) = _findBestDiscardAfterMeld(
         testHand,
