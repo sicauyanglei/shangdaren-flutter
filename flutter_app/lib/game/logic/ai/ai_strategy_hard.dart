@@ -1322,26 +1322,40 @@ class AIStrategyHard extends AIStrategy {
         }
       } else if (discardGroupCharSet.length == 2) {
         // 出牌前该组有2种不同字，可能是靠或对子+单张
-        // 只有真正的靠(2种字各1张，无对子)出单张才破坏靠
-        final hasPairInGroup = discardGroupCharSet.any(
-          (ch) => discardGroupCards.where((c) => c.character == ch).length >= 2,
-        );
-        if (!hasPairInGroup) {
-          final discardCountInGroup = discardGroupCards
-              .where((c) => c.character == cardToDiscard.character)
-              .length;
-          if (discardCountInGroup == 1) {
-            // 出这张牌会破坏靠，检查缺失字的剩余张数
-            final missingChars = _groupChars[discardGroup - 1]
-                .where((ch) => !discardGroupCharSet.contains(ch))
-                .toList();
-            int missingRem = 0;
-            for (final ch in missingChars) {
-              missingRem += _remainingCount(ch, visibleCount);
-            }
-            if (missingRem > 0) {
-              // 靠有进张价值(能摸缺字成句)，破坏它有代价
-              // 惩罚力度：距离越近越不应该拆靠
+        final discardCountInGroup = discardGroupCards
+            .where((c) => c.character == cardToDiscard.character)
+            .length;
+        // 出靠的单张(discardCountInGroup==1)会破坏靠，无论是否有对子
+        // 纯靠(无对子)或对子+靠(有对子)出单张都破坏靠
+        final breaksKao = discardCountInGroup == 1;
+        if (breaksKao) {
+          // 出这张牌会破坏靠，检查缺失字的剩余张数
+          final missingChars = _groupChars[discardGroup - 1]
+              .where((ch) => !discardGroupCharSet.contains(ch))
+              .toList();
+          int missingRem = 0;
+          for (final ch in missingChars) {
+            missingRem += _remainingCount(ch, visibleCount);
+          }
+          if (missingRem > 0) {
+            // 判断靠的进张目标价值：精句(4胡) vs 普句(0胡)
+            // 门1(上大人)/门8(福禄寿)中，缺失字是精字(上/福)→进张成精句
+            final isJingJuKao = (discardGroup == 1 || discardGroup == 8) &&
+                missingChars.any((ch) => ch == '上' || ch == '福');
+            if (isJingJuKao) {
+              // 精句潜力靠(进张+4胡)，破坏代价更大
+              // 胡数不足时尤其应该保护
+              final huBefore = _evaluateHuScore(player);
+              final huWeight = huBefore < 11 ? 1.5 : 1.0;
+              if (quickDist <= 2) {
+                score -= (250 + missingRem * 25) * huWeight;
+              } else if (quickDist <= 4) {
+                score -= (200 + missingRem * 20) * huWeight;
+              } else {
+                score -= (150 + missingRem * 15) * huWeight;
+              }
+            } else {
+              // 普句靠(进张+0胡)，破坏代价较小
               if (quickDist <= 2) {
                 score -= 200 + missingRem * 20;
               } else if (quickDist <= 4) {
@@ -1409,11 +1423,7 @@ class AIStrategyHard extends AIStrategy {
       } else if (isHeiYuan) {
         // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
         if (discardGroupCharSet.length == 1) {
-          if (discardCountInGroup == 1) {
-            score += 200; // 真正的孤张最优先
-          } else if (discardCountInGroup >= 2) {
-            score += 100; // 优先拆对子
-          }
+          score += 200; // 孤张最优先
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
@@ -1433,16 +1443,10 @@ class AIStrategyHard extends AIStrategy {
         // 红元路线：组1/组8句优先保留，优先出非组1/8的孤张
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
         if (discardGroupCharSet.length == 1) {
-          if (discardCountInGroup == 1) {
-            // 真正的孤张
-            if (isGroup18) {
-              score += 100; // 组1/8孤张，仍可凑句，次优
-            } else {
-              score += 200; // 非组1/8孤张，最优先
-            }
-          } else if (discardCountInGroup >= 2) {
-            // 对子，红元路线保留对子
-            score -= 30;
+          if (isGroup18) {
+            score += 100; // 组1/8孤张，仍可凑句，次优
+          } else {
+            score += 200; // 非组1/8孤张，最优先
           }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
@@ -1487,45 +1491,7 @@ class AIStrategyHard extends AIStrategy {
       } else {
         // 默认普通胡牌路线：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
         if (discardGroupCharSet.length == 1) {
-          // 注意：length==1不一定是孤张，可能是对子(2张同字)或坎(3张同字)
-          if (discardCountInGroup == 1) {
-            // 真正的孤张，按类型差异化评分
-            // 精单(上/福)：4胡，可组精句/精靠/金对，价值最高，最不应出
-            // 银单(大/人/禄/寿)：0胡但可组精句(门1/8)/银靠/银对，价值次之
-            // 普单(门2-7非精非银)：0胡，仅能组普句/普靠/普对，价值最低，最优先出
-            if (cardToDiscard.character == '上' ||
-                cardToDiscard.character == '福') {
-              score -= 100; // 精单孤张，保留优先
-            } else if (_isYin(cardToDiscard)) {
-              // 银单：门1/8有精句潜力，保留；门2-7无精句潜力，次优先出
-              if (discardGroup == 1 || discardGroup == 8) {
-                score += 50; // 门1/8银单，保留次之
-              } else {
-                score += 150; // 门2-7银单(实际门2-7无银字，此分支不会命中)
-              }
-            } else {
-              // 普单：最优先出
-              // 进一步区分：同组其他字剩余多则价值高(可进张组句)，剩余少则价值低
-              final otherChars = _groupChars[discardGroup - 1]
-                  .where((ch) => ch != cardToDiscard.character)
-                  .toList();
-              int partnerRem = 0;
-              for (final ch in otherChars) {
-                partnerRem += _remainingCount(ch, visibleCount);
-              }
-              if (partnerRem == 0) {
-                score += 250; // 无进张可能的死孤张，最优先出
-              } else if (partnerRem <= 2) {
-                score += 220; // 进张少的孤张，优先出
-              } else {
-                score += 180; // 有进张潜力的孤张，稍后出
-              }
-            }
-          } else if (discardCountInGroup >= 2) {
-            // 对子或坎，出牌会破坏对子/坎，不加分
-            // 对子价值由_evaluateHandPotentialAndDistance中的对子评分体现
-            score -= 50; // 破坏对子/坎的惩罚
-          }
+          score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
@@ -1536,7 +1502,20 @@ class AIStrategyHard extends AIStrategy {
           } else {
             // 对子+靠：保留对子，出靠的单张
             if (discardCountInGroup == 1) {
-              score += 60;
+              // 检查该靠是否有精句潜力(门1/8，缺失字是精字上/福)
+              // 有精句潜力的银靠单张不应打出(进张+4胡，胡数不足时尤其珍贵)
+              final missingChars = _groupChars[discardGroup - 1]
+                  .where((ch) => !discardGroupCharSet.contains(ch))
+                  .toList();
+              final isJingJuKao = (discardGroup == 1 || discardGroup == 8) &&
+                  missingChars.any((ch) => ch == '上' || ch == '福');
+              if (isJingJuKao) {
+                // 精句潜力靠的单张，施加惩罚保护
+                // 此处已在 huBefore < 11 块内，胡数不足时精句4胡尤其珍贵
+                score -= 150;
+              } else {
+                score += 60;
+              }
             }
           }
         }
