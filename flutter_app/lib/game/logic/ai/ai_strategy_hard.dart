@@ -283,7 +283,6 @@ class AIStrategyHard extends AIStrategy {
 
   /// 评估黑元路线潜力：返回>0表示有黑元潜力
   /// 黑元条件：无碰无招（或招但effectiveHasZhao=false），且所有牌都不属于组1/组8，且无"上"/"福"
-  /// 主动黑元策略：发牌后门1+门8张数<=3且总胡数<=4胡时，主动追求黑元，优先清理门1/8牌
   double _evaluateHeiYuanPotential(Player player) {
     // 有碰则不能黑元
     final hasPeng = player.melds.any((m) => m.type == MeldType.kan);
@@ -291,54 +290,24 @@ class AIStrategyHard extends AIStrategy {
 
     // 检查所有牌（手牌+组合牌）是否都属于组2-7，且无"上"/"福"
     final allCards = [...player.hand, ...player.melds.expand((m) => m.cards)];
-    bool hasGroup18 = false;
-    int group18Count = 0;
     for (final c in allCards) {
-      if (c.sentence == 1 || c.sentence == 8) {
-        hasGroup18 = true;
-        group18Count++;
-      }
-      if (c.character == '上' || c.character == '福') {
-        // 有精字，检查是否还能清理
-      }
+      if (c.sentence == 1 || c.sentence == 8) return -1;
+      if (c.character == '上' || c.character == '福') return -1;
     }
 
-    // 满足黑元路线的基本条件（无门1/8牌），返回一个正值表示有潜力
+    // 满足黑元路线的基本条件，返回一个正值表示有潜力
     // 潜力值与已有句数相关，越多句潜力越大
-    if (!hasGroup18) {
-      int sentenceCount = 0;
-      for (final meld in player.melds) {
-        if (meld.type == MeldType.ju) sentenceCount++;
-      }
-      // 手牌中的句数估算
-      final handRemaining = List<Card>.from(player.hand);
-      final handASet = <Meld>[];
-      HuCalculator.extractJu(handRemaining, handASet);
-      sentenceCount += handASet.length;
-
-      return 100.0 + sentenceCount * 50.0;
+    int sentenceCount = 0;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.ju) sentenceCount++;
     }
+    // 手牌中的句数估算
+    final handRemaining = List<Card>.from(player.hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(handRemaining, handASet);
+    sentenceCount += handASet.length;
 
-    // 主动黑元策略：门1+门8张数<=3且总胡数<=4胡时，主动追求黑元
-    // 返回较低潜力值，引导AI优先清理门1/8牌
-    if (group18Count <= 3) {
-      final totalHu = _evaluateHuScore(player);
-      if (totalHu <= 4) {
-        // 返回主动黑元潜力，值低于完全黑元(100)，但足以触发黑元路线加分
-        int sentenceCount = 0;
-        for (final meld in player.melds) {
-          if (meld.type == MeldType.ju) sentenceCount++;
-        }
-        final handRemaining = List<Card>.from(player.hand);
-        final handASet = <Meld>[];
-        HuCalculator.extractJu(handRemaining, handASet);
-        sentenceCount += handASet.length;
-        // 门1/8牌越少，潜力越高（越接近完全黑元）
-        return 50.0 + sentenceCount * 30.0 + (3 - group18Count) * 10.0;
-      }
-    }
-
-    return -1;
+    return 100.0 + sentenceCount * 50.0;
   }
 
   /// 评估红元路线潜力：返回>0表示有红元潜力
@@ -1306,14 +1275,7 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown,
     );
     // 门结构分变化作为补充评分，权重适中避免覆盖主评分
-    final menScoreDelta = (menScoreAfter - menScoreBefore) * 0.3;
-    score += menScoreDelta;
-
-    // 调试日志：打印关键评分项
-    GameLogger.i(
-      'AI_DISCARD_DETAIL',
-      'card=${cardToDiscard.character} potential=${potential.toStringAsFixed(1)} distToTing=$distToTing menDelta=${menScoreDelta.toStringAsFixed(1)}',
-    );
+    score += (menScoreAfter - menScoreBefore) * 0.3;
 
     if (distToTing <= 4) {
       score += _lookaheadScore(
@@ -1349,24 +1311,15 @@ class AIStrategyHard extends AIStrategy {
           .map((c) => c.character)
           .toSet();
       if (discardGroupCharSet.length == 3) {
-        // 该组有3种字，检查出牌的字是否真的会破坏句
-        // 只有当出牌的字只有1张时，出掉才会破坏句(3字各1张=完整句)
-        // 如果出牌的字有2张以上，出1张后仍保留1张，句不破坏(句+对子结构)
-        final discardCountInGroup = discardGroupCards
-            .where((c) => c.character == cardToDiscard.character)
-            .length;
-        if (discardCountInGroup == 1) {
-          // 出牌的字只有1张，出掉会破坏句，施加惩罚
-          // 惩罚力度：距离越近越不应该拆句
-          if (quickDist <= 2) {
-            score -= 300;
-          } else if (quickDist <= 4) {
-            score -= 200;
-          } else {
-            score -= 100;
-          }
+        // 出牌前该组是完整句，出牌后会破坏它
+        // 惩罚力度：距离越近越不应该拆句
+        if (quickDist <= 2) {
+          score -= 300;
+        } else if (quickDist <= 4) {
+          score -= 200;
+        } else {
+          score -= 100;
         }
-        // discardCountInGroup >= 2 时，出1张不破坏句(句+对子结构)，不惩罚
       } else if (discardGroupCharSet.length == 2) {
         // 出牌前该组有2种不同字，可能是靠或对子+单张
         final discardCountInGroup = discardGroupCards
@@ -1387,8 +1340,7 @@ class AIStrategyHard extends AIStrategy {
           if (missingRem > 0) {
             // 判断靠的进张目标价值：精句(4胡) vs 普句(0胡)
             // 门1(上大人)/门8(福禄寿)中，缺失字是精字(上/福)→进张成精句
-            final isJingJuKao =
-                (discardGroup == 1 || discardGroup == 8) &&
+            final isJingJuKao = (discardGroup == 1 || discardGroup == 8) &&
                 missingChars.any((ch) => ch == '上' || ch == '福');
             if (isJingJuKao) {
               // 精句潜力靠(进张+4胡)，破坏代价更大
@@ -1470,21 +1422,8 @@ class AIStrategyHard extends AIStrategy {
         }
       } else if (isHeiYuan) {
         // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
-        // 主动黑元阶段：优先清理门1/8牌，加速向黑元目标推进
-        final isGroup18 = discardGroup == 1 || discardGroup == 8;
-        if (isGroup18) {
-          // 出门1/8的牌，大幅加分，优先清理
-          if (discardCountInGroup == 1) {
-            score += 300; // 门1/8孤张，最优先清理
-          } else if (discardCountInGroup >= 2) {
-            score += 200; // 门1/8对子，也优先清理（黑元不需要门1/8对子）
-          }
-        } else if (discardGroupCharSet.length == 1) {
-          if (discardCountInGroup == 1) {
-            score += 150; // 门2-7孤张，次优先
-          } else if (discardCountInGroup >= 2) {
-            score += 100; // 优先拆对子
-          }
+        if (discardGroupCharSet.length == 1) {
+          score += 200; // 孤张最优先
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
@@ -1554,24 +1493,7 @@ class AIStrategyHard extends AIStrategy {
         if (discardGroupCharSet.length == 1) {
           score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
-          // 检查是否是"坎+靠"结构（某字>=3，其余各1张）
-          // "坎+靠"中坎已是完整面子，靠单张应按孤张/靠单张处理，不按句处理
-          final hasKanOrZhao = groupCharCount.values.any((cnt) => cnt >= 3);
-          if (hasKanOrZhao && discardCountInGroup == 1) {
-            // 坎+靠：出靠单张，坎已是完整面子不参与靠
-            // 靠的进张价值主要是进坎字组招，概率取决于坎字剩余张数
-            final kanChar = groupCharCount.entries
-                .firstWhere((e) => e.value >= 3)
-                .key;
-            final kanRem = _remainingCount(kanChar, visibleCount);
-            if (kanRem <= 0) {
-              score += 200; // 坎字已出完，靠无进张价值，优先出
-            } else if (kanRem <= 1) {
-              score += 150; // 坎字剩余少，靠进张概率低，优先出
-            } else {
-              score += 80; // 坎字还有剩余，靠有进张价值（可组招），稍后出
-            }
-          } else if (discardCountInGroup >= 2) {
+          if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
           }
         } else if (discardGroupCharSet.length == 2) {
@@ -1585,8 +1507,7 @@ class AIStrategyHard extends AIStrategy {
               final missingChars = _groupChars[discardGroup - 1]
                   .where((ch) => !discardGroupCharSet.contains(ch))
                   .toList();
-              final isJingJuKao =
-                  (discardGroup == 1 || discardGroup == 8) &&
+              final isJingJuKao = (discardGroup == 1 || discardGroup == 8) &&
                   missingChars.any((ch) => ch == '上' || ch == '福');
               if (isJingJuKao) {
                 // 精句潜力靠的单张，施加惩罚保护
@@ -1689,21 +1610,11 @@ class AIStrategyHard extends AIStrategy {
         final sameGroup = player.hand
             .where((c) => c.sentence == cardToDiscard.sentence)
             .toList();
-        // 统计同组每个字的张数，用于排除已是坎/招的字
-        final groupCharCount = <String, int>{};
-        for (final c in sameGroup) {
-          groupCharCount[c.character] = (groupCharCount[c.character] ?? 0) + 1;
-        }
-        // 真正参与搭子判断的字：张数<3的字（排除已是坎/招的字）
-        // "坎+单"（如七七七+十）中，坎已是完整面子，单张应按孤张处理
-        final effectiveGroupCharSet = groupCharCount.entries
-            .where((e) => e.value < 3)
-            .map((e) => e.key)
-            .toSet();
-        if (effectiveGroupCharSet.length >= 2) {
+        final groupCharSet = sameGroup.map((c) => c.character).toSet();
+        if (groupCharSet.length >= 2) {
           // 搭子：保留
           score -= 30;
-          if (effectiveGroupCharSet.length >= 3) {
+          if (groupCharSet.length >= 3) {
             // 完整句：出对子中的一张不破坏句，不额外惩罚
             // 只有出单张（会破坏句）才额外惩罚
             final discardCountInGroup = sameGroup
@@ -1714,7 +1625,7 @@ class AIStrategyHard extends AIStrategy {
             }
           }
         } else {
-          // 孤张/普单：同组只有1种字（或除坎外只有1种字），优先打出
+          // 孤张/普单：同组只有1种字，优先打出
           score += 40;
         }
         final otherChars = _groupChars[cardToDiscard.sentence - 1]
@@ -1726,7 +1637,7 @@ class AIStrategyHard extends AIStrategy {
         }
         if (partnerRem > 0) {
           score -= partnerRem * 3;
-        } else if (effectiveGroupCharSet.length == 1) {
+        } else if (groupCharSet.length == 1) {
           // 孤张且同组其他字已出完，无进张价值，最优先打出
           score += 30;
         }
@@ -1758,15 +1669,7 @@ class AIStrategyHard extends AIStrategy {
       }
       // 中局优先出孤张/普单（非十对路线）
       if (discardCharCount == 1 && shiDuiPotential <= 0) {
-        // 判断是否是真正的孤张：同组中除坎/招（张数>=3）外的字是否只有1种
-        // "坎+单"（如七七七+十）中，单张应按孤张处理，因为坎已是完整面子不参与搭子
-        final effectiveGroupChars = <String>{};
-        for (final ch in groupCharSet) {
-          if ((charCount[ch] ?? 0) < 3) {
-            effectiveGroupChars.add(ch);
-          }
-        }
-        if (effectiveGroupChars.length == 1) {
+        if (groupCharSet.length == 1) {
           // 孤张/普单：优先打出
           score += 30;
         }
@@ -1882,12 +1785,6 @@ class AIStrategyHard extends AIStrategy {
       );
       score += (10 - expSteps) * 50;
     }
-
-    // 调试日志：打印最终评分
-    GameLogger.i(
-      'AI_DISCARD_DETAIL',
-      'card=${cardToDiscard.character} finalScore=${score.toStringAsFixed(1)}',
-    );
 
     return score;
   }
@@ -2780,13 +2677,10 @@ class AIStrategyHard extends AIStrategy {
 
     // 2.5 靠（2字各1张，非完整句）
     // 只有当3字不齐全时才评估靠
-    // 靠的判断排除已是坎/招的字（张数>=3），因为坎已是完整面子不参与靠
-    // "坎+单"（如七七七+十）中，十应按孤张处理，不和七组成靠
     if (!hasAllThree) {
-      final presentChars = groupChars.where((ch) {
-        final cnt = byChar[ch] ?? 0;
-        return cnt >= 1 && cnt < 3;
-      }).toList();
+      final presentChars = groupChars
+          .where((ch) => (byChar[ch] ?? 0) >= 1)
+          .toList();
       if (presentChars.length == 2) {
         final missingChar = _findMissingCharForSentence(presentChars);
         if (missingChar != null) {
@@ -2817,11 +2711,10 @@ class AIStrategyHard extends AIStrategy {
     for (final ch in groupChars) {
       final cnt = byChar[ch] ?? 0;
       if (cnt == 1) {
-        // 检查是否在靠或句中已计算（排除坎/招的字）
-        final presentChars = groupChars.where((c) {
-          final cCnt = byChar[c] ?? 0;
-          return cCnt >= 1 && cCnt < 3;
-        }).toList();
+        // 检查是否在靠或句中已计算
+        final presentChars = groupChars
+            .where((c) => (byChar[c] ?? 0) >= 1)
+            .toList();
         if (presentChars.length >= 2) continue; // 已在靠/句中
 
         if (isJingMen && (ch == '上' || ch == '福')) {
@@ -2979,12 +2872,6 @@ class AIStrategyHard extends AIStrategy {
       return false;
     }
 
-    // 黑元路线：不吃门1/8的牌（吃门1/8句会破坏黑元资格）
-    final heiYuanPotential = _evaluateHeiYuanPotential(player);
-    if (heiYuanPotential > 0 && (card.sentence == 1 || card.sentence == 8)) {
-      return false;
-    }
-
     if (_hasCompleteSentenceWithSingleCards(player, card)) {
       return false;
     }
@@ -3096,12 +2983,6 @@ class AIStrategyHard extends AIStrategy {
 
     // 8对以上强制走十对路线，不碰牌
     if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
-      return false;
-    }
-
-    // 黑元路线：不碰牌（碰牌会破坏黑元资格）
-    final heiYuanPotential = _evaluateHeiYuanPotential(player);
-    if (heiYuanPotential > 0) {
       return false;
     }
 

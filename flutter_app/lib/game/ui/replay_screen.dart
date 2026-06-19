@@ -213,7 +213,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
           );
         }
         _melds[pi].add(
-          Meld(cards: pengCards, type: MeldType.dui, isJing: card.isJing),
+          Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
         );
         break;
       case 'zhao':
@@ -699,25 +699,28 @@ class _ReplayScreenState extends State<ReplayScreen> {
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
     final hand = _hands[playerIndex];
-    return SizedBox(
-      width: leftMaxW,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 弃牌在上方
-          if (discards.isNotEmpty) ...[
-            _buildDiscardsArea(discards, isRight: false),
-            const SizedBox(height: meldToDiscardGap),
-          ],
-          if (melds.isNotEmpty) ...[
-            _buildMeldsArea(melds, isRight: false),
-            const SizedBox(height: aiHandToMeldGap),
-          ],
-          // 手牌
-          _buildMainHand(hand),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 弃牌在上方
+        if (discards.isNotEmpty) ...[
+          SizedBox(
+            width: leftMaxW,
+            child: _buildDiscardsArea(discards, isRight: false),
+          ),
+          const SizedBox(height: meldToDiscardGap),
         ],
-      ),
+        if (melds.isNotEmpty) ...[
+          SizedBox(
+            width: leftMaxW,
+            child: _buildMeldsArea(melds, isRight: false),
+          ),
+          const SizedBox(height: aiHandToMeldGap),
+        ],
+        // 手牌 - 不限制宽度，允许超过leftMaxW
+        _buildMainHand(hand),
+      ],
     );
   }
 
@@ -897,14 +900,14 @@ class _ReplayScreenState extends State<ReplayScreen> {
   Widget _buildMeldsFromGroups(List<List<Card>> groups, bool isRight) {
     final List<Widget> rows = [];
     List<Widget> currentGroups = [];
+    double currentRowWidth = 0;
     int groupCountInRow = 0;
+    final maxW = isRight ? rightMaxW : leftMaxW;
 
     for (final group in groups) {
-      final groupW = (group.length - 1) * meldStackVisible + meldCardW;
-      final maxW = isRight ? rightMaxW : leftMaxW;
+      final groupW = (group.length - 1) * meldStackVisible + meldCardW + 2;
       if (groupCountInRow >= 3 ||
-          (currentGroups.isNotEmpty &&
-              _rowWidth(currentGroups, isRight) + groupW + 2 > maxW)) {
+          (currentGroups.isNotEmpty && currentRowWidth + groupW > maxW)) {
         rows.add(
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -913,9 +916,11 @@ class _ReplayScreenState extends State<ReplayScreen> {
           ),
         );
         currentGroups = [];
+        currentRowWidth = 0;
         groupCountInRow = 0;
       }
       currentGroups.add(_buildMeldGroupWidget(group, isRight));
+      currentRowWidth += groupW;
       groupCountInRow++;
     }
     if (currentGroups.isNotEmpty) {
@@ -937,34 +942,24 @@ class _ReplayScreenState extends State<ReplayScreen> {
     );
   }
 
-  double _rowWidth(List<Widget> groups, bool isRight) {
-    // 简化估算
-    return groups.length * (meldCardW + 2);
-  }
-
   Widget _buildMeldGroupWidget(List<Card> cards, bool isRight) {
-    final List<Widget> cardWidgets = [];
-    for (int i = 0; i < cards.length; i++) {
-      cardWidgets.add(
-        Padding(
-          padding: EdgeInsets.only(
-            left: i > 0 ? meldStackVisible - meldCardW : 0,
-          ),
-          child: _buildMeldCard(cards[i]),
-        ),
-      );
-    }
+    final groupW = (cards.length - 1) * meldStackVisible + meldCardW;
     return Padding(
       padding: const EdgeInsets.only(right: 2),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (int i = 0; i < cards.length; i++)
-            Positioned(
-              left: i * meldStackVisible,
-              child: _buildMeldCard(cards[i]),
-            ),
-        ],
+      child: SizedBox(
+        width: groupW,
+        height: meldCardH,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (int i = 0; i < cards.length; i++)
+              Positioned(
+                left: i * meldStackVisible,
+                top: 0,
+                child: _buildMeldCard(cards[i]),
+              ),
+          ],
+        ),
       ),
     );
   }
