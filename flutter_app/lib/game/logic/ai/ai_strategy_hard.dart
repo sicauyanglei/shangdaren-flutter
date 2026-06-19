@@ -1398,13 +1398,17 @@ class AIStrategyHard extends AIStrategy {
             missingRem += _remainingCount(ch, visibleCount);
           }
           if (missingRem > 0) {
-            // 判断靠的进张目标价值：精句(4胡) vs 普句(0胡)
-            // 门1(上大人)/门8(福禄寿)中，缺失字是精字(上/福)→进张成精句
+            // 判断靠的进张目标价值：
+            // 1. 精句潜力靠：缺失字是精字(上/福)→进张成精句
+            // 2. 精靠本身：当前靠含精字(上/福)，出精字不仅破坏靠还损失精靠4胡
             final isJingJuKao =
                 (discardGroup == 1 || discardGroup == 8) &&
                 missingChars.any((ch) => ch == '上' || ch == '福');
-            if (isJingJuKao) {
-              // 精句潜力靠(进张+4胡)，破坏代价更大
+            final isJingKao =
+                (discardGroup == 1 || discardGroup == 8) &&
+                discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
+            if (isJingJuKao || isJingKao) {
+              // 精句潜力靠或精靠(进张+4胡/本身4胡)，破坏代价更大
               // 胡数不足时尤其应该保护
               final huBefore = _evaluateHuScore(player);
               final huWeight = huBefore < 11 ? 1.5 : 1.0;
@@ -1564,16 +1568,19 @@ class AIStrategyHard extends AIStrategy {
             // 对子+靠：保留对子，出靠的单张
             if (discardCountInGroup == 1) {
               // 检查该靠是否有精句潜力(门1/8，缺失字是精字上/福)
-              // 有精句潜力的银靠单张不应打出(进张+4胡，胡数不足时尤其珍贵)
+              // 或当前靠本身是精靠(含上/福)，出精字不仅破坏靠还损失精靠4胡
               final missingChars = _groupChars[discardGroup - 1]
                   .where((ch) => !discardGroupCharSet.contains(ch))
                   .toList();
               final isJingJuKao =
                   (discardGroup == 1 || discardGroup == 8) &&
                   missingChars.any((ch) => ch == '上' || ch == '福');
-              if (isJingJuKao) {
-                // 精句潜力靠的单张，施加惩罚保护
-                // 此处已在 huBefore < 11 块内，胡数不足时精句4胡尤其珍贵
+              final isJingKao =
+                  (discardGroup == 1 || discardGroup == 8) &&
+                  discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
+              if (isJingJuKao || isJingKao) {
+                // 精句潜力靠或精靠的单张，施加惩罚保护
+                // 此处已在 huBefore < 11 块内，胡数不足时精句/精靠4胡尤其珍贵
                 score -= 150;
               } else {
                 score += 60;
