@@ -1306,7 +1306,14 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown,
     );
     // 门结构分变化作为补充评分，权重适中避免覆盖主评分
-    score += (menScoreAfter - menScoreBefore) * 0.3;
+    final menScoreDelta = (menScoreAfter - menScoreBefore) * 0.3;
+    score += menScoreDelta;
+
+    // 调试日志：打印关键评分项
+    GameLogger.i(
+      'AI_DISCARD_DETAIL',
+      'card=${cardToDiscard.character} potential=${potential.toStringAsFixed(1)} distToTing=$distToTing menDelta=${menScoreDelta.toStringAsFixed(1)}',
+    );
 
     if (distToTing <= 4) {
       score += _lookaheadScore(
@@ -1875,6 +1882,12 @@ class AIStrategyHard extends AIStrategy {
       );
       score += (10 - expSteps) * 50;
     }
+
+    // 调试日志：打印最终评分
+    GameLogger.i(
+      'AI_DISCARD_DETAIL',
+      'card=${cardToDiscard.character} finalScore=${score.toStringAsFixed(1)}',
+    );
 
     return score;
   }
