@@ -50,11 +50,6 @@ class _ReplayScreenState extends State<ReplayScreen> {
   static const double meldToDiscardGap = 1.0;
   static const double avatarToMeldGap = 6.0;
   static const double aiHandToMeldGap = 2.0;
-  // AI玩家手牌正面显示尺寸 - 与GameBoard.huAiHand*一致
-  static const double aiHandCardW = 43.2;
-  static const double aiHandCardH = 179.2;
-  static const double aiHandStackVisibleFace = 40.0;
-  static const double aiHandSentenceGap = 0.0;
   static const double leftMaxW = 340.0;
   static const double rightMaxW = 280.0;
 
@@ -726,22 +721,25 @@ class _ReplayScreenState extends State<ReplayScreen> {
     );
   }
 
-  /// AI玩家手牌正面显示 - 与GameBoard._renderAIHand一致
-  /// 按sentence分组，同字竖向叠放(偏移40px)，组间水平间距0px
+  /// AI玩家手牌 - 使用组合牌区显示方式
+  /// 按sentence(门)分组，每门内不同字横向层叠(偏移17px)，同字层叠显示右上角计数
+  /// 组间间隔2px，每行最多3组，超过换行
   Widget _buildAIHand(List<Card> cards, {required bool isRight}) {
     if (cards.isEmpty) return const SizedBox.shrink();
 
-    // 按sentence分组
+    // 按sentence(门)分组
     final sentenceGroups = <int, List<Card>>{};
     for (final card in cards) {
       sentenceGroups.putIfAbsent(card.sentence, () => []).add(card);
     }
     final sortedSentences = sentenceGroups.keys.toList()..sort();
 
-    final List<Widget> sentenceWidgets = [];
+    // 为每个门构建组widget
+    final List<Widget> groupWidgets = [];
+    final List<double> groupWidths = [];
     for (final sKey in sortedSentences) {
       final group = sentenceGroups[sKey]!;
-      // 按字分组叠放
+      // 按字分组
       final charGroups = <String, List<Card>>{};
       for (final c in group) {
         charGroups.putIfAbsent(c.character, () => []).add(c);
@@ -754,52 +752,89 @@ class _ReplayScreenState extends State<ReplayScreen> {
           return pa.compareTo(pb);
         });
 
-      final List<Widget> stackWidgets = [];
+      // 横向层叠不同字(偏移meldStackVisible)，同字层叠显示计数
+      final List<Widget> cardWidgets = [];
       for (int ci = 0; ci < sortedChars.length; ci++) {
         final chars = charGroups[sortedChars[ci]]!;
-        stackWidgets.add(
+        cardWidgets.add(
           Positioned(
-            top: ci * aiHandStackVisibleFace,
-            left: 0,
-            child: _buildAIHandCard(chars[0], chars.length),
+            left: ci * meldStackVisible,
+            top: 0,
+            child: _buildAIHandMeldCard(chars[0], chars.length),
           ),
         );
       }
 
-      final maxStack = sortedChars.length;
-      final groupH = maxStack > 0
-          ? (maxStack - 1) * aiHandStackVisibleFace + aiHandCardH
-          : 0.0;
-
-      sentenceWidgets.add(
+      final groupW =
+          (sortedChars.length - 1) * meldStackVisible + meldCardW;
+      groupWidgets.add(
         SizedBox(
-          width: aiHandCardW,
-          height: groupH,
-          child: Stack(clipBehavior: Clip.none, children: stackWidgets),
+          width: groupW,
+          height: meldCardH,
+          child: Stack(clipBehavior: Clip.none, children: cardWidgets),
+        ),
+      );
+      groupWidths.add(groupW);
+    }
+
+    // 多行布局，每行最多3组，组间间隔2px
+    final List<Widget> rows = [];
+    List<Widget> currentGroups = [];
+    double currentRowWidth = 0;
+    int groupCountInRow = 0;
+    final maxW = isRight ? rightMaxW : leftMaxW;
+
+    for (int i = 0; i < groupWidgets.length; i++) {
+      final gw = groupWidgets[i];
+      final groupW = groupWidths[i];
+      final newWidth =
+          currentGroups.isEmpty ? groupW : currentRowWidth + 2 + groupW;
+      if (groupCountInRow >= 3 ||
+          (currentGroups.isNotEmpty && newWidth > maxW)) {
+        rows.add(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
+            children: currentGroups,
+          ),
+        );
+        currentGroups = [];
+        currentRowWidth = 0;
+        groupCountInRow = 0;
+      }
+      if (currentGroups.isNotEmpty) {
+        currentGroups.add(const SizedBox(width: 2));
+        currentRowWidth += 2;
+      }
+      currentGroups.add(gw);
+      currentRowWidth += groupW;
+      groupCountInRow++;
+    }
+    if (currentGroups.isNotEmpty) {
+      rows.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
+          children: currentGroups,
         ),
       );
     }
 
-    return Row(
+    return Column(
+      crossAxisAlignment:
+          isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
-      children: [
-        for (int i = 0; i < sentenceWidgets.length; i++) ...[
-          if (i > 0) const SizedBox(width: aiHandSentenceGap),
-          sentenceWidgets[i],
-        ],
-      ],
+      children: rows,
     );
   }
 
-  /// AI玩家手牌单张卡牌 - 使用手牌图片缩放显示，多张时显示数量徽章
-  Widget _buildAIHandCard(Card card, int stackCount) {
+  /// AI玩家手牌单张卡牌(组合牌样式) - 34x56，多张时右上角显示数量徽章
+  Widget _buildAIHandMeldCard(Card card, int stackCount) {
     final pinyin = AtlasLoader.charToPinyin[card.character];
-    final badgeR = aiHandCardW * 0.35;
+    final badgeR = meldCardW * 0.35;
     return Container(
-      width: aiHandCardW,
-      height: aiHandCardH,
+      width: meldCardW,
+      height: meldCardH,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(3),
         boxShadow: [
@@ -816,16 +851,16 @@ class _ReplayScreenState extends State<ReplayScreen> {
         children: [
           if (pinyin != null)
             Image.asset(
-              'assets/html/images/$pinyin.png',
-              width: aiHandCardW,
-              height: aiHandCardH,
-              fit: BoxFit.fill,
+              'assets/html/images/s/$pinyin.png',
+              width: meldCardW,
+              height: meldCardH,
+              fit: BoxFit.contain,
             )
           else
             Container(color: Colors.white),
           if (stackCount > 1)
             Positioned(
-              left: aiHandCardW - badgeR * 2,
+              left: meldCardW - badgeR * 2,
               top: 0,
               child: Container(
                 width: badgeR * 2,
