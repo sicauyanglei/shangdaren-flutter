@@ -324,7 +324,31 @@ class _ReplayScreenState extends State<ReplayScreen> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // 左上 - 头像
+          // 底部 - 头像（先渲染，z-order最低）
+          Positioned(
+            left: myAvatarLeft * scale,
+            bottom: myAvatarBottom * scale,
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.bottomLeft,
+              child: _buildAvatarArea(
+                positions[2],
+                isLeft: true,
+                isBottom: true,
+              ),
+            ),
+          ),
+          // 底部 - 组合牌+弃牌+手牌（先渲染，避免遮挡左右玩家）
+          Positioned(
+            left: myAvatarLeft * scale,
+            bottom: (myAvatarBottom + 108 + avatarToMeldGap) * scale,
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.bottomLeft,
+              child: _buildBottomMeldsDiscardsAndHand(positions[2]),
+            ),
+          ),
+          // 左上 - 头像（后渲染，z-order高于底部）
           Positioned(
             left: aiAvatarLeft * scale,
             top: aiAvatarTop * scale,
@@ -334,7 +358,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
               child: _buildAvatarArea(positions[0], isLeft: true),
             ),
           ),
-          // 左上 - 组合牌+弃牌
+          // 左上 - 组合牌+弃牌（后渲染，确保不被底部手牌遮挡）
           Positioned(
             left: aiAvatarLeft * scale,
             top: (aiAvatarTop + 108 + avatarToMeldGap) * scale,
@@ -362,30 +386,6 @@ class _ReplayScreenState extends State<ReplayScreen> {
               scale: scale,
               alignment: Alignment.topRight,
               child: _buildRightMeldsAndDiscards(positions[1]),
-            ),
-          ),
-          // 底部 - 头像
-          Positioned(
-            left: myAvatarLeft * scale,
-            bottom: myAvatarBottom * scale,
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.bottomLeft,
-              child: _buildAvatarArea(
-                positions[2],
-                isLeft: true,
-                isBottom: true,
-              ),
-            ),
-          ),
-          // 底部 - 组合牌+弃牌+手牌
-          Positioned(
-            left: myAvatarLeft * scale,
-            bottom: (myAvatarBottom + 108 + avatarToMeldGap) * scale,
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.bottomLeft,
-              child: _buildBottomMeldsDiscardsAndHand(positions[2]),
             ),
           ),
           // 中间状态文字
