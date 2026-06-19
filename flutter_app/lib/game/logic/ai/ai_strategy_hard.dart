@@ -1488,9 +1488,39 @@ class AIStrategyHard extends AIStrategy {
         // 默认普通胡牌路线：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
         if (discardGroupCharSet.length == 1) {
           // 注意：length==1不一定是孤张，可能是对子(2张同字)或坎(3张同字)
-          // 只有真正的单张(1张)才加200分，对子/坎不应加此分
           if (discardCountInGroup == 1) {
-            score += 200; // 普单(孤张)最优先
+            // 真正的孤张，按类型差异化评分
+            // 精单(上/福)：4胡，可组精句/精靠/金对，价值最高，最不应出
+            // 银单(大/人/禄/寿)：0胡但可组精句(门1/8)/银靠/银对，价值次之
+            // 普单(门2-7非精非银)：0胡，仅能组普句/普靠/普对，价值最低，最优先出
+            if (cardToDiscard.character == '上' ||
+                cardToDiscard.character == '福') {
+              score -= 100; // 精单孤张，保留优先
+            } else if (_isYin(cardToDiscard)) {
+              // 银单：门1/8有精句潜力，保留；门2-7无精句潜力，次优先出
+              if (discardGroup == 1 || discardGroup == 8) {
+                score += 50; // 门1/8银单，保留次之
+              } else {
+                score += 150; // 门2-7银单(实际门2-7无银字，此分支不会命中)
+              }
+            } else {
+              // 普单：最优先出
+              // 进一步区分：同组其他字剩余多则价值高(可进张组句)，剩余少则价值低
+              final otherChars = _groupChars[discardGroup - 1]
+                  .where((ch) => ch != cardToDiscard.character)
+                  .toList();
+              int partnerRem = 0;
+              for (final ch in otherChars) {
+                partnerRem += _remainingCount(ch, visibleCount);
+              }
+              if (partnerRem == 0) {
+                score += 250; // 无进张可能的死孤张，最优先出
+              } else if (partnerRem <= 2) {
+                score += 220; // 进张少的孤张，优先出
+              } else {
+                score += 180; // 有进张潜力的孤张，稍后出
+              }
+            }
           } else if (discardCountInGroup >= 2) {
             // 对子或坎，出牌会破坏对子/坎，不加分
             // 对子价值由_evaluateHandPotentialAndDistance中的对子评分体现
