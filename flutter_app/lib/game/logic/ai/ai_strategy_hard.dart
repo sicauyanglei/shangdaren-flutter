@@ -2114,6 +2114,8 @@ class AIStrategyHard extends AIStrategy {
     int? myDist,
   }) {
     double danger = 0;
+    // 被招风险单独累积：确定性事件，不受进攻优先调整影响
+    double zhaoDanger = 0;
     final isMidGame = state.deck.length >= 20 && state.deck.length <= 50;
     final myVisibleCount =
         _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
@@ -2201,6 +2203,27 @@ class AIStrategyHard extends AIStrategy {
       // 对方未听牌但面子多时，也有一定危险
       if (!other.isTing && other.melds.length >= 3) {
         danger += isLate ? 15 : 8;
+      }
+
+      // 被招风险：对手已有3张同字坎，出该字100%被招成招（4张同字）
+      // 全牌共4张同字，对手meld占3张+我手上1张=4张，出此牌必被招
+      // 招牌收益：普坎2胡→普招6胡(+4胡)；精坎12胡→精招16胡(+4胡)
+      for (final meld in other.melds) {
+        if (meld.type == MeldType.kan &&
+            meld.cards.length == 3 &&
+            meld.cards.every(
+              (c) => c.character == meld.cards.first.character,
+            )) {
+          if (meld.cards.first.character == cardToDiscard.character) {
+            // 确定性被招，高额扣分（精字损失更大）
+            // 累积到zhaoDanger，不受进攻优先调整影响
+            if (cardToDiscard.isJing) {
+              zhaoDanger += isLate ? 150 : 100;
+            } else {
+              zhaoDanger += isLate ? 80 : 50;
+            }
+          }
+        }
       }
 
       if (isMidGame && !other.isTing) {
@@ -2361,7 +2384,8 @@ class AIStrategyHard extends AIStrategy {
       danger *= 0.6;
     }
 
-    return danger;
+    // 被招风险是确定性事件，不参与进攻优先缩减
+    return danger + zhaoDanger;
   }
 
   (double potential, int distance) _evaluateHandPotentialAndDistance(
