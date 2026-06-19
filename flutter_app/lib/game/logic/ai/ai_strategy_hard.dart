@@ -1362,14 +1362,23 @@ class AIStrategyHard extends AIStrategy {
           .map((c) => c.character)
           .toSet();
       if (discardGroupCharSet.length == 3) {
-        // 出牌前该组是完整句，出牌后会破坏它
-        // 惩罚力度：距离越近越不应该拆句
-        if (quickDist <= 2) {
-          score -= 300;
-        } else if (quickDist <= 4) {
-          score -= 200;
+        // 出牌前该组是完整句
+        // 检查出的牌在该组中是否有冗余（2张以上）
+        final discardCountInGroup = discardGroupCards
+            .where((c) => c.character == cardToDiscard.character)
+            .length;
+        if (discardCountInGroup >= 2) {
+          // 出的牌有冗余，出1张后句仍然完整，不惩罚
         } else {
-          score -= 100;
+          // 出的牌只有1张，出牌后会破坏句
+          // 惩罚力度：距离越近越不应该拆句
+          if (quickDist <= 2) {
+            score -= 300;
+          } else if (quickDist <= 4) {
+            score -= 200;
+          } else {
+            score -= 100;
+          }
         }
       } else if (discardGroupCharSet.length == 2) {
         // 出牌前该组有2种不同字，可能是靠或对子+单张
