@@ -1311,15 +1311,24 @@ class AIStrategyHard extends AIStrategy {
           .map((c) => c.character)
           .toSet();
       if (discardGroupCharSet.length == 3) {
-        // 出牌前该组是完整句，出牌后会破坏它
-        // 惩罚力度：距离越近越不应该拆句
-        if (quickDist <= 2) {
-          score -= 300;
-        } else if (quickDist <= 4) {
-          score -= 200;
-        } else {
-          score -= 100;
+        // 该组有3种字，检查出牌的字是否真的会破坏句
+        // 只有当出牌的字只有1张时，出掉才会破坏句(3字各1张=完整句)
+        // 如果出牌的字有2张以上，出1张后仍保留1张，句不破坏(句+对子结构)
+        final discardCountInGroup = discardGroupCards
+            .where((c) => c.character == cardToDiscard.character)
+            .length;
+        if (discardCountInGroup == 1) {
+          // 出牌的字只有1张，出掉会破坏句，施加惩罚
+          // 惩罚力度：距离越近越不应该拆句
+          if (quickDist <= 2) {
+            score -= 300;
+          } else if (quickDist <= 4) {
+            score -= 200;
+          } else {
+            score -= 100;
+          }
         }
+        // discardCountInGroup >= 2 时，出1张不破坏句(句+对子结构)，不惩罚
       } else if (discardGroupCharSet.length == 2) {
         // 出牌前该组有2种不同字，可能是靠或对子+单张
         final discardCountInGroup = discardGroupCards
@@ -1610,11 +1619,22 @@ class AIStrategyHard extends AIStrategy {
         final sameGroup = player.hand
             .where((c) => c.sentence == cardToDiscard.sentence)
             .toList();
-        final groupCharSet = sameGroup.map((c) => c.character).toSet();
-        if (groupCharSet.length >= 2) {
+        // 统计同组每个字的张数，用于排除已是坎/招的字
+        final groupCharCount = <String, int>{};
+        for (final c in sameGroup) {
+          groupCharCount[c.character] =
+              (groupCharCount[c.character] ?? 0) + 1;
+        }
+        // 真正参与搭子判断的字：张数<3的字（排除已是坎/招的字）
+        // "坎+单"（如七七七+十）中，坎已是完整面子，单张应按孤张处理
+        final effectiveGroupCharSet = groupCharCount.entries
+            .where((e) => e.value < 3)
+            .map((e) => e.key)
+            .toSet();
+        if (effectiveGroupCharSet.length >= 2) {
           // 搭子：保留
           score -= 30;
-          if (groupCharSet.length >= 3) {
+          if (effectiveGroupCharSet.length >= 3) {
             // 完整句：出对子中的一张不破坏句，不额外惩罚
             // 只有出单张（会破坏句）才额外惩罚
             final discardCountInGroup = sameGroup
@@ -1625,7 +1645,7 @@ class AIStrategyHard extends AIStrategy {
             }
           }
         } else {
-          // 孤张/普单：同组只有1种字，优先打出
+          // 孤张/普单：同组只有1种字（或除坎外只有1种字），优先打出
           score += 40;
         }
         final otherChars = _groupChars[cardToDiscard.sentence - 1]
@@ -1637,7 +1657,7 @@ class AIStrategyHard extends AIStrategy {
         }
         if (partnerRem > 0) {
           score -= partnerRem * 3;
-        } else if (groupCharSet.length == 1) {
+        } else if (effectiveGroupCharSet.length == 1) {
           // 孤张且同组其他字已出完，无进张价值，最优先打出
           score += 30;
         }
@@ -1669,7 +1689,15 @@ class AIStrategyHard extends AIStrategy {
       }
       // 中局优先出孤张/普单（非十对路线）
       if (discardCharCount == 1 && shiDuiPotential <= 0) {
-        if (groupCharSet.length == 1) {
+        // 判断是否是真正的孤张：同组中除坎/招（张数>=3）外的字是否只有1种
+        // "坎+单"（如七七七+十）中，单张应按孤张处理，因为坎已是完整面子不参与搭子
+        final effectiveGroupChars = <String>{};
+        for (final ch in groupCharSet) {
+          if ((charCount[ch] ?? 0) < 3) {
+            effectiveGroupChars.add(ch);
+          }
+        }
+        if (effectiveGroupChars.length == 1) {
           // 孤张/普单：优先打出
           score += 30;
         }
@@ -2677,9 +2705,14 @@ class AIStrategyHard extends AIStrategy {
 
     // 2.5 靠（2字各1张，非完整句）
     // 只有当3字不齐全时才评估靠
+    // 靠的判断排除已是坎/招的字（张数>=3），因为坎已是完整面子不参与靠
+    // "坎+单"（如七七七+十）中，十应按孤张处理，不和七组成靠
     if (!hasAllThree) {
       final presentChars = groupChars
-          .where((ch) => (byChar[ch] ?? 0) >= 1)
+          .where((ch) {
+            final cnt = byChar[ch] ?? 0;
+            return cnt >= 1 && cnt < 3;
+          })
           .toList();
       if (presentChars.length == 2) {
         final missingChar = _findMissingCharForSentence(presentChars);
@@ -2711,9 +2744,12 @@ class AIStrategyHard extends AIStrategy {
     for (final ch in groupChars) {
       final cnt = byChar[ch] ?? 0;
       if (cnt == 1) {
-        // 检查是否在靠或句中已计算
+        // 检查是否在靠或句中已计算（排除坎/招的字）
         final presentChars = groupChars
-            .where((c) => (byChar[c] ?? 0) >= 1)
+            .where((c) {
+              final cCnt = byChar[c] ?? 0;
+              return cCnt >= 1 && cCnt < 3;
+            })
             .toList();
         if (presentChars.length >= 2) continue; // 已在靠/句中
 
