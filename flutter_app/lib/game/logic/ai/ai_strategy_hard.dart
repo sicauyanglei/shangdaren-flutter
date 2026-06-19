@@ -1398,17 +1398,20 @@ class AIStrategyHard extends AIStrategy {
         final discardCountInGroup = discardGroupCards
             .where((c) => c.character == cardToDiscard.character)
             .length;
-        // 出靠的单张(discardCountInGroup==1)会破坏靠，无论是否有对子
-        // 纯靠(无对子)或对子+靠(有对子)出单张都破坏靠
-        final breaksKao = discardCountInGroup == 1;
-        // 检查该组是否有对子（对子+靠的情况）
+        // 检查该组是否有对子
         final groupCharCount = <String, int>{};
         for (final c in discardGroupCards) {
           groupCharCount[c.character] = (groupCharCount[c.character] ?? 0) + 1;
         }
         final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
-        if (breaksKao) {
-          // 出这张牌会破坏靠，检查缺失字的剩余张数
+        // 判断是否为"对子+独立单张"结构：同门2种字，一种有2张(对子)，另一种有1张(单张)
+        // 这种情况下，单张不是靠的一部分（对子已独立存在），出单张不会破坏靠
+        // 真正的靠是2种字各1张（无对子），出任何一张都会破坏靠
+        final isPairPlusSingle = hasPairInGroup && discardCountInGroup == 1;
+        // 出靠的单张(discardCountInGroup==1)会破坏靠，但"对子+独立单张"不算靠
+        final breaksKao = discardCountInGroup == 1 && !isPairPlusSingle;
+        if (discardCountInGroup == 1) {
+          // 出这张单张，检查缺失字的剩余张数
           final missingChars = _groupChars[discardGroup - 1]
               .where((ch) => !discardGroupCharSet.contains(ch))
               .toList();
@@ -1416,7 +1419,19 @@ class AIStrategyHard extends AIStrategy {
           for (final ch in missingChars) {
             missingRem += _remainingCount(ch, visibleCount);
           }
-          if (missingRem > 0) {
+          if (isPairPlusSingle) {
+            // 对子+独立单张：出单张不破坏靠，只是放弃进张方向
+            // 惩罚很轻，因为对子仍然完整
+            if (missingRem > 0) {
+              if (quickDist <= 2) {
+                score -= 10 + missingRem * 2;
+              } else if (quickDist <= 4) {
+                score -= 5 + missingRem;
+              }
+              // else: 无惩罚
+            }
+          } else if (missingRem > 0) {
+            // 真正的靠：出单张会破坏靠
             // 判断靠的进张目标价值：
             // 1. 精句潜力靠：缺失字是精字(上/福)→进张成精句
             // 2. 精靠本身：当前靠含精字(上/福)，出精字不仅破坏靠还损失精靠4胡
@@ -1438,16 +1453,6 @@ class AIStrategyHard extends AIStrategy {
               } else {
                 score -= (150 + missingRem * 15) * huWeight;
               }
-            } else if (hasPairInGroup) {
-              // 对子+靠：出靠的单张是正确策略(保留对子碰坎获胡数)
-              // 大幅降低破坏靠惩罚，因为保留对子比保留靠更重要
-              if (quickDist <= 2) {
-                score -= 50 + missingRem * 5;
-              } else if (quickDist <= 4) {
-                score -= 30 + missingRem * 3;
-              } else {
-                score -= 10;
-              }
             } else {
               // 普句靠(进张+0胡)，破坏代价较小
               if (quickDist <= 2) {
@@ -1466,7 +1471,7 @@ class AIStrategyHard extends AIStrategy {
     score += (10 - distToTing) * 120;
 
     // 胡数不足时的出牌优先级规则（按胡牌类型灵活调整）
-    // 默认(普通胡牌)：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
+    // 默认(普通胡牌)：普单 > 对子+独立单张 > 普句多一张 > 普靠
     // 十对：保留对子，优先出孤张/普单，绝不出对子
     // 黑元：无碰无招，优先拆对子(避免对子变碰破坏黑元资格)
     // 红元：组1/组8句优先保留，优先出非组1/8的孤张
@@ -1508,7 +1513,7 @@ class AIStrategyHard extends AIStrategy {
             if (discardCountInGroup >= 2) {
               score -= 100; // 十对路线绝不出对子
             } else {
-              score += 150; // 出靠的单张，保留对子
+              score += 150; // 出独立单张，保留对子
             }
           } else {
             score += 80; // 普靠，出一张变孤张
@@ -1583,7 +1588,7 @@ class AIStrategyHard extends AIStrategy {
           }
         }
       } else {
-        // 默认普通胡牌路线：普单 > 普句多一张 > 普靠 > 对子+靠(保留对子)
+        // 默认普通胡牌路线：普单 > 对子+独立单张 > 普句多一张 > 普靠
         if (discardGroupCharSet.length == 1) {
           score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
@@ -1614,36 +1619,33 @@ class AIStrategyHard extends AIStrategy {
           if (!hasPairInGroup) {
             // 普靠：不加分，靠破坏靠惩罚控制
           } else {
-            // 对子+靠：保留对子，出靠的单张
-            // 对子+靠：检查对子的剩余张数，判断是否为"死对子"
+            // 对子+单张：区分"对子+独立单张"和"对子+靠"
+            // 检查对子是否为死对子（剩余0张，无法碰成坎）
             final pairChar = groupCharCount.entries
                 .firstWhere((e) => e.value >= 2)
                 .key;
             final pairRem = _remainingCount(pairChar, visibleCount);
             if (discardCountInGroup == 1) {
-              // 出靠的单张，保留对子
-              if (pairRem > 0) {
-                // 检查该靠是否有精句潜力(门1/8，缺失字是精字上/福)
-                // 或当前靠本身是精靠(含上/福)，出精字不仅破坏靠还损失精靠4胡
-                final missingChars = _groupChars[discardGroup - 1]
-                    .where((ch) => !discardGroupCharSet.contains(ch))
-                    .toList();
-                final isJingJuKao =
-                    (discardGroup == 1 || discardGroup == 8) &&
-                    missingChars.any((ch) => ch == '上' || ch == '福');
-                final isJingKao =
-                    (discardGroup == 1 || discardGroup == 8) &&
-                    discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
-                if (isJingJuKao || isJingKao) {
-                  // 精句潜力靠或精靠的单张，施加惩罚保护
-                  // 此处已在 huBefore < 11 块内，胡数不足时精句/精靠4胡尤其珍贵
-                  score -= 150;
-                } else {
-                  score += 60;
-                }
+              // 对子+独立单张：单张不是靠的一部分，按"出单张"评分
+              // 对子旁边的单张和孤张类似，应该优先出
+              final missingChars = _groupChars[discardGroup - 1]
+                  .where((ch) => !discardGroupCharSet.contains(ch))
+                  .toList();
+              final isJingJuKao =
+                  (discardGroup == 1 || discardGroup == 8) &&
+                  missingChars.any((ch) => ch == '上' || ch == '福');
+              final isJingKao =
+                  (discardGroup == 1 || discardGroup == 8) &&
+                  discardGroupCharSet.any((ch) => ch == '上' || ch == '福');
+              if (isJingJuKao || isJingKao) {
+                // 精门的对子+单张：单张有精句潜力，施加惩罚保护
+                score -= 150;
+              } else if (pairRem > 0) {
+                // 普通对子+独立单张：出单张是正确策略，与出孤张类似
+                score += 180;
               } else {
-                // 对子剩余为0（死对子），保留它无碰坎价值
-                // 出靠单张保留死对子不加分，反而应该拆死对子
+                // 死对子旁边的单张，保留死对子无碰坎价值
+                // 出单张保留死对子不加分，反而应该拆死对子
                 score -= 30;
               }
             } else {
@@ -1701,9 +1703,9 @@ class AIStrategyHard extends AIStrategy {
               .key;
           final pairRem = _remainingCount(pairChar, visibleCount);
           if (discardCountInGroup == 1) {
-            // 对子+单张：出单张，保留对子
+            // 对子+独立单张：出单张，保留对子，与出孤张类似优先
             if (pairRem > 0) {
-              score += 150;
+              score += 200;
             } else {
               // 死对子，保留无碰坎价值，不加分
               score += 20;
@@ -2901,12 +2903,14 @@ class AIStrategyHard extends AIStrategy {
     }
 
     // 2.5 靠（2字各1张，非完整句）
-    // 只有当3字不齐全时才评估靠
+    // 只有当3字不齐全且没有对子时才评估靠
+    // 有对子时，其他单张是独立单张而非靠的一部分
     if (!hasAllThree) {
       final presentChars = groupChars
           .where((ch) => (byChar[ch] ?? 0) >= 1)
           .toList();
-      if (presentChars.length == 2) {
+      final hasPair = presentChars.any((ch) => (byChar[ch] ?? 0) >= 2);
+      if (presentChars.length == 2 && !hasPair) {
         final missingChar = _findMissingCharForSentence(presentChars);
         if (missingChar != null) {
           final rem = _remainingCount(missingChar, visibleCount);
@@ -2940,7 +2944,14 @@ class AIStrategyHard extends AIStrategy {
         final presentChars = groupChars
             .where((c) => (byChar[c] ?? 0) >= 1)
             .toList();
-        if (presentChars.length >= 2) continue; // 已在靠/句中
+        final hasPairInPresent = presentChars
+            .any((c) => (byChar[c] ?? 0) >= 2);
+        // 已在靠中计算：2种字各1张且无对子（纯靠）
+        // 已在句中计算：3种字齐全
+        // 对子旁边的单张不算靠，需要评估为独立单张
+        final isInKao = presentChars.length == 2 && !hasPairInPresent;
+        final isInJu = presentChars.length >= 3;
+        if (isInKao || isInJu) continue;
 
         if (isJingMen && (ch == '上' || ch == '福')) {
           score += 40; // 精单
