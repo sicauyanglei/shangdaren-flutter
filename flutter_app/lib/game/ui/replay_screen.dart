@@ -213,7 +213,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
           );
         }
         _melds[pi].add(
-          Meld(cards: pengCards, type: MeldType.dui, isJing: card.isJing),
+          Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
         );
         break;
       case 'zhao':
@@ -943,28 +943,23 @@ class _ReplayScreenState extends State<ReplayScreen> {
   }
 
   Widget _buildMeldGroupWidget(List<Card> cards, bool isRight) {
-    final List<Widget> cardWidgets = [];
-    for (int i = 0; i < cards.length; i++) {
-      cardWidgets.add(
-        Padding(
-          padding: EdgeInsets.only(
-            left: i > 0 ? meldStackVisible - meldCardW : 0,
-          ),
-          child: _buildMeldCard(cards[i]),
-        ),
-      );
-    }
+    final groupW = (cards.length - 1) * meldStackVisible + meldCardW;
     return Padding(
       padding: const EdgeInsets.only(right: 2),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (int i = 0; i < cards.length; i++)
-            Positioned(
-              left: i * meldStackVisible,
-              child: _buildMeldCard(cards[i]),
-            ),
-        ],
+      child: SizedBox(
+        width: groupW,
+        height: meldCardH,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (int i = 0; i < cards.length; i++)
+              Positioned(
+                left: i * meldStackVisible,
+                top: 0,
+                child: _buildMeldCard(cards[i]),
+              ),
+          ],
+        ),
       ),
     );
   }
