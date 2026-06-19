@@ -1388,6 +1388,12 @@ class AIStrategyHard extends AIStrategy {
         // 出靠的单张(discardCountInGroup==1)会破坏靠，无论是否有对子
         // 纯靠(无对子)或对子+靠(有对子)出单张都破坏靠
         final breaksKao = discardCountInGroup == 1;
+        // 检查该组是否有对子（对子+靠的情况）
+        final groupCharCount = <String, int>{};
+        for (final c in discardGroupCards) {
+          groupCharCount[c.character] = (groupCharCount[c.character] ?? 0) + 1;
+        }
+        final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
         if (breaksKao) {
           // 出这张牌会破坏靠，检查缺失字的剩余张数
           final missingChars = _groupChars[discardGroup - 1]
@@ -1418,6 +1424,16 @@ class AIStrategyHard extends AIStrategy {
                 score -= (200 + missingRem * 20) * huWeight;
               } else {
                 score -= (150 + missingRem * 15) * huWeight;
+              }
+            } else if (hasPairInGroup) {
+              // 对子+靠：出靠的单张是正确策略(保留对子碰坎获胡数)
+              // 大幅降低破坏靠惩罚，因为保留对子比保留靠更重要
+              if (quickDist <= 2) {
+                score -= 50 + missingRem * 5;
+              } else if (quickDist <= 4) {
+                score -= 30 + missingRem * 3;
+              } else {
+                score -= 10;
               }
             } else {
               // 普句靠(进张+0胡)，破坏代价较小
@@ -1559,7 +1575,27 @@ class AIStrategyHard extends AIStrategy {
           score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
-            score += 120; // 普句多一张
+            // 检查是否所有字都有2张（如七七十十生生）
+            // 这种情况出任何一张是拆对子，不是"句多一张"
+            // 对子可以碰成坎获得胡数，胡数不足时应保留
+            final allCharsHave2 = groupCharCount.values.every(
+              (cnt) => cnt >= 2,
+            );
+            if (allCharsHave2) {
+              score -= 100; // 拆对子惩罚，保留对子碰坎获胡数
+            } else {
+              // 检查出的是否是金对/精对（上上/福福），金对8胡不能拆
+              final isJingPair =
+                  (discardGroup == 1 || discardGroup == 8) &&
+                  (cardToDiscard.character == '上' ||
+                      cardToDiscard.character == '福');
+              if (isJingPair) {
+                // 金对8胡，拆掉损失巨大，重罚
+                score -= 300;
+              } else {
+                score += 120; // 普句多一张
+              }
+            }
           }
         } else if (discardGroupCharSet.length == 2) {
           if (!hasPairInGroup) {
@@ -1585,8 +1621,90 @@ class AIStrategyHard extends AIStrategy {
               } else {
                 score += 60;
               }
+            } else {
+              // discardCountInGroup >= 2：拆对子
+              // 检查对子的字是否还有剩余张数（能否碰成坎获胡数）
+              final pairRem = _remainingCount(
+                cardToDiscard.character,
+                visibleCount,
+              );
+              if (pairRem > 0) {
+                // 对子可以碰成坎获得胡数
+                // 胡数越少，拆对子越不划算（依赖胡数的胡牌类型）
+                // 碰成坎可获得3胡，对胡数不足的牌型是重要胡数来源
+                final huWeight = huBefore < 6
+                    ? 3.0
+                    : (huBefore < 11 ? 2.0 : 1.0);
+                score -= (120 * huWeight).roundToDouble();
+              }
+              // pairRem == 0 时无法碰成坎，拆对子不惩罚
             }
           }
+        }
+      }
+    }
+
+    // 胡数足够(>=11)时的出牌优先级：优先出单张，保留对子/坎
+    // 对子可通过碰成坎获得胡数，坎是已确定的胡数来源，都不应轻易拆
+    if (huBefore >= 11 &&
+        shiDuiPotential <= 0 &&
+        heiYuanPotential <= 0 &&
+        hongYuanPotential <= 0 &&
+        kuHuPotential <= 0) {
+      final discardGroup = cardToDiscard.sentence;
+      final discardGroupCards = player.hand
+          .where((c) => c.sentence == discardGroup)
+          .toList();
+      final discardGroupCharSet = discardGroupCards
+          .map((c) => c.character)
+          .toSet();
+      final discardCountInGroup = discardGroupCards
+          .where((c) => c.character == cardToDiscard.character)
+          .length;
+      final groupCharCount = <String, int>{};
+      for (final c in discardGroupCards) {
+        groupCharCount[c.character] = (groupCharCount[c.character] ?? 0) + 1;
+      }
+      final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
+
+      if (discardGroupCharSet.length == 1) {
+        // 孤张/单张（同组只有1种字）：最优先出
+        score += 200;
+      } else if (discardGroupCharSet.length == 2) {
+        if (hasPairInGroup) {
+          if (discardCountInGroup == 1) {
+            // 对子+单张：出单张，保留对子
+            score += 150;
+          } else {
+            // 拆对子：惩罚（对子可碰成坎获胡数）
+            score -= 100;
+          }
+        } else {
+          // 普靠：出一张变孤张
+          score += 50;
+        }
+      } else if (discardGroupCharSet.length == 3) {
+        // 完整句或3种字都有
+        final allCharsHave2 = groupCharCount.values.every((cnt) => cnt >= 2);
+        if (allCharsHave2) {
+          // 3种字都有2张（如七七十十生生）：拆对子，惩罚
+          score -= 100;
+        } else if (discardCountInGroup == 1) {
+          // 句中单张：出单张会破坏句，但胡数够时句不是必须
+          // 检查该组是否已有坎/招（3张或4张同字），已有坎/招时单张更应优先出
+          // 因为坎/招是已确定的胡数来源，单张是多余的
+          final hasKanOrZhaoInGroup = groupCharCount.values.any(
+            (cnt) => cnt >= 3,
+          );
+          if (hasKanOrZhaoInGroup) {
+            // 组内已有坎/招，单张是多余牌，最优先出
+            score += 250;
+          } else {
+            score += 80;
+          }
+        } else {
+          // 句多一张：出多余的对子张
+          score += 100;
         }
       }
     }
