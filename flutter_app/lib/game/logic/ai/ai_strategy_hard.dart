@@ -1311,15 +1311,24 @@ class AIStrategyHard extends AIStrategy {
           .map((c) => c.character)
           .toSet();
       if (discardGroupCharSet.length == 3) {
-        // 出牌前该组是完整句，出牌后会破坏它
-        // 惩罚力度：距离越近越不应该拆句
-        if (quickDist <= 2) {
-          score -= 300;
-        } else if (quickDist <= 4) {
-          score -= 200;
-        } else {
-          score -= 100;
+        // 该组有3种字，检查出牌的字是否真的会破坏句
+        // 只有当出牌的字只有1张时，出掉才会破坏句(3字各1张=完整句)
+        // 如果出牌的字有2张以上，出1张后仍保留1张，句不破坏(句+对子结构)
+        final discardCountInGroup = discardGroupCards
+            .where((c) => c.character == cardToDiscard.character)
+            .length;
+        if (discardCountInGroup == 1) {
+          // 出牌的字只有1张，出掉会破坏句，施加惩罚
+          // 惩罚力度：距离越近越不应该拆句
+          if (quickDist <= 2) {
+            score -= 300;
+          } else if (quickDist <= 4) {
+            score -= 200;
+          } else {
+            score -= 100;
+          }
         }
+        // discardCountInGroup >= 2 时，出1张不破坏句(句+对子结构)，不惩罚
       } else if (discardGroupCharSet.length == 2) {
         // 出牌前该组有2种不同字，可能是靠或对子+单张
         // 只有真正的靠(2种字各1张，无对子)出单张才破坏靠
