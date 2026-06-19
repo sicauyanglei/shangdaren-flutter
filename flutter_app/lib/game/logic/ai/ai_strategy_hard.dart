@@ -1536,7 +1536,24 @@ class AIStrategyHard extends AIStrategy {
             score -= 50; // 破坏对子/坎的惩罚
           }
         } else if (discardGroupCharSet.length == 3) {
-          if (discardCountInGroup >= 2) {
+          // 检查是否是"坎+靠"结构（某字>=3，其余各1张）
+          // "坎+靠"中坎已是完整面子，靠单张应按孤张/靠单张处理，不按句处理
+          final hasKanOrZhao = groupCharCount.values.any((cnt) => cnt >= 3);
+          if (hasKanOrZhao && discardCountInGroup == 1) {
+            // 坎+靠：出靠单张，坎已是完整面子不参与靠
+            // 靠的进张价值主要是进坎字组招，概率取决于坎字剩余张数
+            final kanChar = groupCharCount.entries
+                .firstWhere((e) => e.value >= 3)
+                .key;
+            final kanRem = _remainingCount(kanChar, visibleCount);
+            if (kanRem <= 0) {
+              score += 200; // 坎字已出完，靠无进张价值，优先出
+            } else if (kanRem <= 1) {
+              score += 150; // 坎字剩余少，靠进张概率低，优先出
+            } else {
+              score += 80; // 坎字还有剩余，靠有进张价值（可组招），稍后出
+            }
+          } else if (discardCountInGroup >= 2) {
             score += 120; // 普句多一张
           }
         } else if (discardGroupCharSet.length == 2) {
