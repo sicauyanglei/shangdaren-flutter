@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart' hide Card;
 import '../core/atlas_loader.dart';
 import '../models/card.dart';
@@ -16,7 +17,44 @@ class ReplayScreen extends StatefulWidget {
   State<ReplayScreen> createState() => _ReplayScreenState();
 }
 
-class _ReplayScreenState extends State<ReplayScreen> {
+/// 飞牌动画状态
+class _FlyCard {
+  final Card card;
+  final bool faceUp;
+  final double fromX, fromY;
+  final double toX, toY;
+  final double fromScale, toScale;
+  final double fromW, fromH;
+  final double toW, toH;
+  double progress; // 0..1
+  final Duration duration;
+  final Duration delay;
+  bool started;
+  bool flash; // 到达后是否闪烁
+
+  _FlyCard({
+    required this.card,
+    this.faceUp = true,
+    required this.fromX,
+    required this.fromY,
+    required this.toX,
+    required this.toY,
+    this.fromScale = 1.0,
+    this.toScale = 1.0,
+    required this.fromW,
+    required this.fromH,
+    required this.toW,
+    required this.toH,
+    this.progress = 0,
+    required this.duration,
+    this.delay = Duration.zero,
+    this.started = false,
+    this.flash = false,
+  });
+}
+
+class _ReplayScreenState extends State<ReplayScreen>
+    with TickerProviderStateMixin {
   List<List<Card>> _hands = <List<Card>>[];
   List<List<Card>> _discards = <List<Card>>[];
   List<List<Meld>> _melds = <List<Meld>>[];
@@ -28,6 +66,17 @@ class _ReplayScreenState extends State<ReplayScreen> {
   Timer? _timer;
   String _statusText = '';
   int _viewPlayerIndex = 1; // 主视角玩家，默认人类玩家
+
+  // 飞牌动画系统
+  final List<_FlyCard> _flyingCards = [];
+  AnimationController? _animController;
+  Timer? _animTimer;
+  bool _animInProgress = false;
+  // 闪烁的弃牌（最后出的牌）
+  int _flashPlayerIndex = -1;
+  int _flashCardId = -1;
+  // 摸牌标记（最后摸的牌ID，用于主视角显示"摸"字）
+  int _moCardId = -1;
 
   // 牌局页面设计尺寸
   static const double designWidth = 1280.0;
@@ -90,6 +139,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
     _isPaused = true;
     _isPlaying = false;
     _timer?.cancel();
+    _animTimer?.cancel();
+    _flyingCards.clear();
+    _animInProgress = false;
     setState(() {
       _statusText =
           '已暂停 - 第${_currentActionIndex + 1}/${widget.replay.actions.length}步';
@@ -98,6 +150,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
 
   void _stopReplay() {
     _timer?.cancel();
+    _animTimer?.cancel();
+    _flyingCards.clear();
+    _animInProgress = false;
     _isPlaying = false;
     _isPaused = false;
     _initHands();
@@ -119,7 +174,6 @@ class _ReplayScreenState extends State<ReplayScreen> {
     }
     _currentActionIndex++;
     final action = widget.replay.actions[_currentActionIndex];
-    _applyAction(action);
     final playerName = widget
         .replay
         .playerNames[action.playerIndex >= 0 ? action.playerIndex : 0];
@@ -127,7 +181,359 @@ class _ReplayScreenState extends State<ReplayScreen> {
       _statusText =
           '${_actionLabel(action.type, playerName)} - ${_currentActionIndex + 1}/${widget.replay.actions.length}';
     });
-    final delay = (800 / _speed).round();
+    // 先播放动画，动画完成后应用状态变更
+    _playActionWithAnimation(action);
+  }
+
+  /// 获取玩家在设计坐标系中的手牌位置
+  Offset _playerHandPos(int playerIndex) {
+    final positions = _positionMap;
+    if (playerIndex == positions[2]) {
+      // 底部主视角
+      return const Offset(640, 580);
+    } else if (playerIndex == positions[0]) {
+      // 左上
+      return const Offset(60, 276);
+    } else {
+      // 右上
+      return const Offset(1220, 276);
+    }
+  }
+
+  /// 获取玩家在设计坐标系中的组合牌位置
+  Offset _playerMeldPos(int playerIndex) {
+    final positions = _positionMap;
+    if (playerIndex == positions[2]) {
+      // 底部主视角 - 组合牌在头像上方
+      return const Offset(135, 600);
+    } else if (playerIndex == positions[0]) {
+      // 左上
+      return const Offset(60, 180);
+    } else {
+      // 右上
+      return const Offset(1220, 180);
+    }
+  }
+
+  /// 牌堆位置
+  static const _deckPos = Offset(600, 9.6);
+
+  /// 中央出牌区
+  static const _centerPos = Offset(620, 276);
+
+  /// 卡牌尺寸常量
+  static const double _flyHandCardW = 56.0;
+  static const double _flyHandCardH = 224.0;
+  static const double _flySmallCardW = 28.0;
+  static const double _flySmallCardH = 48.0;
+  static const double _flyMeldCardW = 34.0;
+  static const double _flyMeldCardH = 56.0;
+
+  void _playActionWithAnimation(ReplayAction action) {
+    _flyingCards.clear();
+    _animInProgress = true;
+    _moCardId = -1;
+
+    final speedFactor = 1.0 / _speed;
+    final pi = action.playerIndex;
+
+    switch (action.type) {
+      case 'draw':
+        _startDrawAnimation(action, pi, speedFactor);
+        break;
+      case 'discard':
+        _startDiscardAnimation(action, pi, speedFactor);
+        break;
+      case 'chi':
+        _startMeldAnimation(action, pi, 'chi', speedFactor);
+        break;
+      case 'peng':
+        _startMeldAnimation(action, pi, 'peng', speedFactor);
+        break;
+      case 'zhao':
+        _startMeldAnimation(action, pi, 'zhao', speedFactor);
+        break;
+      case 'zhao_from_hand':
+        _startZhaoFromHandAnimation(action, pi, speedFactor);
+        break;
+      case 'hu':
+      case 'zimo':
+        _startHuAnimation(action, pi, speedFactor);
+        break;
+      default:
+        // piao, liuju等无动画
+        _applyAction(action);
+        _animInProgress = false;
+        _scheduleNext();
+        break;
+    }
+  }
+
+  /// 摸牌动画：牌堆 → 中央 → 手牌
+  void _startDrawAnimation(ReplayAction action, int pi, double sf) {
+    final card = _deserializeCard(action.data['card']);
+    final handPos = _playerHandPos(pi);
+    final isMain = pi == _positionMap[2];
+    final faceUp = isMain;
+    final cardW = isMain ? _flyHandCardW : _flyMeldCardW;
+    final cardH = isMain ? _flyHandCardH : _flyMeldCardH;
+
+    // 阶段1: 牌堆 → 中央 (0.2s)
+    _flyingCards.add(
+      _FlyCard(
+        card: card,
+        faceUp: false,
+        fromX: _deckPos.dx,
+        fromY: _deckPos.dy,
+        toX: _centerPos.dx,
+        toY: _centerPos.dy,
+        fromW: 160,
+        fromH: 40,
+        toW: 160,
+        toH: 40,
+        duration: Duration(milliseconds: (200 * sf).round()),
+      ),
+    );
+    // 阶段2: 中央 → 手牌 (0.3s, 延迟0.2s)
+    _flyingCards.add(
+      _FlyCard(
+        card: card,
+        faceUp: faceUp,
+        fromX: _centerPos.dx,
+        fromY: _centerPos.dy,
+        toX: handPos.dx,
+        toY: handPos.dy,
+        fromW: 160,
+        fromH: 40,
+        toW: cardW,
+        toH: cardH,
+        duration: Duration(milliseconds: (300 * sf).round()),
+        delay: Duration(milliseconds: (200 * sf).round()),
+      ),
+    );
+
+    if (isMain) _moCardId = card.id;
+    _runAnimation(
+      action,
+      totalDuration: Duration(milliseconds: (500 * sf).round()),
+    );
+  }
+
+  /// 出牌动画：手牌 → 中央(闪烁)
+  void _startDiscardAnimation(ReplayAction action, int pi, double sf) {
+    final card = _deserializeCard(action.data['card']);
+    final handPos = _playerHandPos(pi);
+    final isMain = pi == _positionMap[2];
+    final fromW = isMain ? _flyHandCardW : _flyMeldCardW;
+    final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
+
+    _flyingCards.add(
+      _FlyCard(
+        card: card,
+        faceUp: true,
+        fromX: handPos.dx,
+        fromY: handPos.dy,
+        toX: _centerPos.dx,
+        toY: _centerPos.dy,
+        fromW: fromW,
+        fromH: fromH,
+        toW: _flySmallCardW * 1.5,
+        toH: _flySmallCardH * 1.5,
+        duration: Duration(milliseconds: (300 * sf).round()),
+        flash: true,
+      ),
+    );
+
+    _runAnimation(
+      action,
+      totalDuration: Duration(milliseconds: (400 * sf).round()),
+    );
+  }
+
+  /// 吃/碰/招动画：弃牌区的牌+手牌的牌 → 组合牌区
+  void _startMeldAnimation(
+    ReplayAction action,
+    int pi,
+    String meldType,
+    double sf,
+  ) {
+    final meldPos = _playerMeldPos(pi);
+    final handPos = _playerHandPos(pi);
+    final isMain = pi == _positionMap[2];
+    final fromW = isMain ? _flyHandCardW : _flyMeldCardW;
+    final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
+
+    // 从中央(弃牌区)飞来的牌
+    final fromCard = _deserializeCard(
+      action.data['fromCard'] ?? action.data['card'],
+    );
+    _flyingCards.add(
+      _FlyCard(
+        card: fromCard,
+        faceUp: true,
+        fromX: _centerPos.dx,
+        fromY: _centerPos.dy,
+        toX: meldPos.dx,
+        toY: meldPos.dy,
+        fromW: _flySmallCardW * 1.5,
+        fromH: _flySmallCardH * 1.5,
+        toW: _flyMeldCardW,
+        toH: _flyMeldCardH,
+        duration: Duration(milliseconds: (300 * sf).round()),
+      ),
+    );
+
+    // 从手牌飞来的牌
+    List<Card> handCards;
+    if (meldType == 'chi') {
+      handCards = _deserializeCardList(action.data['cards']);
+    } else {
+      // peng: 2张, zhao: 3张
+      final card = _deserializeCard(action.data['card']);
+      final count = meldType == 'peng' ? 2 : 3;
+      handCards = [];
+      for (int i = 0; i < count; i++) {
+        handCards.add(card);
+      }
+    }
+
+    for (int i = 0; i < handCards.length; i++) {
+      _flyingCards.add(
+        _FlyCard(
+          card: handCards[i],
+          faceUp: true,
+          fromX: handPos.dx + (i - 1) * 10,
+          fromY: handPos.dy,
+          toX: meldPos.dx + (i + 1) * (_flyMeldCardW * 0.5),
+          toY: meldPos.dy,
+          fromW: fromW,
+          fromH: fromH,
+          toW: _flyMeldCardW,
+          toH: _flyMeldCardH,
+          duration: Duration(milliseconds: (300 * sf).round()),
+          delay: Duration(milliseconds: (i * 50 * sf).round()),
+        ),
+      );
+    }
+
+    _runAnimation(
+      action,
+      totalDuration: Duration(milliseconds: (500 * sf).round()),
+    );
+  }
+
+  /// 手牌招动画：手牌4张 → 组合牌区
+  void _startZhaoFromHandAnimation(ReplayAction action, int pi, double sf) {
+    final meldPos = _playerMeldPos(pi);
+    final handPos = _playerHandPos(pi);
+    final isMain = pi == _positionMap[2];
+    final fromW = isMain ? _flyHandCardW : _flyMeldCardW;
+    final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
+    final cards = _deserializeCardList(action.data['cards']);
+
+    for (int i = 0; i < cards.length; i++) {
+      _flyingCards.add(
+        _FlyCard(
+          card: cards[i],
+          faceUp: true,
+          fromX: handPos.dx + (i - 1) * 10,
+          fromY: handPos.dy,
+          toX: meldPos.dx + i * (_flyMeldCardW * 0.5),
+          toY: meldPos.dy,
+          fromW: fromW,
+          fromH: fromH,
+          toW: _flyMeldCardW,
+          toH: _flyMeldCardH,
+          duration: Duration(milliseconds: (300 * sf).round()),
+          delay: Duration(milliseconds: (i * 50 * sf).round()),
+        ),
+      );
+    }
+
+    _runAnimation(
+      action,
+      totalDuration: Duration(milliseconds: (500 * sf).round()),
+    );
+  }
+
+  /// 胡牌/自摸动画：牌飞到中央展示
+  void _startHuAnimation(ReplayAction action, int pi, double sf) {
+    final card = _deserializeCard(action.data['card']);
+    final handPos = _playerHandPos(pi);
+    final isMain = pi == _positionMap[2];
+    final fromW = isMain ? _flyHandCardW : _flyMeldCardW;
+    final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
+
+    // 点炮：从出牌者位置飞到胡牌者
+    // 自摸：从手牌位置飞到中央
+    final fromPos = action.type == 'zimo' ? handPos : _centerPos;
+
+    _flyingCards.add(
+      _FlyCard(
+        card: card,
+        faceUp: true,
+        fromX: fromPos.dx,
+        fromY: fromPos.dy,
+        toX: _centerPos.dx,
+        toY: _centerPos.dy,
+        fromW: fromW,
+        fromH: fromH,
+        toW: _flyHandCardW * 0.8,
+        toH: _flyHandCardH * 0.8,
+        duration: Duration(milliseconds: (400 * sf).round()),
+        flash: true,
+      ),
+    );
+
+    _runAnimation(
+      action,
+      totalDuration: Duration(milliseconds: (600 * sf).round()),
+    );
+  }
+
+  /// 运行动画，完成后应用状态变更并继续下一步
+  void _runAnimation(ReplayAction action, {required Duration totalDuration}) {
+    final startTime = DateTime.now();
+    _animTimer?.cancel();
+
+    void tick() {
+      final elapsed = DateTime.now().difference(startTime);
+      for (final fc in _flyingCards) {
+        if (!fc.started) {
+          if (elapsed >= fc.delay) {
+            fc.started = true;
+          } else {
+            continue;
+          }
+        }
+        if (fc.started) {
+          final localElapsed = elapsed - fc.delay;
+          fc.progress =
+              (localElapsed.inMilliseconds / fc.duration.inMilliseconds).clamp(
+                0.0,
+                1.0,
+              );
+        }
+      }
+      setState(() {});
+
+      if (elapsed >= totalDuration) {
+        _animTimer?.cancel();
+        _flyingCards.clear();
+        _applyAction(action);
+        _animInProgress = false;
+        _scheduleNext();
+      }
+    }
+
+    _animTimer = Timer.periodic(
+      const Duration(milliseconds: 16),
+      (_) => tick(),
+    );
+  }
+
+  void _scheduleNext() {
+    final delay = (300 / _speed).round();
     _timer = Timer(Duration(milliseconds: delay), () {
       if (mounted && _isPlaying && !_isPaused) _playNextAction();
     });
@@ -282,6 +688,8 @@ class _ReplayScreenState extends State<ReplayScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _animTimer?.cancel();
+    _animController?.dispose();
     super.dispose();
   }
 
@@ -399,28 +807,8 @@ class _ReplayScreenState extends State<ReplayScreen> {
               child: _buildRightMeldsAndDiscards(positions[1]),
             ),
           ),
-          // 中间状态文字
-          Positioned(
-            top: designHeight * 0.4 * scale,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _statusText,
-                  style: const TextStyle(fontSize: 14, color: Colors.white70),
-                ),
-              ),
-            ),
-          ),
+          // 飞牌动画Overlay层
+          if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 控制栏
           _buildControls(),
         ],
@@ -764,25 +1152,57 @@ class _ReplayScreenState extends State<ReplayScreen> {
         });
 
       // 横向层叠不同字(偏移meldStackVisible)，同字层叠显示计数
+      // 卡牌在下层，数字徽章在上层（不被相邻卡牌覆盖）
       final List<Widget> cardWidgets = [];
+      final List<Widget> badgeWidgets = [];
+      final badgeR = meldCardW * 0.35;
       for (int ci = 0; ci < sortedChars.length; ci++) {
         final chars = charGroups[sortedChars[ci]]!;
+        final stackCount = chars.length;
         cardWidgets.add(
           Positioned(
             left: ci * meldStackVisible,
             top: 0,
-            child: _buildAIHandMeldCard(chars[0], chars.length),
+            child: _buildAIHandMeldCard(chars[0], 1),
           ),
         );
+        // 徽章单独放最上层，不参与折叠
+        if (stackCount > 1) {
+          badgeWidgets.add(
+            Positioned(
+              left: ci * meldStackVisible + meldCardW - badgeR * 2,
+              top: 0,
+              child: Container(
+                width: badgeR * 2,
+                height: badgeR * 2,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF4444),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$stackCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: badgeR * 0.9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
       }
 
-      final groupW =
-          (sortedChars.length - 1) * meldStackVisible + meldCardW;
+      final groupW = (sortedChars.length - 1) * meldStackVisible + meldCardW;
       groupWidgets.add(
         SizedBox(
           width: groupW,
           height: meldCardH,
-          child: Stack(clipBehavior: Clip.none, children: cardWidgets),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [...cardWidgets, ...badgeWidgets],
+          ),
         ),
       );
       groupWidths.add(groupW);
@@ -798,8 +1218,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
     for (int i = 0; i < groupWidgets.length; i++) {
       final gw = groupWidgets[i];
       final groupW = groupWidths[i];
-      final newWidth =
-          currentGroups.isEmpty ? groupW : currentRowWidth + 2 + groupW;
+      final newWidth = currentGroups.isEmpty
+          ? groupW
+          : currentRowWidth + 2 + groupW;
       if (groupCountInRow >= 3 ||
           (currentGroups.isNotEmpty && newWidth > maxW)) {
         rows.add(
@@ -832,8 +1253,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
     }
 
     return Column(
-      crossAxisAlignment:
-          isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isRight
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: rows,
     );
@@ -977,9 +1399,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
     return Container(
       width: meldCardW,
       height: meldCardH,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(3),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(3)),
       clipBehavior: Clip.hardEdge,
       child: pinyin != null
           ? Image.asset(
@@ -1034,9 +1454,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
     return Container(
       width: smallCardW,
       height: smallCardH,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(2)),
       clipBehavior: Clip.hardEdge,
       child: pinyin != null
           ? Image.asset(
@@ -1136,6 +1554,73 @@ class _ReplayScreenState extends State<ReplayScreen> {
             sentenceWidgets[i],
           ],
         ],
+      ),
+    );
+  }
+
+  /// 构建飞牌动画Overlay层
+  Widget _buildFlyingCardOverlay(double scale) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: _flyingCards.where((fc) => fc.started).map((fc) {
+            final t = fc.progress;
+            // easeInOutCubic
+            final eased = t < 0.5
+                ? 4 * t * t * t
+                : 1 - math.pow(1 - t, 3) * 1.0;
+            final x = fc.fromX + (fc.toX - fc.fromX) * eased;
+            final y = fc.fromY + (fc.toY - fc.fromY) * eased;
+            final w = fc.fromW + (fc.toW - fc.fromW) * eased;
+            final h = fc.fromH + (fc.toH - fc.fromH) * eased;
+
+            final pinyin = AtlasLoader.charToPinyin[fc.card.character];
+
+            return Positioned(
+              left: x * scale,
+              top: y * scale,
+              child: Container(
+                width: w * scale,
+                height: h * scale,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 8,
+                      offset: const Offset(2, 4),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: fc.faceUp && pinyin != null
+                    ? Image.asset(
+                        'assets/html/images/$pinyin.png',
+                        width: w * scale,
+                        height: h * scale,
+                        fit: BoxFit.fill,
+                      )
+                    : Container(
+                        color: const Color(0xFF2d5a3d),
+                        child: Center(
+                          child: Container(
+                            width: w * scale * 0.6,
+                            height: h * scale * 0.6,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: const Color(0xFF4a8a5e),
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
