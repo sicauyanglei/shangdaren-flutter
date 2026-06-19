@@ -324,7 +324,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // 底部 - 头像（先渲染，z-order最低）
+          // 底部 - 头像
           Positioned(
             left: myAvatarLeft * scale,
             bottom: myAvatarBottom * scale,
@@ -338,17 +338,28 @@ class _ReplayScreenState extends State<ReplayScreen> {
               ),
             ),
           ),
-          // 底部 - 组合牌+弃牌+手牌（先渲染，避免遮挡左右玩家）
+          // 底部 - 组合牌+弃牌（在头像上方）
           Positioned(
             left: myAvatarLeft * scale,
             bottom: (myAvatarBottom + 108 + avatarToMeldGap) * scale,
             child: Transform.scale(
               scale: scale,
               alignment: Alignment.bottomLeft,
-              child: _buildBottomMeldsDiscardsAndHand(positions[2]),
+              child: _buildBottomMeldsAndDiscards(positions[2]),
             ),
           ),
-          // 左上 - 头像（后渲染，z-order高于底部）
+          // 底部 - 手牌（水平居中，与正常牌局一致，底部超出屏幕80px）
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: -80 * scale,
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.bottomCenter,
+              child: _buildMainHand(_hands[positions[2]]),
+            ),
+          ),
+          // 左上 - 头像
           Positioned(
             left: aiAvatarLeft * scale,
             top: aiAvatarTop * scale,
@@ -358,7 +369,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
               child: _buildAvatarArea(positions[0], isLeft: true),
             ),
           ),
-          // 左上 - 组合牌+弃牌（后渲染，确保不被底部手牌遮挡）
+          // 左上 - 组合牌+弃牌
           Positioned(
             left: aiAvatarLeft * scale,
             top: (aiAvatarTop + 108 + avatarToMeldGap) * scale,
@@ -694,11 +705,10 @@ class _ReplayScreenState extends State<ReplayScreen> {
     );
   }
 
-  /// 底部玩家组合牌+弃牌+手牌
-  Widget _buildBottomMeldsDiscardsAndHand(int playerIndex) {
+  /// 底部玩家组合牌+弃牌（不含手牌，手牌单独居中定位）
+  Widget _buildBottomMeldsAndDiscards(int playerIndex) {
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
-    final hand = _hands[playerIndex];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -718,8 +728,6 @@ class _ReplayScreenState extends State<ReplayScreen> {
           ),
           const SizedBox(height: aiHandToMeldGap),
         ],
-        // 手牌 - 不限制宽度，允许超过leftMaxW
-        _buildMainHand(hand),
       ],
     );
   }
@@ -1118,15 +1126,17 @@ class _ReplayScreenState extends State<ReplayScreen> {
       );
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (int i = 0; i < sentenceWidgets.length; i++) ...[
-          if (i > 0) const SizedBox(width: handSentenceGap),
-          sentenceWidgets[i],
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (int i = 0; i < sentenceWidgets.length; i++) ...[
+            if (i > 0) const SizedBox(width: handSentenceGap),
+            sentenceWidgets[i],
+          ],
         ],
-      ],
+      ),
     );
   }
 
