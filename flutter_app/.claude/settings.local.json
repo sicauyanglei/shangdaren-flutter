@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git clone:*)",
       "Bash(pip install:*)",
-      "Bash(graphify:*)"
+      "Bash(graphify:*)",
+      "Bash(flutter build:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)"
     ]
   }
 }
