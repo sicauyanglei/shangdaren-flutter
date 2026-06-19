@@ -879,7 +879,9 @@ class AIStrategyHard extends AIStrategy {
     double bestHuScore = -1;
 
     for (final card in hand) {
-      if (_isPartOfKan(card, hand)) continue;
+      // 招（4张同字）不能出，跳过
+      // 手牌坎（3张同字）出1张变对子，损失3胡但可能形成听牌，不跳过
+      if (_isPartOfZhao(card, hand)) continue;
 
       final testHand = List<Card>.from(hand);
       testHand.remove(card);
