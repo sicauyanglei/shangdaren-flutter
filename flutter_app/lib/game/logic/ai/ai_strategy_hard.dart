@@ -3169,6 +3169,19 @@ class AIStrategyHard extends AIStrategy {
 
     if (bestBenefit < 0) return false;
 
+    // 胡数小于8且不走黑元路线时，吃牌如果破坏普通对子，不吃
+    // 例外：吃后听牌（bestBenefit>=10000）时允许吃
+    // 例：手牌"丘丘己"胡数<8且非黑元，吃"乙"会破坏丘对，不吃
+    if (!player.isTing && bestBenefit < 10000) {
+      final totalHu = _evaluateHuScore(player);
+      if (totalHu < 8) {
+        final heiYuanPotential = _evaluateHeiYuanPotential(player);
+        if (heiYuanPotential <= 0 && _wouldBreakNormalPair(player, card)) {
+          return false;
+        }
+      }
+    }
+
     // 吃后听牌（bestBenefit>=10000）时允许吃
     if (player.isTing) return bestBenefit >= 10000;
 
@@ -3238,6 +3251,40 @@ class AIStrategyHard extends AIStrategy {
 
     // 出的牌也属于这个句组
     return allPresent && allSingle && groupChars.contains(card.character);
+  }
+
+  /// 检查吃牌是否会破坏普通对子
+  /// 普通对子 = 2张同字（非上/福，即普对/银对，不含金对上上/福福）
+  /// 吃牌消耗的2个字中，如果有任一字在手牌中恰好有2张且非上/福，
+  /// 则吃牌会破坏该对子（吃掉1张后只剩1张单牌）
+  /// 例：手牌"丘丘己"，吃"乙"会消耗"丘"和"己"，"丘"有2张，破坏丘对
+  bool _wouldBreakNormalPair(Player player, Card card) {
+    final hand = player.hand;
+    final otherChars = _getOtherCharsInGroup(card);
+    final availableChars = otherChars
+        .where((ch) => hand.any((c) => c.character == ch))
+        .toList();
+
+    if (availableChars.length < 2) return false;
+
+    // 提取手牌中的句，用于排除参与句的字
+    // 参与句的2张牌中，1张在句中，1张是单牌，不算对子
+    final handRemaining = List<Card>.from(hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(handRemaining, handASet);
+
+    for (final ch in availableChars) {
+      // 上/福的对子是金对，不属于"普通对子"
+      if (ch == '上' || ch == '福') continue;
+      final chCount = hand.where((c) => c.character == ch).length;
+      if (chCount != 2) continue; // 恰好2张才是对子
+      // 参与句的字，1张在句中，1张是单牌，不算对子
+      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
+      if (inJu) continue;
+      // 该字恰好2张且非上/福，吃掉1张会破坏对子
+      return true;
+    }
+    return false;
   }
 
   @override
