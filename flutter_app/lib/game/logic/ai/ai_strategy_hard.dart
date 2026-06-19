@@ -540,7 +540,9 @@ class AIStrategyHard extends AIStrategy {
     _initCache(player, state);
 
     if (player.isTing) {
-      return _selectDiscardWhenTing(player, state);
+      final tingCard = _selectDiscardWhenTing(player, state);
+      if (tingCard != null) return tingCard;
+      // 死听且无法切换到有效听牌，回退到综合评分重新组织牌型
     }
 
     return _selectDiscardOptimized(player, state);
@@ -852,12 +854,25 @@ class AIStrategyHard extends AIStrategy {
     return benefit;
   }
 
-  Card _selectDiscardWhenTing(Player player, GameState state) {
+  Card? _selectDiscardWhenTing(Player player, GameState state) {
     final hand = player.hand;
     final visibleCount =
         _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
     final totalUnknown =
         _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+
+    // 死听检测：所有听牌卡牌剩余张数都为0，无法通过点炮胡牌
+    bool isDeadTing = false;
+    if (player.tingCards.isNotEmpty) {
+      isDeadTing = true;
+      for (final tc in player.tingCards) {
+        final rem = _remainingCount(tc.character, visibleCount);
+        if (rem > 0) {
+          isDeadTing = false;
+          break;
+        }
+      }
+    }
 
     // 出牌前的胡数，用于胡数资格保护
     final huBefore = _evaluateHuScore(player);
@@ -974,6 +989,12 @@ class AIStrategyHard extends AIStrategy {
         bestTingProb = tingProb;
         bestHuScore = effectiveScore;
       }
+    }
+
+    // 死听状态下，如果没有找到有效听牌（所有方案都是死听或不听牌），
+    // 返回null让调用者回退到综合评分，重新组织牌型追求新听牌
+    if (isDeadTing && (bestCard == null || bestTingCount <= 0)) {
+      return null;
     }
 
     // 如果找到听牌出牌，返回
@@ -1131,8 +1152,10 @@ class AIStrategyHard extends AIStrategy {
             huQualifyMet = false;
           }
 
-          // 只有胡数资格满足时，才考虑作为bestTingCard
+          // 只有胡数资格满足且有效听牌（tingRem>0）时，才考虑作为bestTingCard
+          // 死听（tingRem==0）不作为bestTingCard，让综合评分接管
           if (huQualifyMet &&
+              tingRem > 0 &&
               (tingRem > bestTingRem ||
                   (tingRem == bestTingRem && tingProb > bestTingProb) ||
                   (tingRem == bestTingRem &&
@@ -1150,6 +1173,10 @@ class AIStrategyHard extends AIStrategy {
           tingScore += huScore * 10;
           if (isLate) tingScore += 3000;
           tingScore += huQualifyPenalty;
+          // 死听（tingRem==0）时，听牌无实际价值，大幅降低评分让综合评分接管
+          if (tingRem == 0) {
+            tingScore -= 9000;
+          }
           scored.add(MapEntry(card, tingScore));
           continue;
         }
