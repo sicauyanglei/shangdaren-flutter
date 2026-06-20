@@ -3683,15 +3683,22 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 11. 低胡数时门1/8保护：胡数≤8时，门1/8牌保留优先级高于门2-7的半靠和对子
-    // 因为门1/8含精字，精单4胡、精靠4胡、精句4胡，是低胡数时凑胡数的关键
+    // 11. 低胡数时门1/8精字保护：胡数≤8时，含精字(上/福)的牌型保留优先级提升
+    // 精字(上/福)提供高胡数(精单4胡、精靠4胡、精句4胡)，是低胡数时凑胡数的关键
+    // 银字(大/人/禄/寿)不提供胡数(银单0胡、银靠0胡)，不需要特殊保护
     if ((sentence == 1 || sentence == 8) && heiYuanPotential <= 0) {
       final huScore = _evaluateHuScore(player);
       if (huScore <= 8) {
-        // 低胡数时，门1/8的任何牌型都应优先保留
-        // 惩罚力度随胡数降低而增大
-        final lowHuPenalty = (8 - huScore) * 30.0; // 8胡→0, 0胡→-240
-        cardSelectionBonus -= lowHuPenalty;
+        // 检查该牌型是否含精字(上/福)
+        final groupChars = _groupChars[sentence - 1];
+        final jingChar = sentence == 1 ? '上' : '福';
+        final hasJingInGroup = byChar[jingChar]! > 0;
+        if (hasJingInGroup) {
+          // 含精字的牌型，惩罚力度随胡数降低而增大
+          final lowHuPenalty = (8 - huScore) * 30.0; // 8胡→0, 0胡→-240
+          cardSelectionBonus -= lowHuPenalty;
+        }
+        // 不含精字的牌型(如银单大/人、银对禄禄等)，不施加额外保护
       }
     }
 
