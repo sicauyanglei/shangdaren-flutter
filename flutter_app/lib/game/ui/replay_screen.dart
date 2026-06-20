@@ -53,6 +53,13 @@ class _FlyCard {
   });
 }
 
+/// 胡牌徽章信息
+class _HuBadgeInfo {
+  final String text;
+  final bool isPrimary;
+  _HuBadgeInfo({required this.text, required this.isPrimary});
+}
+
 class _ReplayScreenState extends State<ReplayScreen>
     with TickerProviderStateMixin {
   List<List<Card>> _hands = <List<Card>>[];
@@ -822,6 +829,9 @@ class _ReplayScreenState extends State<ReplayScreen>
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 结果面板（胡牌/流局）
           if (_showResult) _buildResultOverlay(scale),
+          // 胡牌徽章（赢家/点炮者头像旁边）
+          if (_showResult && widget.replay.resultType == 'hu')
+            ..._buildHuBadges(scale, positions),
           // 控制栏
           _buildControls(),
         ],
@@ -1647,6 +1657,198 @@ class _ReplayScreenState extends State<ReplayScreen>
     );
   }
 
+  /// 构建胡牌徽章列表（赢家/点炮者头像旁边）
+  List<Widget> _buildHuBadges(double scale, List<int> positions) {
+    final resultData = widget.replay.resultData;
+    if (resultData == null) return [];
+
+    final int winnerIndex = resultData['winnerIndex'] as int? ?? -1;
+    final String huType = resultData['huType'] as String? ?? '';
+    final String method = resultData['method'] as String? ?? '';
+    final int dianpaoIndex = resultData['dianpaoIndex'] as int? ?? -1;
+
+    final List<Widget> badgeWidgets = [];
+
+    // 赢家徽章：自摸 + 胡型 或 仅胡型
+    final winnerBadges = <_HuBadgeInfo>[];
+    if (method == '自摸') {
+      winnerBadges.add(_HuBadgeInfo(text: '自摸', isPrimary: true));
+    }
+    winnerBadges.add(_HuBadgeInfo(text: huType, isPrimary: false));
+    badgeWidgets.add(
+      _buildPlayerHuBadge(
+        playerIndex: winnerIndex,
+        badges: winnerBadges,
+        scale: scale,
+        positions: positions,
+      ),
+    );
+
+    // 点炮者徽章
+    if (method == '点炮' && dianpaoIndex >= 0) {
+      badgeWidgets.add(
+        _buildPlayerHuBadge(
+          playerIndex: dianpaoIndex,
+          badges: [_HuBadgeInfo(text: '点炮', isPrimary: true)],
+          scale: scale,
+          positions: positions,
+        ),
+      );
+    }
+
+    return badgeWidgets;
+  }
+
+  /// 构建单个玩家的胡牌徽章（定位在头像旁边）
+  Widget _buildPlayerHuBadge({
+    required int playerIndex,
+    required List<_HuBadgeInfo> badges,
+    required double scale,
+    required List<int> positions,
+  }) {
+    const double badgeGap = 4.0;
+    const double padH = 10.0;
+    const double padV = 6.0;
+    const double fontSize = 18.0;
+    const double badgeH = fontSize + padV * 2;
+    const double badgeGapFromAvatar = 10.0;
+
+    // 计算徽章总宽度
+    double totalW = 0;
+    final badgeWidths = <double>[];
+    for (final badge in badges) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: badge.text,
+          style: const TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            letterSpacing: 1,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final w = tp.width + padH * 2;
+      badgeWidths.add(w);
+      totalW += w;
+    }
+    totalW += (badges.length - 1) * badgeGap;
+
+    // 根据玩家位置确定徽章位置
+    // positions = [leftPlayerIndex, rightPlayerIndex, bottomPlayerIndex]
+    double left, top;
+    bool isRight = false;
+
+    if (playerIndex == positions[0]) {
+      // 左上玩家：徽章在头像右侧
+      left = (aiAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      top = (aiAvatarTop + 108 - badgeH) * scale;
+      isRight = false;
+    } else if (playerIndex == positions[2]) {
+      // 底部玩家：徽章在头像右侧
+      left = (myAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      top = (designHeight - myAvatarBottom - 108) * scale;
+      isRight = false;
+    } else {
+      // 右上玩家：徽章在头像左侧
+      left = (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
+          scale;
+      top = (aiAvatarTop + 108 - badgeH) * scale;
+      isRight = true;
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: Transform.scale(
+        scale: scale,
+        alignment: isRight ? Alignment.topRight : Alignment.topLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < badges.length; i++) ...[
+              if (i > 0) const SizedBox(width: badgeGap),
+              _buildSingleBadge(badges[i], badgeWidths[i], badgeH, padH, padV),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建单个徽章widget
+  Widget _buildSingleBadge(
+    _HuBadgeInfo badge,
+    double badgeW,
+    double badgeH,
+    double padH,
+    double padV,
+  ) {
+    // 颜色方案 - 与game_board.dart一致
+    List<Color> bgColors;
+    Color borderColor;
+    Color innerBorderColor;
+    Color glowColor;
+
+    if (badge.isPrimary && badge.text == '自摸') {
+      bgColors = const [Color(0xFF6a1b9a), Color(0xFF9c27b0)];
+      borderColor = const Color(0xFFffd700);
+      innerBorderColor = const Color(0xFFce93d8);
+      glowColor = const Color(0xFFce93d8);
+    } else if (badge.isPrimary && badge.text == '点炮') {
+      bgColors = const [Color(0xFFe65100), Color(0xFFff8f00)];
+      borderColor = const Color(0xFFffd700);
+      innerBorderColor = const Color(0xFFffcc80);
+      glowColor = const Color(0xFFffb74d);
+    } else {
+      bgColors = const [Color(0xFFc62828), Color(0xFFef5350)];
+      borderColor = const Color(0xFFffd700);
+      innerBorderColor = const Color(0xFFFF8A80);
+      glowColor = const Color(0xFFff6b6b);
+    }
+
+    return Container(
+      width: badgeW,
+      height: badgeH,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: bgColors,
+          begin: Alignment(-0.6, -0.6),
+          end: Alignment(0.6, 0.6),
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withOpacity(0.3),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: innerBorderColor.withOpacity(0.4), width: 1),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          badge.text,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            letterSpacing: 1,
+            shadows: [
+              Shadow(color: borderColor.withOpacity(0.6), blurRadius: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 构建回放结束后的结果面板（胡牌/流局）
   Widget _buildResultOverlay(double scale) {
     final resultType = widget.replay.resultType;
@@ -1655,8 +1857,6 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     // 胡牌信息
     final int winnerIndex = resultData?['winnerIndex'] as int? ?? -1;
-    final String huType = resultData?['huType'] as String? ?? '';
-    final String method = resultData?['method'] as String? ?? '';
     final String winnerName =
         winnerIndex >= 0 ? widget.replay.playerNames[winnerIndex] : '';
 
@@ -1685,103 +1885,20 @@ class _ReplayScreenState extends State<ReplayScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 标题行
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Text(
-                      isLiuju ? '流局' : '$winnerName 胡牌!',
-                      style: TextStyle(
-                        fontSize: 28 * scale,
-                        color: const Color(0xFFffd700),
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: const Color(0xFFffd700).withOpacity(0.5),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                    // 关闭按钮
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _showResult = false;
-                          });
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xCCcc0000),
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (!isLiuju) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFffd700).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFFffd700).withOpacity(0.5),
-                          ),
-                        ),
-                        child: Text(
-                          method,
-                          style: TextStyle(
-                            fontSize: 16 * scale,
-                            color: const Color(0xFFffd700),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4ecdc4).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFF4ecdc4).withOpacity(0.5),
-                          ),
-                        ),
-                        child: Text(
-                          huType,
-                          style: TextStyle(
-                            fontSize: 16 * scale,
-                            color: const Color(0xFF4ecdc4),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                Text(
+                  isLiuju ? '流局' : '$winnerName 胡牌!',
+                  style: TextStyle(
+                    fontSize: 28 * scale,
+                    color: const Color(0xFFffd700),
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFFffd700).withOpacity(0.5),
+                        blurRadius: 10,
                       ),
                     ],
                   ),
-                ],
+                ),
                 if (isLiuju) ...[
                   const SizedBox(height: 8),
                   const Text(
