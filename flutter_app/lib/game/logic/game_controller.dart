@@ -145,6 +145,7 @@ class GameController {
     }
     if (_isStartingRound) return;
     _isStartingRound = true;
+    _isPaused = false;
 
     // 重置托管状态（每局开始重新计数超时）
     // AI策略测试开关打开时，人类玩家自动进入托管状态

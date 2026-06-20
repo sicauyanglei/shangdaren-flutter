@@ -371,6 +371,10 @@ class ShangdarenGame extends FlameGame {
     bool piaoEnabled = false,
   }) {
     if (!_loaded) return;
+    _lastPlayedCard = null;
+    _scoreAnimPlayed = false;
+    _gameBoard?.clearLastDiscard();
+    _animationSystem?.clearAll();
     _gameController!.state.baseScore = baseScore;
     _gameController!.state.multiplierBase = multiplierBase;
     _gameController!.state.difficulty = difficulty;
