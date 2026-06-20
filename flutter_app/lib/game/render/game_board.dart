@@ -1352,10 +1352,14 @@ class GameBoard extends Component {
   }
 
   void _renderPlayedCards(Canvas canvas) {
-    if (lastPlayedCard == null) return;
+    // 自摸时使用huZimoCard，点炮时不渲染中央卡牌（已在弃牌区）
+    final isZimoDisplay =
+        showHuDisplay && huMethod == '自摸' && huZimoCard != null;
+    if (!isZimoDisplay && lastPlayedCard == null) return;
     if (!dealingComplete) return;
     if (showHuDisplay && huMethod == '点炮') return;
 
+    final displayCard = isZimoDisplay ? huZimoCard! : lastPlayedCard!;
     double px, py;
     if (dealingComplete) {
       px = designWidth / 2 - hCardW / 2;
@@ -1368,7 +1372,7 @@ class GameBoard extends Component {
     canvas.save();
     canvas.translate(px, py);
 
-    final hImg = _horizontalCardImages[lastPlayedCard!.character];
+    final hImg = _horizontalCardImages[displayCard.character];
     if (hImg != null) {
       final paint = Paint()..filterQuality = FilterQuality.high;
       final imgW = hImg.width.toDouble();
@@ -1387,7 +1391,7 @@ class GameBoard extends Component {
         paint,
       );
     } else if (_atlasImage != null && _atlasLoader != null) {
-      final pinyin = AtlasLoader.charToPinyin[lastPlayedCard!.character];
+      final pinyin = AtlasLoader.charToPinyin[displayCard.character];
       if (pinyin != null) {
         final info = _atlasLoader!.getSprite('v/$pinyin');
         if (info != null) {
@@ -1405,6 +1409,39 @@ class GameBoard extends Component {
           );
         }
       }
+    }
+
+    // 自摸时在卡牌中央显示"自摸"标签
+    if (isZimoDisplay) {
+      final bgPaint = Paint()..color = const Color(0xCC000000);
+      final bgW = hCardW * 0.7;
+      final bgH = hCardH * 0.5;
+      final bgX = (hCardW - bgW) / 2;
+      final bgY = (hCardH - bgH) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(bgX, bgY, bgW, bgH),
+          const Radius.circular(4),
+        ),
+        bgPaint,
+      );
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '自摸',
+          style: TextStyle(
+            fontSize: 20.0,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFFffd700),
+            shadows: [Shadow(color: const Color(0xFF000000), blurRadius: 4)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(
+        canvas,
+        Offset(hCardW / 2 - tp.width / 2, hCardH / 2 - tp.height / 2),
+      );
     }
 
     canvas.restore();
