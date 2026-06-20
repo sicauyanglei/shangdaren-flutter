@@ -3449,6 +3449,34 @@ class AIStrategyHard extends AIStrategy {
     return _cardGroupTypeScore[type] ?? 0;
   }
 
+  /// 获取牌型的结构分（区分门1/8和门2-7）
+  /// 门1/8含精字，组件分值不同
+  int _getCardGroupTypeScoreForMen(String type, int sentence) {
+    if (sentence != 1 && sentence != 8) {
+      return _cardGroupTypeScore[type] ?? 0;
+    }
+    // 门1/8精字分值映射
+    switch (type) {
+      case '孤张型': return 40; // 精单
+      case '半靠型': return 50; // 精靠
+      case '对型': return 20; // 银对(大/人/禄/寿的对)
+      case '对孤张型': return 60; // 银对+精单/银靠+精单，取最优拆解
+      case '句型': return 90; // 精句
+      case '坎型': return 150; // 精坎(上上上/福福福) 或 银坎
+      case '招型': return 200; // 精招
+      case '句孤张型': return 90; // 精句+精单/银单
+      case '对对型': return 40; // 银对+银对
+      case '坎孤张型': return 150; // 精坎+精单 或 银坎+银单
+      case '句半靠型': return 140; // 精句+精靠
+      case '坎半靠型': return 200; // 精坎+精靠 或 银坎+银靠
+      case '坎对型': return 170; // 精坎+银对 或 银坎+银对
+      case '招孤张型': return 200; // 精招+精单
+      case '招半靠型': return 250; // 精招+精靠
+      case '招对型': return 220; // 精招+银对
+      default: return _cardGroupTypeScore[type] ?? 0;
+    }
+  }
+
   /// 根据胡牌类型路线获取门间优先级权重
   /// 返回该门的优先拆解权重（越高越优先拆）
   double _getMenPriorityByRoute(
@@ -3515,7 +3543,7 @@ class AIStrategyHard extends AIStrategy {
       isShiDuiRoute,
     );
     final currentRank = _getRetentionRank(currentType);
-    final currentScore = _getCardGroupTypeScore(currentType);
+    final currentScore = _getCardGroupTypeScoreForMen(currentType, sentence);
 
     // 2. 分类出牌后的牌型
     final typeAfterDiscard = _classifyCardGroupType(
@@ -3529,7 +3557,7 @@ class AIStrategyHard extends AIStrategy {
       visibleCount,
       isShiDuiRoute,
     );
-    final scoreAfterDiscard = _getCardGroupTypeScore(typeAfterDiscard);
+    final scoreAfterDiscard = _getCardGroupTypeScoreForMen(typeAfterDiscard, sentence);
 
     // 3. 计算结构分损失
     final scoreLoss = currentScore - scoreAfterDiscard;
@@ -3545,9 +3573,8 @@ class AIStrategyHard extends AIStrategy {
     );
 
     // 5. 基础评分：保留排名越低（越应牺牲），越鼓励出牌
-    // 排名34(孤张型)→+200, 排名1(招招招型)→-200
-    // rank范围1-34，映射到 +200 ~ -200
-    final rankScore = (34 - currentRank) * 12.0; // 34→0, 1→396
+    // 排名34(孤张型)→最高正分(鼓励出), 排名1(招招招型)→最高负分(禁止出)
+    final rankScore = (currentRank - 17.5) * 12.0; // 34→198, 1→-198
 
     // 6. 结构分损失惩罚：损失越大越不应该出
     final lossPenalty = -scoreLoss * 1.5;
