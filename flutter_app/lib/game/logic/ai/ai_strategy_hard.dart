@@ -1656,7 +1656,8 @@ class AIStrategyHard extends AIStrategy {
               (cnt) => cnt >= 2,
             );
             if (allCharsHave2) {
-              score -= 100; // 拆对子惩罚，保留对子碰坎获胡数
+              // 对对型拆对子，排名30，优先于拆句(-200)但低于半靠(+80)
+              score += 40; // 对对型拆对子加分
             } else {
               // 检查出的是否是金对/精对（上上/福福），金对8胡不能拆
               final isJingPair =
@@ -1713,17 +1714,18 @@ class AIStrategyHard extends AIStrategy {
               }
             } else {
               // discardCountInGroup >= 2：拆对子
+              // 对型排名32，介于半靠(33)和句型(29)之间
+              // 拆对子优先于拆句，但次于拆半靠
+              // 给予正向加分+40，低于半靠(+80)但高于拆句(-200)
               if (pairRem > 0) {
-                // 对子可以碰成坎获得胡数
-                // 胡数越少，拆对子越不划算（依赖胡数的胡牌类型）
-                // 碰成坎可获得3胡，对胡数不足的牌型是重要胡数来源
-                final huWeight = huBefore < 6
-                    ? 3.0
-                    : (huBefore < 11 ? 2.0 : 1.0);
-                score -= (120 * huWeight).roundToDouble();
+                // 对子可以碰成坎获得胡数，但拆对子仍优先于拆句
+                // 胡数越少，对子碰坎价值越高，适当降低加分
+                final huBonus = huBefore < 6
+                    ? 0.0
+                    : (huBefore < 11 ? 20.0 : 40.0);
+                score += huBonus;
               } else {
-                // 死对子（剩余0张），无法碰成坎，保留无意义
-                // 拆死对子加分，优先打出
+                // 死对子（剩余0张），无法碰成坎，优先拆
                 score += 80;
               }
             }
