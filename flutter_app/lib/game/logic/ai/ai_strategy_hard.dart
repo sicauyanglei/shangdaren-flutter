@@ -1368,6 +1368,19 @@ class AIStrategyHard extends AIStrategy {
     // 门结构分变化作为补充评分，权重适中避免覆盖主评分
     score += (menScoreAfter - menScoreBefore) * 0.3;
 
+    // card-group-type.md 规则评分：牌型分类、保留价值排名、门间优先级、剩余张数动态调整
+    // 作为出牌决策的补充评分，权重适中
+    final cardGroupTypeScore = _evaluateDiscardByCardGroupType(
+      player,
+      cardToDiscard,
+      visibleCount,
+      shiDuiPotential,
+      heiYuanPotential,
+      hongYuanPotential,
+      kuHuPotential,
+    );
+    score += cardGroupTypeScore * 0.5;
+
     if (distToTing <= 4) {
       score += _lookaheadScore(
         testHand,
@@ -3125,6 +3138,514 @@ class AIStrategyHard extends AIStrategy {
       if (!existingChars.contains(ch)) return ch;
     }
     return null;
+  }
+
+  // ==================== card-group-type.md 规则实现 ====================
+
+  /// 牌型名称枚举（对应 card-group-type.md 的34种牌型）
+  static const Map<String, int> _cardGroupTypeRank = {
+    '招招招型': 1, '招招坎型': 2, '招招对型': 3, '招坎坎型': 4,
+    '招招孤张型': 5, '招招型': 6, '招坎对型': 7, '坎坎坎型': 8,
+    '招坎孤张型': 9, '招坎型': 10, '坎坎对型': 11, '招对对型': 12,
+    '招对孤张型': 13, '招对型': 14, '坎坎孤张型': 15, '坎坎型': 16,
+    '招半靠型': 17, '招孤张型': 18, '招型': 19, '坎对对型': 20,
+    '句句型': 21, '坎对孤张型': 22, '坎对型': 23, '坎半靠型': 24,
+    '坎孤张型': 25, '坎型': 26, '句半靠型': 27, '句孤张型': 28,
+    '句型': 29, '对对型': 30, '对孤张型': 31, '对型': 32,
+    '半靠型': 33, '孤张型': 34,
+  };
+
+  /// 牌型结构分（门2-7普字基准）
+  static const Map<String, int> _cardGroupTypeScore = {
+    '招招招型': 300, '招招坎型': 260, '招招对型': 220, '招坎坎型': 220,
+    '招招孤张型': 200, '招招型': 200, '招坎对型': 180, '坎坎坎型': 180,
+    '招坎孤张型': 160, '招坎型': 160, '坎坎对型': 140, '招对对型': 140,
+    '招对孤张型': 120, '招对型': 120, '坎坎孤张型': 120, '坎坎型': 120,
+    '招半靠型': 110, '招孤张型': 100, '招型': 100, '坎对对型': 100,
+    '句句型': 100, '坎对孤张型': 80, '坎对型': 80, '坎半靠型': 70,
+    '坎孤张型': 60, '坎型': 60, '句半靠型': 60, '句孤张型': 50,
+    '句型': 50, '对对型': 40, '对孤张型': 20, '对型': 20,
+    '半靠型': 10, '孤张型': 0,
+  };
+
+  /// 对一手牌中指定门的牌型进行分类
+  /// 返回牌型名称，如"句型"、"坎对型"等
+  String _classifyCardGroupType(
+    int sentence,
+    List<Card> hand,
+    Map<String, int> visibleCount,
+    bool isShiDuiRoute,
+  ) {
+    final groupChars = _groupChars[sentence - 1];
+    final byChar = <String, int>{};
+    for (final ch in groupChars) {
+      byChar[ch] = 0;
+    }
+    for (final c in hand) {
+      if (c.sentence == sentence) {
+        byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+      }
+    }
+
+    // 排序张数 (a >= b >= c)
+    final counts = byChar.values.toList()..sort((a, b) => b.compareTo(a));
+    final a = counts[0], b = counts[1], c = counts[2];
+    final total = a + b + c;
+
+    // 基础分类（不考虑剩余张数降级）
+    String baseType = _classifyByDistribution(a, b, c, total);
+
+    // 应用剩余张数动态调整（组件降级）
+    return _applyDegradation(
+      baseType,
+      byChar,
+      groupChars,
+      visibleCount,
+      isShiDuiRoute,
+    );
+  }
+
+  /// 按张数分布分类（静态基准）
+  String _classifyByDistribution(int a, int b, int c, int total) {
+    switch (total) {
+      case 0:
+        return '空';
+      case 1:
+        return '孤张型';
+      case 2:
+        if (b == 0) return '对型'; // (2,0,0)
+        return '半靠型'; // (1,1,0)
+      case 3:
+        if (c == 1) return '句型'; // (1,1,1)
+        if (b == 0) return '坎型'; // (3,0,0)
+        return '对孤张型'; // (2,1,0)
+      case 4:
+        if (a == 4) return '招型'; // (4,0,0)
+        if (a == 3) return '坎孤张型'; // (3,1,0)
+        if (b == 2) return '对对型'; // (2,2,0)
+        return '句孤张型'; // (2,1,1)
+      case 5:
+        if (a == 4) return '招孤张型'; // (4,1,0)
+        if (a == 3 && b == 2) return '坎对型'; // (3,2,0)
+        if (a == 3) return '坎半靠型'; // (3,1,1)
+        return '句半靠型'; // (2,2,1)
+      case 6:
+        if (a == 4 && b == 2) return '招对型'; // (4,2,0)
+        if (a == 4) return '招半靠型'; // (4,1,1)
+        if (a == 3 && b == 3) return '坎坎型'; // (3,3,0)
+        if (a == 3) return '坎对孤张型'; // (3,2,1)
+        return '句句型'; // (2,2,2)
+      case 7:
+        if (a == 4 && b == 3) return '招坎型'; // (4,3,0)
+        if (a == 4) return '招对孤张型'; // (4,2,1)
+        if (a == 3 && b == 3) return '坎坎孤张型'; // (3,3,1)
+        return '坎对对型'; // (3,2,2)
+      case 8:
+        if (a == 4 && b == 4) return '招招型'; // (4,4,0)
+        if (a == 4 && b == 3) return '招坎孤张型'; // (4,3,1)
+        if (a == 4) return '招对对型'; // (4,2,2)
+        return '坎坎对型'; // (3,3,2)
+      case 9:
+        if (a == 4 && b == 4) return '招招孤张型'; // (4,4,1)
+        if (a == 4 && b == 3) return '招坎对型'; // (4,3,2)
+        return '坎坎坎型'; // (3,3,3)
+      case 10:
+        if (a == 4 && b == 4) return '招招对型'; // (4,4,2)
+        return '招坎坎型'; // (4,3,3)
+      case 11:
+        return '招招坎型'; // (4,4,3)
+      case 12:
+        return '招招招型'; // (4,4,4)
+      default:
+        return '空';
+    }
+  }
+
+  /// 应用剩余张数动态调整（组件降级）
+  String _applyDegradation(
+    String baseType,
+    Map<String, int> byChar,
+    List<String> groupChars,
+    Map<String, int> visibleCount,
+    bool isShiDuiRoute,
+  ) {
+    // 检查每个字的剩余张数
+    final remByChar = <String, int>{};
+    for (final ch in groupChars) {
+      remByChar[ch] = _remainingCount(ch, visibleCount);
+    }
+
+    // 十对路线下对子不降级
+    if (isShiDuiRoute) {
+      return baseType;
+    }
+
+    // 非十对路线：对子剩余0张降级，半靠中任一字剩余0张降级
+    switch (baseType) {
+      case '半靠型':
+        {
+          final presentChars = groupChars
+              .where((ch) => byChar[ch]! >= 1)
+              .toList();
+          if (presentChars.any((ch) => remByChar[ch] == 0)) {
+            return '孤张型';
+          }
+          break;
+        }
+      case '对孤张型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! >= 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '孤张型';
+          }
+          break;
+        }
+      case '坎对型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '坎孤张型';
+          }
+          break;
+        }
+      case '坎对孤张型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '坎孤张型';
+          }
+          break;
+        }
+      case '招对型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '招孤张型';
+          }
+          break;
+        }
+      case '招对孤张型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '招孤张型';
+          }
+          break;
+        }
+      case '招对对型':
+        {
+          final pairs = groupChars.where((ch) => byChar[ch]! == 2).toList();
+          if (pairs.any((ch) => remByChar[ch] == 0)) {
+            return '招对孤张型';
+          }
+          break;
+        }
+      case '坎对对型':
+        {
+          final pairs = groupChars.where((ch) => byChar[ch]! == 2).toList();
+          if (pairs.any((ch) => remByChar[ch] == 0)) {
+            return '坎对孤张型';
+          }
+          break;
+        }
+      case '坎坎对型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '坎坎孤张型';
+          }
+          break;
+        }
+      case '招坎对型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '招坎孤张型';
+          }
+          break;
+        }
+      case '招招对型':
+        {
+          final pairChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (pairChar.isNotEmpty && remByChar[pairChar] == 0) {
+            return '招招孤张型';
+          }
+          break;
+        }
+      case '对对型':
+        {
+          final pairs = groupChars.where((ch) => byChar[ch]! == 2).toList();
+          if (pairs.any((ch) => remByChar[ch] == 0)) {
+            return '对孤张型';
+          }
+          break;
+        }
+      case '句半靠型':
+        {
+          final extraChar = groupChars.firstWhere(
+            (ch) => byChar[ch]! == 2,
+            orElse: () => '',
+          );
+          if (extraChar.isNotEmpty && remByChar[extraChar] == 0) {
+            return '句孤张型';
+          }
+          break;
+        }
+      case '坎半靠型':
+        {
+          final singles = groupChars
+              .where((ch) => byChar[ch]! == 1)
+              .toList();
+          if (singles.any((ch) => remByChar[ch] == 0)) {
+            return '坎孤张型';
+          }
+          break;
+        }
+      case '招半靠型':
+        {
+          final singles = groupChars
+              .where((ch) => byChar[ch]! == 1)
+              .toList();
+          if (singles.any((ch) => remByChar[ch] == 0)) {
+            return '招孤张型';
+          }
+          break;
+        }
+    }
+    return baseType;
+  }
+
+  /// 获取牌型的保留价值排名（1=最应保留，34=最应牺牲）
+  int _getRetentionRank(String type) {
+    return _cardGroupTypeRank[type] ?? 34;
+  }
+
+  /// 获取牌型的结构分
+  int _getCardGroupTypeScore(String type) {
+    return _cardGroupTypeScore[type] ?? 0;
+  }
+
+  /// 根据胡牌类型路线获取门间优先级权重
+  /// 返回该门的优先拆解权重（越高越优先拆）
+  double _getMenPriorityByRoute(
+    int sentence,
+    double shiDuiPotential,
+    double heiYuanPotential,
+    double hongYuanPotential,
+    double kuHuPotential,
+    Map<String, int> visibleCount,
+  ) {
+    final isJingMen = sentence == 1 || sentence == 8;
+
+    // 十对路线：门1/8和门2-7同等对待
+    if (shiDuiPotential > 0) {
+      return 1.0;
+    }
+
+    // 黑元路线：优先拆门1/8（精字阻碍路线）
+    if (heiYuanPotential > 0) {
+      if (isJingMen) return 2.0; // 优先拆
+      return 0.5; // 保留门2-7
+    }
+
+    // 依赖胡数的路线（普通胡、枯胡、清枯胡、清枯重台、红元）：优先拆门2-7，保留门1/8
+    // 红元路线：门1/8句优先保留
+    if (hongYuanPotential > 0 || kuHuPotential > 0) {
+      if (isJingMen) return 0.5; // 保留门1/8
+      return 2.0; // 优先拆门2-7
+    }
+
+    // 默认普通胡牌路线：优先拆门2-7
+    // 但门1/8中精字剩余0张时，保留价值降低
+    if (isJingMen) {
+      final jingChar = sentence == 1 ? '上' : '福';
+      final jingRem = _remainingCount(jingChar, visibleCount);
+      if (jingRem == 0) {
+        return 1.5; // 精字无进张，门1/8保留价值降低
+      }
+      return 0.5; // 保留门1/8
+    }
+    return 2.0; // 优先拆门2-7
+  }
+
+  /// 基于card-group-type.md规则评估出牌
+  /// 返回评分调整值（正值=鼓励出这张牌，负值=惩罚出这张牌）
+  double _evaluateDiscardByCardGroupType(
+    Player player,
+    Card cardToDiscard,
+    Map<String, int> visibleCount,
+    double shiDuiPotential,
+    double heiYuanPotential,
+    double hongYuanPotential,
+    double kuHuPotential,
+  ) {
+    final sentence = cardToDiscard.sentence;
+    final hand = player.hand;
+    final isShiDuiRoute = shiDuiPotential > 0;
+
+    // 1. 分类当前牌型
+    final currentType = _classifyCardGroupType(
+      sentence,
+      hand,
+      visibleCount,
+      isShiDuiRoute,
+    );
+    final currentRank = _getRetentionRank(currentType);
+    final currentScore = _getCardGroupTypeScore(currentType);
+
+    // 2. 分类出牌后的牌型
+    final typeAfterDiscard = _classifyCardGroupType(
+      sentence,
+      List<Card>.from(hand)
+        ..removeWhere(
+          (c) =>
+              c.character == cardToDiscard.character &&
+              c.sentence == cardToDiscard.sentence,
+        ),
+      visibleCount,
+      isShiDuiRoute,
+    );
+    final scoreAfterDiscard = _getCardGroupTypeScore(typeAfterDiscard);
+
+    // 3. 计算结构分损失
+    final scoreLoss = currentScore - scoreAfterDiscard;
+
+    // 4. 门间优先级权重
+    final menPriority = _getMenPriorityByRoute(
+      sentence,
+      shiDuiPotential,
+      heiYuanPotential,
+      hongYuanPotential,
+      kuHuPotential,
+      visibleCount,
+    );
+
+    // 5. 基础评分：保留排名越低（越应牺牲），越鼓励出牌
+    // 排名34(孤张型)→+200, 排名1(招招招型)→-200
+    // rank范围1-34，映射到 +200 ~ -200
+    final rankScore = (34 - currentRank) * 12.0; // 34→0, 1→396
+
+    // 6. 结构分损失惩罚：损失越大越不应该出
+    final lossPenalty = -scoreLoss * 1.5;
+
+    // 7. 门间优先级调整：优先拆的门加分，保留的门减分
+    final menAdjustment = (menPriority - 1.0) * 50.0;
+
+    // 8. 牌型内选牌优先级：含孤张优先出孤张，含半靠优先出半靠
+    double cardSelectionBonus = 0;
+    final byChar = <String, int>{};
+    for (final ch in _groupChars[sentence - 1]) {
+      byChar[ch] = 0;
+    }
+    for (final c in hand) {
+      if (c.sentence == sentence) {
+        byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+      }
+    }
+    final discardCount = byChar[cardToDiscard.character] ?? 0;
+
+    // 判断出的牌在牌型中的角色
+    final counts = byChar.values.toList()..sort((a, b) => b.compareTo(a));
+    final a = counts[0], b = counts[1], c = counts[2];
+
+    // 孤张（该字只有1张，且不是对/坎/招/句/靠的一部分）
+    if (discardCount == 1) {
+      // 检查是否是孤张（同门只有1种字）或对孤张型/句孤张型中的孤张
+      if (a + b + c == 1) {
+        // 纯孤张型
+        cardSelectionBonus += 100;
+      } else if (currentType.contains('孤张')) {
+        // 牌型中的孤张，优先出
+        cardSelectionBonus += 80;
+      } else if (currentType.contains('半靠')) {
+        // 半靠中的字，出一张损失=0
+        cardSelectionBonus += 60;
+      }
+    }
+
+    // 半靠中的字（2种字各1张，出任一张损失=0）
+    if (discardCount == 1 && a == 1 && b == 1 && c == 0) {
+      cardSelectionBonus += 40; // 半靠型，出任一张
+    }
+
+    // 对中一张（出对中一张，保留完整集）
+    if (discardCount >= 2 && discardCount < 3) {
+      // 检查是否是"含对的牌型"中出对
+      if (currentType.contains('对') && !currentType.contains('孤张')) {
+        // 含对的牌型，出对中一张
+        // 但十对路线绝不出对子
+        if (isShiDuiRoute) {
+          cardSelectionBonus -= 200; // 十对路线重罚出对子
+        } else {
+          // 检查对子是否已降级（剩余0张）
+          final rem = _remainingCount(cardToDiscard.character, visibleCount);
+          if (rem == 0) {
+            cardSelectionBonus += 80; // 死对子，优先出
+          } else {
+            cardSelectionBonus += 20; // 普通对子，小幅鼓励
+          }
+        }
+      }
+    }
+
+    // 绝不拆句/坎/招（除非别无选择）
+    if (discardCount >= 3) {
+      // 出坎/招中的牌
+      if (currentType.contains('招') || currentType.contains('坎')) {
+        // 检查是否是含孤张/半靠/对的复合牌型中出坎/招
+        // 如果是纯坎型/招型，重罚
+        if (currentType == '坎型' || currentType == '招型') {
+          cardSelectionBonus -= 150; // 重罚拆纯坎/纯招
+        } else if (currentType.contains('坎') || currentType.contains('招')) {
+          // 复合牌型中出坎/招，仍需惩罚
+          cardSelectionBonus -= 100;
+        }
+      }
+    }
+
+    // 9. 剩余张数动态调整：进张概率低的字优先出
+    final rem = _remainingCount(cardToDiscard.character, visibleCount);
+    if (rem == 0) {
+      // 死牌（剩余0张），优先出
+      cardSelectionBonus += 50;
+    } else if (rem == 1) {
+      // 进张概率低，小幅优先
+      cardSelectionBonus += 20;
+    }
+
+    // 10. 精字保护（门1/8的精字上/福）
+    if (cardToDiscard.isJing) {
+      // 精字提供高胡数，除非黑元路线，否则重罚
+      if (heiYuanPotential <= 0) {
+        cardSelectionBonus -= 100;
+      }
+    }
+
+    return rankScore + lossPenalty + menAdjustment + cardSelectionBonus;
   }
 
   int _discardPriority(Card card) {
