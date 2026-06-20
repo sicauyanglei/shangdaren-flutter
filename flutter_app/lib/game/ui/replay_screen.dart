@@ -78,6 +78,9 @@ class _ReplayScreenState extends State<ReplayScreen>
   // 摸牌标记（最后摸的牌ID，用于主视角显示"摸"字）
   int _moCardId = -1;
 
+  // 回放结束后的结果面板
+  bool _showResult = false;
+
   // 牌局页面设计尺寸
   static const double designWidth = 1280.0;
   static const double designHeight = 720.0;
@@ -101,6 +104,11 @@ class _ReplayScreenState extends State<ReplayScreen>
   static const double aiHandToMeldGap = 2.0;
   static const double leftMaxW = 340.0;
   static const double rightMaxW = 280.0;
+
+  // 胡牌显示时的AI手牌尺寸 - 与GameBoard一致
+  static const double huDisplayCardW = 42.0;
+  static const double huDisplayCardH = 68.0;
+  static const double huDisplayStackVisible = 20.0;
 
   // 头像位置常量 - 与game_overlay.dart一致
   static const double aiAvatarLeft = 9.6;
@@ -132,6 +140,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     }
     _isPlaying = true;
     _isPaused = false;
+    _showResult = false;
     _playNextAction();
   }
 
@@ -155,6 +164,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     _animInProgress = false;
     _isPlaying = false;
     _isPaused = false;
+    _showResult = false;
     _initHands();
     _currentActionIndex = -1;
     setState(() {
@@ -168,6 +178,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     if (_currentActionIndex >= widget.replay.actions.length - 1) {
       _isPlaying = false;
       setState(() {
+        _showResult = true;
         _statusText = '回放结束';
       });
       return;
@@ -809,6 +820,8 @@ class _ReplayScreenState extends State<ReplayScreen>
           ),
           // 飞牌动画Overlay层
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
+          // 结果面板（胡牌/流局）
+          if (_showResult) _buildResultOverlay(scale),
           // 控制栏
           _buildControls(),
         ],
@@ -1048,6 +1061,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
     final hand = _hands[playerIndex];
+    final handMeldGap = _showResult ? 20.0 : aiHandToMeldGap;
     return SizedBox(
       width: leftMaxW,
       child: Column(
@@ -1056,7 +1070,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         children: [
           if (hand.isNotEmpty) ...[
             _buildAIHand(hand, isRight: false),
-            const SizedBox(height: aiHandToMeldGap),
+            SizedBox(height: handMeldGap),
           ],
           if (melds.isNotEmpty) ...[
             _buildMeldsArea(melds, isRight: false),
@@ -1073,6 +1087,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final melds = _melds[playerIndex];
     final discards = _discards[playerIndex];
     final hand = _hands[playerIndex];
+    final handMeldGap = _showResult ? 20.0 : aiHandToMeldGap;
     return SizedBox(
       width: rightMaxW,
       child: Column(
@@ -1081,7 +1096,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         children: [
           if (hand.isNotEmpty) ...[
             _buildAIHand(hand, isRight: true),
-            const SizedBox(height: aiHandToMeldGap),
+            SizedBox(height: handMeldGap),
           ],
           if (melds.isNotEmpty) ...[
             _buildMeldsArea(melds, isRight: true),
@@ -1126,6 +1141,11 @@ class _ReplayScreenState extends State<ReplayScreen>
   Widget _buildAIHand(List<Card> cards, {required bool isRight}) {
     if (cards.isEmpty) return const SizedBox.shrink();
 
+    // 胡牌显示时使用更大的卡牌尺寸
+    final cw = _showResult ? huDisplayCardW : meldCardW;
+    final ch = _showResult ? huDisplayCardH : meldCardH;
+    final sv = _showResult ? huDisplayStackVisible : meldStackVisible;
+
     // 按sentence(门)分组
     final sentenceGroups = <int, List<Card>>{};
     for (final card in cards) {
@@ -1151,26 +1171,26 @@ class _ReplayScreenState extends State<ReplayScreen>
           return pa.compareTo(pb);
         });
 
-      // 横向层叠不同字(偏移meldStackVisible)，同字层叠显示计数
+      // 横向层叠不同字(偏移sv)，同字层叠显示计数
       // 卡牌在下层，数字徽章在上层（不被相邻卡牌覆盖）
       final List<Widget> cardWidgets = [];
       final List<Widget> badgeWidgets = [];
-      final badgeR = meldCardW * 0.35;
+      final badgeR = cw * 0.35;
       for (int ci = 0; ci < sortedChars.length; ci++) {
         final chars = charGroups[sortedChars[ci]]!;
         final stackCount = chars.length;
         cardWidgets.add(
           Positioned(
-            left: ci * meldStackVisible,
+            left: ci * sv,
             top: 0,
-            child: _buildAIHandMeldCard(chars[0], 1),
+            child: _buildAIHandMeldCard(chars[0], 1, cardW: cw, cardH: ch),
           ),
         );
         // 徽章单独放最上层，不参与折叠
         if (stackCount > 1) {
           badgeWidgets.add(
             Positioned(
-              left: ci * meldStackVisible + meldCardW - badgeR * 2,
+              left: ci * sv + cw - badgeR * 2,
               top: 0,
               child: Container(
                 width: badgeR * 2,
@@ -1194,11 +1214,11 @@ class _ReplayScreenState extends State<ReplayScreen>
         }
       }
 
-      final groupW = (sortedChars.length - 1) * meldStackVisible + meldCardW;
+      final groupW = (sortedChars.length - 1) * sv + cw;
       groupWidgets.add(
         SizedBox(
           width: groupW,
-          height: meldCardH,
+          height: ch,
           child: Stack(
             clipBehavior: Clip.none,
             children: [...cardWidgets, ...badgeWidgets],
@@ -1261,13 +1281,15 @@ class _ReplayScreenState extends State<ReplayScreen>
     );
   }
 
-  /// AI玩家手牌单张卡牌(组合牌样式) - 34x56，多张时右上角显示数量徽章
-  Widget _buildAIHandMeldCard(Card card, int stackCount) {
+  /// AI玩家手牌单张卡牌(组合牌样式) - 默认34x56，多张时右上角显示数量徽章
+  Widget _buildAIHandMeldCard(Card card, int stackCount, {double? cardW, double? cardH}) {
+    final w = cardW ?? meldCardW;
+    final h = cardH ?? meldCardH;
     final pinyin = AtlasLoader.charToPinyin[card.character];
-    final badgeR = meldCardW * 0.35;
+    final badgeR = w * 0.35;
     return Container(
-      width: meldCardW,
-      height: meldCardH,
+      width: w,
+      height: h,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(3),
         boxShadow: [
@@ -1285,15 +1307,15 @@ class _ReplayScreenState extends State<ReplayScreen>
           if (pinyin != null)
             Image.asset(
               'assets/html/images/s/$pinyin.png',
-              width: meldCardW,
-              height: meldCardH,
+              width: w,
+              height: h,
               fit: BoxFit.contain,
             )
           else
             Container(color: Colors.white),
           if (stackCount > 1)
             Positioned(
-              left: meldCardW - badgeR * 2,
+              left: w - badgeR * 2,
               top: 0,
               child: Container(
                 width: badgeR * 2,
@@ -1620,6 +1642,156 @@ class _ReplayScreenState extends State<ReplayScreen>
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  /// 构建回放结束后的结果面板（胡牌/流局）
+  Widget _buildResultOverlay(double scale) {
+    final resultType = widget.replay.resultType;
+    final resultData = widget.replay.resultData;
+    final isLiuju = resultType == 'liuju';
+
+    // 胡牌信息
+    final int winnerIndex = resultData?['winnerIndex'] as int? ?? -1;
+    final String huType = resultData?['huType'] as String? ?? '';
+    final String method = resultData?['method'] as String? ?? '';
+    final String winnerName =
+        winnerIndex >= 0 ? widget.replay.playerNames[winnerIndex] : '';
+
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
+        child: Center(
+          child: Container(
+            constraints: BoxConstraints(
+              minWidth: 500,
+              maxWidth: 680 * scale,
+              maxHeight: 400 * scale,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xF01a472a),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFffd700), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFffd700).withOpacity(0.3),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 标题行
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Text(
+                      isLiuju ? '流局' : '$winnerName 胡牌!',
+                      style: TextStyle(
+                        fontSize: 28 * scale,
+                        color: const Color(0xFFffd700),
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: const Color(0xFFffd700).withOpacity(0.5),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 关闭按钮
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _showResult = false;
+                          });
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xCCcc0000),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isLiuju) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFffd700).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFffd700).withOpacity(0.5),
+                          ),
+                        ),
+                        child: Text(
+                          method,
+                          style: TextStyle(
+                            fontSize: 16 * scale,
+                            color: const Color(0xFFffd700),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4ecdc4).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF4ecdc4).withOpacity(0.5),
+                          ),
+                        ),
+                        child: Text(
+                          huType,
+                          style: TextStyle(
+                            fontSize: 16 * scale,
+                            color: const Color(0xFF4ecdc4),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (isLiuju) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    '牌堆已空，本局结束',
+                    style: TextStyle(fontSize: 18, color: Colors.white70),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
