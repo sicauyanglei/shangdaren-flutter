@@ -1460,6 +1460,10 @@ class GameController {
         'winnerIndex': winnerIndex,
         'huType': huTypeResult.name,
         'method': method,
+        if (dianpaoIndex != null) 'dianpaoIndex': dianpaoIndex,
+        'huCount': totalHu,
+        'multiplier': displayMultiplier,
+        'scoreChanges': scores,
       },
     );
 

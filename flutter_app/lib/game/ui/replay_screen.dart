@@ -1292,7 +1292,12 @@ class _ReplayScreenState extends State<ReplayScreen>
   }
 
   /// AI玩家手牌单张卡牌(组合牌样式) - 默认34x56，多张时右上角显示数量徽章
-  Widget _buildAIHandMeldCard(Card card, int stackCount, {double? cardW, double? cardH}) {
+  Widget _buildAIHandMeldCard(
+    Card card,
+    int stackCount, {
+    double? cardW,
+    double? cardH,
+  }) {
     final w = cardW ?? meldCardW;
     final h = cardH ?? meldCardH;
     final pinyin = AtlasLoader.charToPinyin[card.character];
@@ -1752,7 +1757,8 @@ class _ReplayScreenState extends State<ReplayScreen>
       isRight = false;
     } else {
       // 右上玩家：徽章在头像左侧
-      left = (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
+      left =
+          (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
           scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = true;
@@ -1820,17 +1826,17 @@ class _ReplayScreenState extends State<ReplayScreen>
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: borderColor, width: 2),
         boxShadow: [
-          BoxShadow(
-            color: glowColor.withOpacity(0.3),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: glowColor.withOpacity(0.3), blurRadius: 10),
         ],
       ),
       child: Container(
         margin: const EdgeInsets.all(1.5),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: innerBorderColor.withOpacity(0.4), width: 1),
+          border: Border.all(
+            color: innerBorderColor.withOpacity(0.4),
+            width: 1,
+          ),
         ),
         alignment: Alignment.center,
         child: Text(
@@ -1857,61 +1863,243 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     // 胡牌信息
     final int winnerIndex = resultData?['winnerIndex'] as int? ?? -1;
-    final String winnerName =
-        winnerIndex >= 0 ? widget.replay.playerNames[winnerIndex] : '';
+    final String winnerName = winnerIndex >= 0
+        ? widget.replay.playerNames[winnerIndex]
+        : '';
+    final String huType = resultData?['huType'] as String? ?? '';
+    final String method = resultData?['method'] as String? ?? '';
+    final int dianpaoIndex = resultData?['dianpaoIndex'] as int? ?? -1;
+    final int huCount = resultData?['huCount'] as int? ?? 0;
+    final int multiplier = resultData?['multiplier'] as int? ?? 1;
+    final Map<String, dynamic>? scoreChanges =
+        resultData?['scoreChanges'] as Map<String, dynamic>?;
 
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withOpacity(0.6),
-        child: Center(
-          child: Container(
-            constraints: BoxConstraints(
-              minWidth: 500,
-              maxWidth: 680 * scale,
-              maxHeight: 400 * scale,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-            decoration: BoxDecoration(
-              color: const Color(0xF01a472a),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFffd700), width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFffd700).withOpacity(0.3),
-                  blurRadius: 20,
+    // 胡型颜色
+    Color huTypeColor = _getHuTypeColor(huType);
+
+    // 定位在屏幕中上部，避免与底部手牌重叠
+    // 底部手牌区域约从y=580开始（设计坐标），面板放在y=80~380区域
+    final panelW = 600.0;
+    final panelH = isLiuju ? 120.0 : 280.0;
+    final panelLeft = (designWidth - panelW) / 2;
+    final panelTop = 80.0;
+
+    return Positioned(
+      left: panelLeft * scale,
+      top: panelTop * scale,
+      width: panelW * scale,
+      height: panelH * scale,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topCenter,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+          decoration: BoxDecoration(
+            color: const Color(0xF01a472a),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFffd700), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFffd700).withOpacity(0.3),
+                blurRadius: 20,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 标题
+              Text(
+                isLiuju ? '流局' : '$winnerName 胡牌!',
+                style: TextStyle(
+                  fontSize: 28,
+                  color: const Color(0xFFffd700),
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: const Color(0xFFffd700).withOpacity(0.5),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isLiuju ? '流局' : '$winnerName 胡牌!',
-                  style: TextStyle(
-                    fontSize: 28 * scale,
-                    color: const Color(0xFFffd700),
-                    fontWeight: FontWeight.bold,
-                    shadows: [
-                      Shadow(
-                        color: const Color(0xFFffd700).withOpacity(0.5),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
+              ),
+              if (isLiuju) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  '牌堆已空，本局结束',
+                  style: TextStyle(fontSize: 18, color: Colors.white70),
                 ),
-                if (isLiuju) ...[
-                  const SizedBox(height: 8),
-                  const Text(
-                    '牌堆已空，本局结束',
-                    style: TextStyle(fontSize: 18, color: Colors.white70),
+              ] else ...[
+                const SizedBox(height: 16),
+                // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _buildResultTag(
+                      method,
+                      Colors.white,
+                      Colors.white.withOpacity(0.1),
+                    ),
+                    _buildResultTag(
+                      huType,
+                      huTypeColor,
+                      huTypeColor.withOpacity(0.2),
+                    ),
+                    _buildResultTag(
+                      '$huCount胡',
+                      const Color(0xFFffd700),
+                      const Color(0x33ffd700),
+                    ),
+                    _buildResultTag(
+                      '$multiplier倍',
+                      const Color(0xFFff6b6b),
+                      const Color(0x33ff6b6b),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // 玩家分数变化
+                if (scoreChanges != null)
+                  ..._buildScoreChanges(
+                    scoreChanges,
+                    winnerIndex,
+                    dianpaoIndex,
+                    method,
                   ),
-                ],
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  /// 构建结果标签
+  Widget _buildResultTag(String text, Color textColor, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: textColor.withOpacity(0.4), width: 1),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 18,
+          color: textColor,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  /// 构建分数变化行
+  List<Widget> _buildScoreChanges(
+    Map<String, dynamic> scoreChanges,
+    int winnerIndex,
+    int dianpaoIndex,
+    String method,
+  ) {
+    final widgets = <Widget>[];
+    for (int i = 0; i < widget.replay.playerNames.length; i++) {
+      final name = widget.replay.playerNames[i];
+      final change = scoreChanges[i] as int? ?? 0;
+      final isWinner = i == winnerIndex;
+      final isDianpao = i == dianpaoIndex && method == '点炮';
+      final label = isWinner
+          ? '赢家'
+          : (isDianpao ? '点炮' : (change < 0 ? '输家' : ''));
+
+      widgets.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isWinner ? const Color(0xFFffd700) : Colors.white70,
+              ),
+            ),
+            if (label.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Text(
+                '($label)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDianpao ? const Color(0xFFff6b6b) : Colors.white54,
+                ),
+              ),
+            ],
+            const SizedBox(width: 8),
+            Text(
+              change >= 0 ? '+$change' : '$change',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: isWinner
+                    ? const Color(0xFFffd700)
+                    : change < 0
+                    ? const Color(0xFFff6b6b)
+                    : Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+      if (i < widget.replay.playerNames.length - 1) {
+        widgets.add(const SizedBox(width: 24));
+      }
+    }
+    return [
+      Wrap(
+        spacing: 24,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: widgets,
+      ),
+    ];
+  }
+
+  /// 胡型颜色
+  Color _getHuTypeColor(String huTypeName) {
+    switch (huTypeName) {
+      case '清枯重台卡':
+      case '清枯重台胡':
+        return const Color(0xFFff2d2d);
+      case '枯重台卡':
+      case '枯重台胡':
+      case '清枯台胡':
+      case '清枯台卡':
+        return const Color(0xFFe040fb);
+      case '十对':
+        return const Color(0xFFff9800);
+      case '枯台胡':
+      case '清枯胡':
+      case '枯胡':
+      case '重台卡':
+      case '重台胡':
+        return const Color(0xFFff6b6b);
+      case '红元精':
+      case '红元2精':
+      case '红元3精':
+      case '红元4精':
+      case '黑元':
+        return const Color(0xFFab47bc);
+      case '清卡胡':
+      case '清胡':
+      case '卡胡':
+        return const Color(0xFF4ecdc4);
+      case '台卡':
+      case '台胡':
+        return const Color(0xFF42a5f5);
+      default:
+        return const Color(0xFF4ecdc4);
+    }
   }
 
   Widget _buildControls() {
