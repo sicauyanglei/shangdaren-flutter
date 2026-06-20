@@ -1399,9 +1399,15 @@ class AIStrategyHard extends AIStrategy {
     }
 
     if (cardToDiscard.isJing) {
-      score -= 80;
+      // 黑元路线下，精字(上/福)是门1/8牌，需要优先打出清理，不惩罚
+      if (heiYuanPotential <= 0) {
+        score -= 80;
+      }
     } else if (_isYin(cardToDiscard)) {
-      score -= 20;
+      // 黑元路线下，银字(大/人/禄/寿)也是门1/8牌，不惩罚
+      if (heiYuanPotential <= 0) {
+        score -= 20;
+      }
     }
 
     // 破坏完整句惩罚：出牌导致手牌中某个完整句被拆散时，施加惩罚
@@ -1592,21 +1598,24 @@ class AIStrategyHard extends AIStrategy {
         }
       } else if (isHeiYuan) {
         // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
+        // 黑元目标是清理所有门1/8牌，门1/8牌额外加分
+        final isGroup18 = discardGroup == 1 || discardGroup == 8;
+        final group18Bonus = isGroup18 ? 300 : 0; // 门1/8牌额外加分，优先清理
         if (discardGroupCharSet.length == 1) {
-          score += 200; // 孤张最优先
+          score += 200 + group18Bonus; // 孤张最优先，门1/8孤张更优先
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
-            score += 120; // 普句多一张
+            score += 120 + group18Bonus; // 普句多一张，门1/8更优先
           }
         } else if (discardGroupCharSet.length == 2) {
           if (hasPairInGroup) {
             if (discardCountInGroup >= 2) {
-              score += 100; // 优先拆对子
+              score += 100 + group18Bonus; // 优先拆对子，门1/8更优先
             } else {
-              score += 30; // 保留对子次之
+              score += 30 + group18Bonus; // 保留对子次之，门1/8更优先
             }
           } else {
-            score += 50; // 普靠
+            score += 50 + group18Bonus; // 普靠，门1/8更优先
           }
         }
       } else if (isHongYuan) {
@@ -1889,11 +1898,17 @@ class AIStrategyHard extends AIStrategy {
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
     final huAfter = _evaluateHuScore(testPlayer);
     final huLoss = huBefore - huAfter;
+    // 黑元路线下，打出门1/8牌(精字/银字)会损失胡数，但这是清理门1/8的必要代价
+    // 黑元是特殊胡牌类型，不受11胡限制，所以不惩罚门1/8牌的胡数损失
+    final isHeiYuanRoute = heiYuanPotential > 0;
+    final isDiscardGroup18 =
+        cardToDiscard.sentence == 1 || cardToDiscard.sentence == 8;
+    final skipHuLossPenalty = isHeiYuanRoute && isDiscardGroup18;
     // 胡数损失权重：胡数越低，损失越严重（离11胡资格越远）
-    if (huBefore < 11 && huLoss > 0) {
+    if (huBefore < 11 && huLoss > 0 && !skipHuLossPenalty) {
       // 胡数不足11时，每损失1胡的代价更大
       score -= huLoss * 50;
-    } else if (huLoss > 0) {
+    } else if (huLoss > 0 && !skipHuLossPenalty) {
       // 胡数够了(>=11)时，损失精靠/精对等高胡数牌型仍需重罚
       // 精靠4胡、金对8胡等破坏代价大，权重提高到40
       score -= huLoss * 40;
@@ -3823,6 +3838,12 @@ class AIStrategyHard extends AIStrategy {
     // 20张牌时不能吃
     if (!_canOperate(player)) return false;
 
+    // 黑元路线下，不吃门1/8的牌（吃门1/8会形成门1/8句，破坏黑元资格）
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    if (heiYuanPotential > 0 && (card.sentence == 1 || card.sentence == 8)) {
+      return false;
+    }
+
     // 尝试所有可能的吃法，选最优
     final otherChars = _getOtherCharsInGroup(card);
     final availableChars = otherChars
@@ -3986,6 +4007,12 @@ class AIStrategyHard extends AIStrategy {
 
     // 20张牌时不能碰
     if (!_canOperate(player)) return false;
+
+    // 黑元路线下，不碰牌（碰会形成坎，破坏黑元资格）
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    if (heiYuanPotential > 0) {
+      return false;
+    }
 
     // 截胡策略：其他玩家快听牌时，更积极碰牌
     final opponentNearTing = _hasOpponentNearTing(state, player.id);
@@ -4278,6 +4305,12 @@ class AIStrategyHard extends AIStrategy {
     // 20张牌时不能招别人出的牌
     if (!_canOperate(player)) return false;
 
+    // 黑元路线下，不招牌（招会形成招，破坏黑元资格）
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    if (heiYuanPotential > 0) {
+      return false;
+    }
+
     final hand = player.hand;
     final sameCharCount = hand
         .where((c) => c.character == card.character)
@@ -4402,6 +4435,12 @@ class AIStrategyHard extends AIStrategy {
 
     // 19张牌时不能招自己手牌上的4张同字牌
     if (!_canZhaoFromHand(player, character)) return false;
+
+    // 黑元路线下，不招牌（招会形成招，破坏黑元资格）
+    final heiYuanPotential = _evaluateHeiYuanPotential(player);
+    if (heiYuanPotential > 0) {
+      return false;
+    }
 
     return _evaluateZhaoBenefit(player, character, state, isFromHand: true);
   }
