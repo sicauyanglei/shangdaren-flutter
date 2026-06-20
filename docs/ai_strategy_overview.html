@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI困难模式策略逻辑全景图</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #0f1923;
+  color: #c9d1d9;
+  line-height: 1.7;
+  padding: 20px;
+}
+.container { max-width: 1400px; margin: 0 auto; }
+h1 {
+  text-align: center;
+  color: #58a6ff;
+  font-size: 28px;
+  margin-bottom: 8px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #30363d;
+}
+.subtitle {
+  text-align: center;
+  color: #8b949e;
+  margin-bottom: 30px;
+  font-size: 14px;
+}
+h2 {
+  color: #f0883e;
+  font-size: 22px;
+  margin: 30px 0 15px;
+  padding-left: 12px;
+  border-left: 4px solid #f0883e;
+}
+h3 {
+  color: #7ee787;
+  font-size: 18px;
+  margin: 20px 0 10px;
+}
+h4 {
+  color: #d2a8ff;
+  font-size: 15px;
+  margin: 15px 0 8px;
+}
+
+/* 流程图容器 */
+.flowchart {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 25px;
+  margin: 15px 0;
+}
+
+/* 决策节点 */
+.node {
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 6px;
+  margin: 5px;
+  text-align: center;
+  font-weight: 600;
+  min-width: 120px;
+}
+.node-entry { background: #1f6feb; color: #fff; }
+.node-decision { background: #238636; color: #fff; border-radius: 20px; }
+.node-action { background: #8957e5; color: #fff; }
+.node-reject { background: #da3633; color: #fff; }
+.node-check { background: #d29922; color: #000; }
+
+/* 箭头 */
+.arrow {
+  display: inline-block;
+  color: #8b949e;
+  font-size: 20px;
+  margin: 0 5px;
+}
+
+/* 表格 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+th {
+  background: #21262d;
+  color: #58a6ff;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid #30363d;
+}
+td {
+  padding: 8px 12px;
+  border: 1px solid #30363d;
+  vertical-align: top;
+}
+tr:nth-child(even) { background: #161b22; }
+.positive { color: #7ee787; }
+.negative { color: #f85149; }
+.warning { color: #d29922; }
+.highlight { color: #58a6ff; font-weight: 600; }
+
+/* 代码块 */
+.code-block {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  color: #e6edc3;
+}
+
+/* 信息卡片 */
+.info-card {
+  background: #161b22;
+  border-left: 4px solid #58a6ff;
+  border-radius: 4px;
+  padding: 15px 20px;
+  margin: 12px 0;
+}
+.info-card.warning-card { border-left-color: #d29922; }
+.info-card.danger-card { border-left-color: #f85149; }
+.info-card.success-card { border-left-color: #7ee787; }
+
+/* 评分公式 */
+.formula {
+  background: #1c2128;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 15px 20px;
+  margin: 10px 0;
+  font-family: "Cascadia Code", monospace;
+  font-size: 14px;
+  color: #e6edc3;
+}
+.formula .var { color: #79c0ff; }
+.formula .op { color: #f0883e; }
+.formula .num { color: #7ee787; }
+
+/* 分支容器 */
+.branch-container {
+  display: flex;
+  gap: 15px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.branch {
+  flex: 1;
+  min-width: 300px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 15px;
+}
+.branch-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #30363d;
+}
+
+/* 标签 */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 2px;
+}
+.tag-yes { background: #238636; color: #fff; }
+.tag-no { background: #da3633; color: #fff; }
+.tag-cond { background: #1f6feb; color: #fff; }
+.tag-special { background: #8957e5; color: #fff; }
+
+/* 目录 */
+.toc {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 20px 25px;
+  margin-bottom: 30px;
+}
+.toc h3 { margin-top: 0; }
+.toc ul { list-style: none; padding-left: 10px; }
+.toc li { margin: 6px 0; }
+.toc a { color: #58a6ff; text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+
+/* 图例 */
+.legend {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin: 15px 0;
+  font-size: 13px;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-color { width: 16px; height: 16px; border-radius: 4px; }
+
+.section { margin-bottom: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>AI困难模式策略逻辑全景图</h1>
+<p class="subtitle">基于 ai_strategy_hard.dart · 包含吃/碰/招/出牌/胡牌完整决策链</p>
+
+<div class="toc">
+<h3>目录</h3>
+<ul>
+<li><a href="#overview">一、策略总览与入口</a></li>
+<li><a href="#routes">二、胡牌路线评估</a></li>
+<li><a href="#discard">三、出牌策略（selectDiscard）</a></li>
+<li><a href="#chi">四、吃牌策略（shouldChi）</a></li>
+<li><a href="#peng">五、碰牌策略（shouldPeng）</a></li>
+<li><a href="#zhao">六、招策略（shouldZhao / shouldZhaoFromHand）</a></li>
+<li><a href="#hu">七、胡牌策略（shouldHu）</a></li>
+<li><a href="#scoring">八、核心评分系统</a></li>
+<li><a href="#distance">九、听牌距离计算</a></li>
+<li><a href="#danger">十、危险度评估</a></li>
+</ul>
+</div>
+
+<!-- ==================== 一、策略总览 ==================== -->
+<div class="section" id="overview">
+<h2>一、策略总览与入口</h2>
+
+<div class="info-card">
+<h4>核心设计原则</h4>
+<ul style="padding-left:20px;">
+<li><b>操作优先级</b>：胡 &gt; 招 &gt; 碰 &gt; 吃（硬性规则）</li>
+<li><b>决策基础</b>：所有决策基于"操作后总分 - 操作前总分"的最大化</li>
+<li><b>牌数约束</b>：手牌+组合牌总在19-20之间；20张不能吃/碰/招别人出的牌</li>
+<li><b>缓存机制</b>：听牌结果、胡数、距离、可见牌数均有缓存，避免重复计算</li>
+<li><b>特殊路线</b>：十对/黑元/红元/枯胡不受"胡数≥11"限制</li>
+</ul>
+</div>
+
+<h3>1.1 决策入口流程</h3>
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">游戏事件触发</span>
+</div>
+<div style="text-align:center; margin:10px 0;">
+<span class="arrow">↓</span>
+</div>
+<div style="text-align:center;">
+<span class="node node-decision">判断事件类型</span>
+</div>
+<div style="text-align:center; margin:10px 0;">
+<span class="arrow">↓</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">别人出牌</div>
+<p>依次检查（按优先级）：</p>
+<ol style="padding-left:20px;">
+<li><span class="tag tag-special">胡</span> shouldHu → 能胡必胡</li>
+<li><span class="tag tag-special">招</span> shouldZhao → 4张同字</li>
+<li><span class="tag tag-special">碰</span> shouldPeng → 2张同字+出牌</li>
+<li><span class="tag tag-special">吃</span> shouldChi → 同门2字+出牌</li>
+</ol>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">自己摸牌后</div>
+<ol style="padding-left:20px;">
+<li><span class="tag tag-special">自摸</span> 检查能否自摸胡牌</li>
+<li><span class="tag tag-special">招手牌</span> shouldZhaoFromHand → 手牌4张同字</li>
+<li><span class="tag tag-special">出牌</span> selectDiscard → 选择最优出牌</li>
+</ol>
+</div>
+</div>
+</div>
+
+<h3>1.2 缓存初始化（_initCache）</h3>
+<p>每次决策前初始化以下缓存：</p>
+<table>
+<tr><th>缓存项</th><th>说明</th><th>用途</th></tr>
+<tr><td>_cachedVisibleCount</td><td>可见牌计数（手牌+组合牌+弃牌+他人组合牌）</td><td>计算剩余张数</td></tr>
+<tr><td>_cachedTotalUnknown</td><td>未知牌总数 = 96 - 已知牌数</td><td>进张概率计算</td></tr>
+<tr><td>_cachedCharCount</td><td>手牌按字统计</td><td>快速查询字数</td></tr>
+<tr><td>_tingCache</td><td>听牌结果缓存</td><td>避免重复TingChecker</td></tr>
+<tr><td>_distanceCache</td><td>听牌距离缓存</td><td>避免重复距离计算</td></tr>
+<tr><td>_huScoreCache</td><td>胡数缓存</td><td>避免重复HuCalculator</td></tr>
+<tr><td>_shiDuiEligible</td><td>十对路线资格（发牌6对/前3回合6对）</td><td>十对路线开关</td></tr>
+</table>
+</div>
+
+<!-- ==================== 二、胡牌路线 ==================== -->
+<div class="section" id="routes">
+<h2>二、胡牌路线评估</h2>
+
+<p>AI在每次决策时会评估5种胡牌路线的潜力值，潜力值&gt;0表示该路线可行：</p>
+
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">普通胡牌（默认）</div>
+<ul style="padding-left:20px;">
+<li>条件：总胡数 ≥ 11</li>
+<li>权重：×1.0</li>
+<li>不受特殊路线限制时默认走此路线</li>
+</ul>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#d2a8ff;">十对路线</div>
+<ul style="padding-left:20px;">
+<li>条件：手牌9对（十对胡牌=10对）</li>
+<li>资格：发牌后≥6对 或 前3回合内出现≥6对</li>
+<li>8对以上强制走十对，不吃/不碰/不招</li>
+<li>潜力值 = 对数×80 + 进张概率×200</li>
+</ul>
+</div>
+</div>
+
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#8b949e;">黑元路线</div>
+<ul style="padding-left:20px;">
+<li>条件：无碰无招，全门2-7，无上/福</li>
+<li>主动策略：门1+8张数≤3且胡数≤4时，主动清理门1/8</li>
+<li>潜力值 = 100 + 句数×50（完全黑元）</li>
+<li>主动黑元 = 50 + 句数×30 + (3-门18张数)×10</li>
+</ul>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">红元路线</div>
+<ul style="padding-left:20px;">
+<li>条件：无碰无招，组合牌全句，门1/8句≥2，上/福3-6张</li>
+<li>潜力值 = 80 + 特殊句数×40 + 上福数×15</li>
+</ul>
+</div>
+</div>
+
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">枯胡路线</div>
+<ul style="padding-left:20px;">
+<li>条件：无吃，有上/福，手牌无单张无4张，6坎+1对</li>
+<li>潜力值 = 120 - 距离×30</li>
+</ul>
+</div>
+
+<div class="info-card warning-card">
+<h4>路线对出牌策略的影响</h4>
+<p>不同路线下，胡数不足(&lt;11)时的出牌优先级不同：</p>
+<table>
+<tr><th>路线</th><th>最优先出</th><th>次优先</th><th>保护</th></tr>
+<tr><td>十对</td><td>孤张(+250)</td><td>靠单张(+150)</td><td>对子(-100)</td></tr>
+<tr><td>黑元</td><td>孤张(+200)</td><td>拆对子(+100)</td><td>—</td></tr>
+<tr><td>红元</td><td>非门1/8孤张(+200)</td><td>门1/8孤张(+100)</td><td>门1/8句</td></tr>
+<tr><td>枯胡</td><td>单张(+200)</td><td>句中单张(+120)</td><td>对子(-150)、坎</td></tr>
+<tr><td>普通</td><td>孤张(+200)</td><td>句多一张(+120)</td><td>对子(-100~300)</td></tr>
+</table>
+</div>
+</div>
+
+<!-- ==================== 三、出牌策略 ==================== -->
+<div class="section" id="discard">
+<h2>三、出牌策略（selectDiscard）</h2>
+
+<h3>3.1 主入口流程</h3>
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">selectDiscard</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">player.isTing ?</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是 → _selectDiscardWhenTing</div>
+<p>已听牌，选择最优听牌出牌</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否 → _selectDiscardOptimized</div>
+<p>未听牌，综合评分选择出牌</p>
+</div>
+</div>
+</div>
+
+<h3>3.2 已听牌出牌（_selectDiscardWhenTing）</h3>
+<div class="info-card">
+<h4>核心逻辑</h4>
+<ol style="padding-left:20px;">
+<li>遍历每张手牌（跳过招4张，手牌坎3张<b>不跳过</b>）</li>
+<li>模拟出牌后检查听牌结果</li>
+<li><b>胡数资格保护</b>：出牌前≥11胡，出牌后&lt;11胡且无特殊路线 → 跳过</li>
+<li>计算听牌进张数和进张概率</li>
+<li><b>单钓听限制</b>：单钓听的听牌数减半（点炮不可胡，只能自摸）</li>
+<li>选择优先级：听牌数多2+ → 直接选；多1 → 胡数≥当前；相同 → 概率高→胡数高</li>
+</ol>
+</div>
+
+<h3>3.3 未听牌出牌（_selectDiscardOptimized）</h3>
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">遍历每张手牌</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-check">跳过招(4张同字) score=-10000</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">手牌坎(3张同字)?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">十对路线 + 剩余0张</div>
+<p>允许拆坎，继续评估</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">其他情况</div>
+<p>继续评估（huLoss惩罚覆盖3胡损失）</p>
+</div>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">距离 ≤ 2 且 听牌?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是 → 听牌评分</div>
+<div class="code-block">
+tingScore = 10000 + tingProb×2000
+         + 听牌种数×200
+         + huScore×10
+         + (残局? +3000 : 0)
+         + 胡数不足? -8000 : 0
+</div>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否 → 综合评分</div>
+<p>调用 _evaluateDiscardComprehensiveWithDist + _twoStepLookahead</p>
+</div>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-action">选最高分牌出牌</span>
+</div>
+</div>
+
+<h3>3.4 综合评分公式（_evaluateDiscardComprehensiveWithDist）</h3>
+<div class="formula">
+出牌评分 = <span class="var">potential</span> <span class="op">+</span>
+           门结构变化×0.3 <span class="op">+</span>
+           <span class="var">_lookaheadScore</span> <span class="op">+</span>
+           十对加成 <span class="op">-</span>
+           精牌惩罚(80) <span class="op">-</span>
+           银牌惩罚(20) <span class="op">-</span>
+           破坏句/靠惩罚 <span class="op">+</span>
+           距离分×120 <span class="op">+</span>
+           胡数不足出牌优先级 <span class="op">+</span>
+           胡数足够出牌优先级 <span class="op">-</span>
+           胡数损失×50/40 <span class="op">-</span>
+           胡数资格破坏(-600) <span class="op">+</span>
+           残局加成 <span class="op">+</span>
+           十对特殊处理 <span class="op">+</span>
+           早/中局策略 <span class="op">+</span>
+           组进张效率比较 <span class="op">-</span>
+           <span class="var">_evaluateDanger</span> <span class="op">+</span>
+           安全出牌加成 <span class="op">+</span>
+           预期听牌步数×50
+</div>
+
+<h4>破坏句/靠惩罚明细</h4>
+<table>
+<tr><th>场景</th><th>距离≤2</th><th>距离≤4</th><th>距离&gt;4</th></tr>
+<tr><td>破坏完整句（出单张）</td><td class="negative">-300</td><td class="negative">-200</td><td class="negative">-100</td></tr>
+<tr><td>破坏精句潜力靠/精靠</td><td class="negative">-(250+missingRem×25)×权重</td><td class="negative">-(200+missingRem×20)×权重</td><td class="negative">-(150+missingRem×15)×权重</td></tr>
+<tr><td>破坏普靠</td><td class="negative">-(200+missingRem×20)</td><td class="negative">-(150+missingRem×15)</td><td class="negative">-(100+missingRem×10)</td></tr>
+<tr><td>对子+靠出单张（保留对子）</td><td class="negative">-(50+missingRem×5)</td><td class="negative">-(30+missingRem×3)</td><td class="negative">-10</td></tr>
+</table>
+
+<h4>胡数不足(&lt;11)时出牌优先级（普通路线）</h4>
+<table>
+<tr><th>牌型</th><th>加分</th><th>说明</th></tr>
+<tr><td>孤张(普单)</td><td class="positive">+200</td><td>同组只有1种字</td></tr>
+<tr><td>句多一张(非全对子)</td><td class="positive">+120</td><td>3种字都有，出的字≥2张</td></tr>
+<tr><td>句多一张(全对子)</td><td class="negative">-100</td><td>3种字都有且都≥2张，拆对子</td></tr>
+<tr><td>金对(上上/福福)</td><td class="negative">-300</td><td>8胡不能拆</td></tr>
+<tr><td>对子+靠：出靠单张(对子可碰)</td><td class="positive">+60</td><td>保留对子碰坎获胡数</td></tr>
+<tr><td>对子+靠：出靠单张(死对子)</td><td class="negative">-30</td><td>对子剩余0张，应拆对子</td></tr>
+<tr><td>对子+靠：拆对子(可碰)</td><td class="negative">-(120×权重)</td><td>权重=胡数&lt;6?3.0 : &lt;11?2.0 : 1.0</td></tr>
+<tr><td>对子+靠：拆死对子</td><td class="positive">+80</td><td>剩余0张无法碰坎</td></tr>
+<tr><td>精句潜力靠/精靠单张</td><td class="negative">-150</td><td>门1/8含上/福的靠</td></tr>
+</table>
+
+<h4>胡数足够(≥11)时出牌优先级</h4>
+<table>
+<tr><th>牌型</th><th>加分</th><th>说明</th></tr>
+<tr><td>孤张</td><td class="positive">+200</td><td>最优先出</td></tr>
+<tr><td>对子+单张：出单张(对子可碰)</td><td class="positive">+150</td><td>保留对子</td></tr>
+<tr><td>对子+单张：出单张(死对子)</td><td class="positive">+20</td><td>不加分</td></tr>
+<tr><td>拆对子(可碰)</td><td class="negative">-100</td><td>惩罚</td></tr>
+<tr><td>拆死对子</td><td class="positive">+80</td><td>优先打出</td></tr>
+<tr><td>普靠</td><td class="positive">+50</td><td>出一张变孤张</td></tr>
+<tr><td>句中单张(组内有坎/招)</td><td class="positive">+250</td><td>多余牌最优先</td></tr>
+<tr><td>句中单张(无坎/招)</td><td class="positive">+80</td><td>—</td></tr>
+<tr><td>句多一张</td><td class="positive">+100</td><td>出多余对子张</td></tr>
+<tr><td>3种字全对子</td><td class="negative">-100</td><td>拆对子惩罚</td></tr>
+</table>
+
+<h3>3.5 两步前瞻（_twoStepLookahead）</h3>
+<div class="info-card">
+<h4>逻辑</h4>
+<ol style="padding-left:20px;">
+<li>出牌后距离&gt;5 → 返回0（太远不考虑）</li>
+<li>遍历所有可进张的字</li>
+<li>模拟摸到该字后的距离改善</li>
+<li>稀缺性加成：rem=1 ×1.5，rem=2 ×1.2</li>
+<li>累加：prob × 改善值 × 稀缺加成</li>
+</ol>
+</div>
+</div>
+
+<!-- ==================== 四、吃牌策略 ==================== -->
+<div class="section" id="chi">
+<h2>四、吃牌策略（shouldChi）</h2>
+
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">shouldChi</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-check">前置检查</span>
+</div>
+<table>
+<tr><th>检查项</th><th>条件</th><th>结果</th></tr>
+<tr><td>十对路线8对+</td><td>_currentShiDuiEnabled && 对数≥8</td><td class="negative">不吃</td></tr>
+<tr><td>完整句单张特例</td><td>_hasCompleteSentenceWithSingleCards</td><td class="negative">不吃（直接摸牌）</td></tr>
+<tr><td>20张牌</td><td>!_canOperate</td><td class="negative">不吃</td></tr>
+<tr><td>手牌不足2字</td><td>availableChars.length &lt; 2</td><td class="negative">不吃</td></tr>
+</table>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">评估吃牌收益 _evaluateChiBenefit</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">bestBenefit ≥ 10000? (吃后听牌)</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是</div>
+<p class="positive">吃牌</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否</div>
+<div style="text-align:center;"><span class="node node-decision">已听牌?</span></div>
+<p class="negative">已听牌但吃后不听 → 不吃</p>
+</div>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">纯单张完整句保护?</span>
+</div>
+<p>手牌中该组3种字都有且每字只有1张 → 不吃（除非吃后听牌）</p>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">对手快听牌?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是</div>
+<p>bestBenefit &gt; -50 → 吃（截胡策略）</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否</div>
+<p>bestBenefit &gt; 0 → 吃</p>
+</div>
+</div>
+</div>
+
+<h3>4.1 吃牌收益评估（_evaluateChiBenefit）</h3>
+<div class="formula">
+吃牌收益 = 听牌加成(10000) <span class="op">+</span>
+           胡数提升×100 <span class="op">+</span>
+           距离改善×200 <span class="op">-</span>
+           <span class="var">consumptionCost</span> <span class="op">-</span>
+           牌堆消耗(-5) <span class="op">-</span>
+           摸牌机会成本(-8)
+</div>
+
+<h4>消耗代价（consumptionCost）明细</h4>
+<table>
+<tr><th>消耗的牌参与</th><th>代价</th></tr>
+<tr><td>已有句组合</td><td class="negative">+80</td></tr>
+<tr><td>已有坎组合（3张同字）</td><td class="negative">+100</td></tr>
+<tr><td>对子（非句非坎）</td><td class="negative">+20 + 剩余×5</td></tr>
+<tr><td>其他靠组合</td><td class="negative">+30</td></tr>
+<tr><td>绝版牌（剩余0）</td><td class="negative">+30</td></tr>
+<tr><td>稀缺牌（剩余1）</td><td class="negative">+15</td></tr>
+<tr><td>该字≥2张（有冗余）</td><td class="positive">-20</td></tr>
+</table>
+</div>
+
+<!-- ==================== 五、碰牌策略 ==================== -->
+<div class="section" id="peng">
+<h2>五、碰牌策略（shouldPeng）</h2>
+
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">shouldPeng</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-check">前置检查</span>
+</div>
+<table>
+<tr><th>检查项</th><th>条件</th><th>结果</th></tr>
+<tr><td>十对路线8对+</td><td>_currentShiDuiEnabled && 对数≥8</td><td class="negative">不碰</td></tr>
+<tr><td>手牌同字&lt;2张</td><td>sameCharCount &lt; 2</td><td class="negative">不碰</td></tr>
+<tr><td>20张牌</td><td>!_canOperate</td><td class="negative">不碰</td></tr>
+<tr><td>手牌已有坎(3张)</td><td>sameCharCount ≥ 3</td><td>碰后听牌才碰</td></tr>
+</table>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">碰牌破坏句/靠?</span>
+</div>
+<div class="info-card warning-card">
+<h4>破坏句/靠时的处理</h4>
+<table>
+<tr><th>缺失字剩余</th><th>条件</th><th>结果</th></tr>
+<tr><td>0张</td><td>无法重组</td><td class="negative">必须碰后听牌才碰</td></tr>
+<tr><td>≤2张</td><td>重组困难</td><td>碰后距离不能增加</td></tr>
+<tr><td>&gt;2张</td><td>重组容易</td><td>碰后距离不能增加</td></tr>
+<tr><td>胡数≥11</td><td>破坏句</td><td class="negative">距离没改善不碰</td></tr>
+<tr><td>胡数&lt;11 + 快轮到</td><td>无冗余对子</td><td class="negative">不碰</td></tr>
+</table>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">碰后听牌?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是</div>
+<p class="positive">碰牌</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否</div>
+<div style="text-align:center;"><span class="node node-decision">已听牌?</span></div>
+<p class="negative">已听牌但碰后不听 → 不碰</p>
+</div>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">距离比较（碰后出牌 vs 碰前）</span>
+</div>
+<table>
+<tr><th>比较结果</th><th>动作</th></tr>
+<tr><td>碰后距离 &gt; 碰前</td><td class="negative">不碰</td></tr>
+<tr><td>碰后距离 &lt; 碰前</td><td class="positive">碰</td></tr>
+<tr><td>距离相同</td><td>比较胡数：碰后&gt;碰前 → 碰</td></tr>
+<tr><td>距离+胡数都同</td><td>比较进张数：碰后&lt;碰前×0.7 → 不碰</td></tr>
+<tr><td>以上都不满足</td><td>手牌≤14 或 对手快听牌 → 碰</td></tr>
+</table>
+
+<div class="info-card">
+<h4>十对路线距离比较特例</h4>
+<p>碰牌后十对路线不可用（melds不为空），碰前距离使用<b>普通路线距离</b>_distanceToTingNormal比较，避免十对距离(较小)与普通距离(较大)的不公平比较。</p>
+<div class="code-block">
+final distBefore = _currentShiDuiEnabled && player.melds.isEmpty
+    ? _distanceToTingNormal(hand, player.melds)  // 普通路线
+    : _distanceToTing(hand, player.melds);        // 含十对的混合路线
+</div>
+</div>
+</div>
+
+<!-- ==================== 六、招策略 ==================== -->
+<div class="section" id="zhao">
+<h2>六、招策略（shouldZhao / shouldZhaoFromHand）</h2>
+
+<h3>6.1 招别人出的牌（shouldZhao）</h3>
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">shouldZhao</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<table>
+<tr><th>检查项</th><th>条件</th><th>结果</th></tr>
+<tr><td>十对路线8对+</td><td>_currentShiDuiEnabled && 对数≥8</td><td class="negative">不招</td></tr>
+<tr><td>20张牌</td><td>!_canOperate</td><td class="negative">不招</td></tr>
+</table>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">手牌同字 = 3张?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是（3+1=4招）</div>
+<ol style="padding-left:20px;">
+<li>模拟招牌后效果</li>
+<li>招后听牌 → 招</li>
+<li>已听牌但招后不听 → 不招</li>
+<li>招后距离 &gt; 碰前+1 → 不招</li>
+<li>比较招vs碰：胡数更高或距离更短 → 招</li>
+<li>补摸改善概率&gt;0.3 → 招</li>
+</ol>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否 → _evaluateZhaoBenefit</div>
+<p>手牌同字≥4张时评估招手牌</p>
+</div>
+</div>
+</div>
+
+<h3>6.2 招自己手牌（shouldZhaoFromHand）</h3>
+<table>
+<tr><th>检查项</th><th>条件</th><th>结果</th></tr>
+<tr><td>十对路线8对+</td><td>_currentShiDuiEnabled && 对数≥8</td><td class="negative">不招</td></tr>
+<tr><td>19张牌</td><td>!_canZhaoFromHand</td><td class="negative">不招</td></tr>
+</table>
+
+<h3>6.3 招牌收益评估（_evaluateZhaoBenefit）</h3>
+<div class="info-card">
+<h4>手牌4张同字时的评估</h4>
+<ol style="padding-left:20px;">
+<li>模拟招牌（4张移到组合牌区）</li>
+<li>招后听牌 → 招</li>
+<li>已听牌但招后不听 → 不招</li>
+<li>招后19张，补摸后能否自摸 → 招</li>
+<li>对手快听牌且招后没听牌 → 距离没改善不招</li>
+<li>招后距离 &gt; 招前+1 → 不招</li>
+<li>比较招vs坎：胡数更高或距离更短 → 招</li>
+<li>补摸改善概率&gt;0.3 → 招</li>
+<li>招的牌参与句组合时：
+  <ul>
+    <li>缺失字剩余0 → 坎距离≤招距离时不招</li>
+    <li>缺失字≤2 → 坎距离&lt;招距离时不招</li>
+    <li>缺失字&gt;2 → 按正常逻辑</li>
+  </ul>
+</li>
+</ol>
+</div>
+</div>
+
+<!-- ==================== 七、胡牌策略 ==================== -->
+<div class="section" id="hu">
+<h2>七、胡牌策略（shouldHu）</h2>
+
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">shouldHu</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">单钓听 + 非自摸?</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#f85149;">是</div>
+<p>检查出的牌是否为单钓的字</p>
+<div class="code-block">
+if (card.character == singleChar)
+  return false;  // 不能胡单钓的这张字
+</div>
+<p class="negative">单钓听时不能胡单钓的字（只能自摸）</p>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">否</div>
+<p class="positive">return true（能胡必胡）</p>
+</div>
+</div>
+</div>
+
+<div class="info-card warning-card">
+<h4>单钓听限制规则</h4>
+<ul style="padding-left:20px;">
+<li>单钓听（TingType.singleWait）时，<b>不能胡</b>单钓的那张字</li>
+<li>单钓的字 = player.tingCards.first.character</li>
+<li>自摸不受此限制</li>
+<li>AI和人类玩家都受此限制</li>
+</ul>
+</div>
+</div>
+
+<!-- ==================== 八、核心评分系统 ==================== -->
+<div class="section" id="scoring">
+<h2>八、核心评分系统</h2>
+
+<h3>8.1 手牌潜力评估（_evaluateHandPotentialAndDistance）</h3>
+<div class="info-card">
+<p>综合评估手牌的结构潜力和听牌距离，返回(potential, distance)。</p>
+<p>potential越高表示手牌质量越好，distance越小表示越接近听牌。</p>
+</div>
+
+<h3>8.2 门结构评分（_evaluateMenStructure）</h3>
+<p>按men-structure-score.md规则，对每门牌独立评分：</p>
+<table>
+<tr><th>牌型</th><th>门2-7（普字）</th><th>门1/8（精字）</th></tr>
+<tr><td>招（4张同字）</td><td class="highlight">100</td><td class="highlight">200（精招）</td></tr>
+<tr><td>坎（3张同字，手牌）</td><td class="highlight">60</td><td class="highlight">150（精坎）</td></tr>
+<tr><td>坎（3张同字，组合牌）</td><td class="highlight">50</td><td class="highlight">150（精坎）</td></tr>
+<tr><td>句（3字各1）</td><td class="highlight">50</td><td class="highlight">90（精句）</td></tr>
+<tr><td>对（2张同字）</td><td class="highlight">20</td><td class="highlight">100（金对）/ 20（银对）</td></tr>
+<tr><td>靠（2字各1）</td><td class="highlight">10</td><td class="highlight">50（精靠）/ 10（银靠）</td></tr>
+<tr><td>单张</td><td class="highlight">0</td><td class="highlight">40（精单）/ 0（银单）</td></tr>
+</table>
+<p>额外加成：进张期望分 = (rem/totalUnknown) × 结构提升分</p>
+
+<h3>8.3 胡数计算（_evaluateHuScore）</h3>
+<div class="formula">
+总胡数 = 组合牌胡数 <span class="op">+</span> 手牌胡数
+
+手牌胡数 = A集(句) <span class="op">+</span> B集(招) <span class="op">+</span> C集(坎) <span class="op">+</span> D集(对/靠) <span class="op">+</span> E集(单) <span class="op">+</span> 附加胡数
+
+附加胡数：
+  a. 普对+句中1字 → <span class="num">+3</span>
+  b. 普靠+句中2字 → <span class="num">+6</span>
+  c. 普单+句中2字 → <span class="num">+3</span>
+  d. 3精句 → <span class="num">+6</span> / 3普句 → <span class="num">+9</span>
+</div>
+
+<h3>8.4 进张概率</h3>
+<div class="formula">
+进张概率 = <span class="var">所需进张剩余张数</span> <span class="op">/</span> <span class="var">未知牌总数</span>
+
+剩余张数 = 4 - 已知张数（手牌+组合牌+弃牌+他人组合牌）
+未知牌总数 = 96 - 所有已知牌数
+</div>
+</div>
+
+<!-- ==================== 九、听牌距离 ==================== -->
+<div class="section" id="distance">
+<h2>九、听牌距离计算（_distanceToTing）</h2>
+
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry">_distanceToTing</span>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-decision">十对路线可用? (melds为空 && _currentShiDuiEnabled)</span>
+</div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title" style="color:#7ee787;">是</div>
+<div style="text-align:center;"><span class="node node-decision">对数≥8?</span></div>
+<div class="branch-container">
+<div class="branch">
+<div class="branch-title">是</div>
+<p>强制十对路线<br>_distanceToTingShiDui</p>
+</div>
+<div class="branch">
+<div class="branch-title">否</div>
+<p>取min(十对距离, 普通距离)</p>
+</div>
+</div>
+</div>
+<div class="branch">
+<div class="branch-title" style="color:#f0883e;">否</div>
+<p>只走普通路线<br>_distanceToTingNormal</p>
+</div>
+</div>
+<div style="text-align:center; margin:10px 0;"><span class="arrow">↓</span></div>
+<div style="text-align:center;">
+<span class="node node-check">距离≤2时检查胡数条件</span>
+</div>
+<div class="info-card warning-card">
+<p>距离≤2但胡数&lt;11且非特殊胡型 → 增加距离惩罚：penalty = max(0, (11-胡数)/2)</p>
+</div>
+</div>
+
+<h3>9.1 十对听牌距离（_distanceToTingShiDui）</h3>
+<div class="formula">
+距离 = <span class="num">9</span> <span class="op">-</span> 对数
+
+对数计算：4张=2对，3张=1对(+1坎)，2张=1对，1张=0
+9对 = 听牌（距离0）
+</div>
+
+<h3>9.2 普通听牌距离（_distanceToTingNormal）</h3>
+<div class="formula">
+neededMelds = <span class="num">6</span> <span class="op">-</span> 已完成面子数(句+招+坎)
+
+距离 = neededMelds × <span class="num">2</span> <span class="op">-</span> 有用对/靠数 <span class="op">-</span> 单张可组靠数
+
+听牌条件：
+  单钓听：E集1张 + D集空 → 距离=0
+  普通听：D集2个 + E集空 → 距离=0
+</div>
+<p>使用两种模式(mode 0/1)计算取最小值：mode 0=优先对子，mode 1=优先靠</p>
+</div>
+
+<!-- ==================== 十、危险度评估 ==================== -->
+<div class="section" id="danger">
+<h2>十、危险度评估（_evaluateDanger）</h2>
+
+<div class="info-card">
+<h4>评估出牌被他人胡牌的风险</h4>
+<p>遍历所有对手，根据对手状态评估出牌危险度：</p>
+</div>
+
+<h3>对手已听牌时</h3>
+<table>
+<tr><th>出牌类型</th><th>残局</th><th>非残局</th></tr>
+<tr><td>基础危险分</td><td class="negative">+25</td><td class="negative">+12</td></tr>
+<tr><td>精牌(上/福)</td><td class="negative">+100</td><td class="negative">+60</td></tr>
+<tr><td>银牌(大/人/禄/寿)</td><td class="negative">+40</td><td class="negative">+20</td></tr>
+<tr><td>同组有对手组合牌</td><td class="negative">+60</td><td class="negative">+40</td></tr>
+<tr><td>剩余张数越少</td><td colspan="2" class="negative">越危险（对手可能在等）</td></tr>
+</table>
+
+<h3>对手未听牌时</h3>
+<table>
+<tr><th>评估依据</th><th>说明</th></tr>
+<tr><td>对手弃牌区</td><td>弃过的字→不需要，同组可能也不需要</td></tr>
+<tr><td>对手组合牌区</td><td>已吃/碰/招的字→该门有投入，同组其他字可能需要</td></tr>
+<tr><td>对手组合牌≥3组</td><td>接近听牌，危险度提高</td></tr>
+</table>
+
+<h3>安全出牌策略</h3>
+<div class="info-card success-card">
+<ul style="padding-left:20px;">
+<li>自己距离≥4时，优先出对手弃过的组的牌（safeGroupCount×15）</li>
+<li>残局时更注重防守（isLate加成更高）</li>
+<li>精牌和银牌默认更危险，出牌需谨慎</li>
+</ul>
+</div>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<div class="section">
+<h2>总结：AI决策优先级链</h2>
+<div class="flowchart">
+<div style="text-align:center;">
+<span class="node node-entry" style="background:#da3633;">1. 能胡必胡</span>
+<span class="arrow">→</span>
+<span class="node node-entry" style="background:#8957e5;">2. 能招则招</span>
+<span class="arrow">→</span>
+<span class="node node-entry" style="background:#238636;">3. 评估碰牌</span>
+<span class="arrow">→</span>
+<span class="node node-entry" style="background:#1f6feb;">4. 评估吃牌</span>
+<span class="arrow">→</span>
+<span class="node node-entry" style="background:#d29922;">5. 出牌</span>
+</div>
+</div>
+
+<div class="info-card">
+<h4>出牌决策核心公式</h4>
+<div class="formula" style="font-size:13px;">
+出牌评分 = 手牌潜力 + 门结构变化×0.3 + 前瞻分 + 距离分×120
+         + 路线优先级加成(十对/黑元/红元/枯胡/普通)
+         - 破坏句/靠惩罚 - 精银牌惩罚 - 胡数损失×50
+         - 危险度 + 安全出牌加成 + 预期步数×50
+         + 两步前瞻
+
+<span class="highlight">选择评分最高的牌打出</span>
+</div>
+</div>
+
+<div class="info-card success-card">
+<h4>关键硬性约束</h4>
+<ul style="padding-left:20px;">
+<li>招（4张同字）不能出</li>
+<li>20张牌不能吃/碰/招别人出的牌</li>
+<li>19张牌不能招自己手牌的4张同字</li>
+<li>单钓听不能胡单钓的字（只能自摸）</li>
+<li>胡数≥11才能胡牌（特殊胡型除外）</li>
+<li>操作优先级：胡&gt;招&gt;碰&gt;吃</li>
+</ul>
+</div>
+
+</div>
+
+</div>
+</body>
+</html>

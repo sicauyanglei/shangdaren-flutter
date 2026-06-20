@@ -281,8 +281,6 @@ class _GameOverlayState extends State<GameOverlay> {
               !gameState.showLiujuResult)
             Builder(
               builder: (context) {
-                // 按钮纵坐标固定为初始位置（maxStacks=1时的位置），不随手牌上下移动
-                const initialButtonTopY = _designHeight - _handCardH + 80;
                 // 按照8组牌满宽度计算，不随手牌实际宽度移动
                 const maxGroupCount = 8;
                 const fullHandW =
@@ -291,22 +289,13 @@ class _GameOverlayState extends State<GameOverlay> {
                 final handRightX = (_designWidth + fullHandW) / 2;
                 const buttonGap = 20.0;
                 const buttonW = 210.0;
-                const buttonH = 72.0;
                 double buttonLeftX = handRightX + buttonGap;
-                double buttonTopY = initialButtonTopY;
-                // 玩家2区域左边界
-                const player2LeftBound =
-                    _designWidth - _player2RightPadding - _player2MaxWidth;
-                final player2BottomY = _player2AreaBottomY(player2);
-                // 如果按钮与玩家2区域重叠，则往下移动到玩家2区域下方
-                if (buttonLeftX + buttonW > player2LeftBound &&
-                    buttonTopY + buttonH > _player2AvatarBottom &&
-                    buttonTopY < player2BottomY) {
-                  buttonTopY = player2BottomY + 10.0;
-                }
+                // 按钮底部固定在RoundInfo上边缘上方40px
+                // RoundInfo: bottom=9.6, height=60, 上边缘距底部69.6px
+                const buttonBottom = 9.6 + 60.0 + 40.0;
                 return Positioned(
                   left: buttonLeftX,
-                  top: buttonTopY,
+                  bottom: buttonBottom,
                   child: GameArtButton(
                     label: gameState.isAutoHosting ? '取消托管' : 'AI托管',
                     type: GameButtonType.hosting,

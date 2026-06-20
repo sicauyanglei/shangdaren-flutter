@@ -2168,6 +2168,12 @@ class AIStrategyHard extends AIStrategy {
       score += (10 - expSteps) * 50;
     }
 
+    // 调试日志：打印出牌评分明细
+    GameLogger.i(
+      'AI_DISCARD_DETAIL',
+      '  card=${cardToDiscard.character} potential=${potential.toStringAsFixed(1)} distToTing=$distToTing menDelta=${(menScoreAfter - menScoreBefore).toStringAsFixed(1)} cardGroupType=${cardGroupTypeScore.toStringAsFixed(1)} finalScore=${score.toStringAsFixed(1)}',
+    );
+
     return score;
   }
 
