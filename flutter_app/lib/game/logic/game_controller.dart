@@ -86,6 +86,7 @@ class GameController {
   bool _pendingAIContinue = false;
   int? _pendingAIContinuePlayerId;
   bool _pendingAIContinueSkipZimo = false;
+  Card? _pendingAIContinueDrawnCard;
 
   int _drawVersion = 0;
   int _discardVersion = 0;
@@ -200,6 +201,7 @@ class GameController {
     _pendingAIContinue = false;
     _pendingAIContinuePlayerId = null;
     _pendingAIContinueSkipZimo = false;
+    _pendingAIContinueDrawnCard = null;
     _clearPendingAIResponses();
 
     _drawVersion++;
@@ -1491,7 +1493,8 @@ class GameController {
     } else {
       state.huResultDianpaoName = null;
       state.huResultDianpaoCard = null;
-      state.huResultZimoCard = zimoCard;
+      // 自摸卡牌：优先使用传入的zimoCard，否则回退到_lastDrawnCard
+      state.huResultZimoCard = zimoCard ?? _lastDrawnCard;
     }
     state.showHuResult = true;
 
@@ -1694,7 +1697,9 @@ class GameController {
       _pendingAIContinuePlayerId = null;
       final skipZimo = _pendingAIContinueSkipZimo;
       _pendingAIContinueSkipZimo = false;
-      _aiContinueAfterDraw(player, skipZimoCheck: skipZimo);
+      final drawnCard = _pendingAIContinueDrawnCard;
+      _pendingAIContinueDrawnCard = null;
+      _aiContinueAfterDraw(player, drawnCard: drawnCard, skipZimoCheck: skipZimo);
       return;
     }
 
@@ -1812,13 +1817,14 @@ class GameController {
       _pendingAIContinue = true;
       _pendingAIContinuePlayerId = player.id;
       _pendingAIContinueSkipZimo = false;
+      _pendingAIContinueDrawnCard = card;
       final delay = 800 + _rng.nextInt(500);
       Future.delayed(Duration(milliseconds: delay), () {
         if (_isPaused || !state.gameStarted) return;
         if (_aiContinueVersion != version) return;
         _pendingAIContinue = false;
         _pendingAIContinuePlayerId = null;
-        _aiContinueAfterDraw(player);
+        _aiContinueAfterDraw(player, drawnCard: card);
       });
     }
   }
