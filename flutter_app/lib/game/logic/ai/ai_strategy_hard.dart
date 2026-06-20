@@ -1641,7 +1641,7 @@ class AIStrategyHard extends AIStrategy {
           }
         }
       } else {
-        // 默认普通胡牌路线：普单 > 对子+独立单张 > 普句多一张 > 普靠
+        // 默认普通胡牌路线：普单 > 对子+独立单张 > 普句多一张 > 普靠 > 拆句
         if (discardGroupCharSet.length == 1) {
           score += 200; // 普单(孤张)最优先
         } else if (discardGroupCharSet.length == 3) {
@@ -1678,7 +1678,9 @@ class AIStrategyHard extends AIStrategy {
           // else: 真正的句，出单张会破坏句，不加分（由破坏句惩罚控制）
         } else if (discardGroupCharSet.length == 2) {
           if (!hasPairInGroup) {
-            // 普靠：不加分，靠破坏靠惩罚控制
+            // 普靠：出半靠中一张，排名33，优先于拆句(排名29)
+            // 给予正向加分确保出半靠 > 拆句
+            score += 80; // 普靠出牌加分，低于孤张(+200)但高于拆句(-200)
           } else {
             // 对子+单张：区分"对子+独立单张"和"对子+靠"
             // 检查对子是否为死对子（剩余0张，无法碰成坎）
