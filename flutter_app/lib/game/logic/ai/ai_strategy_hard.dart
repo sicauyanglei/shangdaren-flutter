@@ -325,11 +325,12 @@ class AIStrategyHard extends AIStrategy {
       return 100.0 + sentenceCount * 50.0;
     }
 
-    // 主动黑元策略：门1+门8张数<=3且总胡数<=4胡时，主动追求黑元
+    // 主动黑元策略：门1+门8张数<=3且总胡数<=10胡时，主动追求黑元
+    // 黑元给4-5番，普通胡不足11胡给0番，所以胡数<11时应优先黑元
     // 返回较低潜力值，引导AI优先清理门1/8牌
     if (group18Count <= 3) {
       final totalHu = _evaluateHuScore(player);
-      if (totalHu <= 4) {
+      if (totalHu <= 10) {
         int sentenceCount = 0;
         for (final meld in player.melds) {
           if (meld.type == MeldType.ju) sentenceCount++;
@@ -1402,12 +1403,22 @@ class AIStrategyHard extends AIStrategy {
       // 黑元路线下，精字(上/福)是门1/8牌，需要优先打出清理，不惩罚
       if (heiYuanPotential <= 0) {
         score -= 80;
+      } else {
+        // 黑元路线下主动奖励出精字（门1/8牌）
+        score += 150;
       }
     } else if (_isYin(cardToDiscard)) {
       // 黑元路线下，银字(大/人/禄/寿)也是门1/8牌，不惩罚
       if (heiYuanPotential <= 0) {
         score -= 20;
+      } else {
+        // 黑元路线下主动奖励出银字（门1/8牌）
+        score += 150;
       }
+    } else if (heiYuanPotential > 0 &&
+        (cardToDiscard.sentence == 1 || cardToDiscard.sentence == 8)) {
+      // 黑元路线下，门1/8的非精非银字也优先打出
+      score += 120;
     }
 
     // 破坏完整句惩罚：出牌导致手牌中某个完整句被拆散时，施加惩罚
@@ -1446,23 +1457,29 @@ class AIStrategyHard extends AIStrategy {
           // 句型排名29，远高于半靠型排名33，破坏完整句的惩罚必须大于破坏靠
           // 动态调整：句中缺失字剩余0→拆句后无法重组，惩罚不变
           // 句中缺失字剩余多→拆句后容易重组，惩罚降低
-          final missingChars = _groupChars[discardGroup - 1]
-              .where((ch) => !discardGroupCharSet.contains(ch))
-              .toList();
-          int missingRem = 0;
-          for (final ch in missingChars) {
-            missingRem += _remainingCount(ch, visibleCount);
-          }
-          // missingRem=0→无法重组→惩罚不变; missingRem≥4→容易重组→惩罚降低30%
-          final reassembleFactor = missingRem == 0
-              ? 1.0
-              : (1.0 - (missingRem * 0.05).clamp(0.0, 0.3));
-          if (quickDist <= 2) {
-            score -= (400 * reassembleFactor).round();
-          } else if (quickDist <= 4) {
-            score -= (300 * reassembleFactor).round();
+          // 黑元路线下，门1/8的句需要拆散清理，豁免拆句惩罚
+          if (heiYuanPotential > 0 &&
+              (discardGroup == 1 || discardGroup == 8)) {
+            // 黑元路线下不惩罚拆门1/8句
           } else {
-            score -= (200 * reassembleFactor).round();
+            final missingChars = _groupChars[discardGroup - 1]
+                .where((ch) => !discardGroupCharSet.contains(ch))
+                .toList();
+            int missingRem = 0;
+            for (final ch in missingChars) {
+              missingRem += _remainingCount(ch, visibleCount);
+            }
+            // missingRem=0→无法重组→惩罚不变; missingRem≥4→容易重组→惩罚降低30%
+            final reassembleFactor = missingRem == 0
+                ? 1.0
+                : (1.0 - (missingRem * 0.05).clamp(0.0, 0.3));
+            if (quickDist <= 2) {
+              score -= (400 * reassembleFactor).round();
+            } else if (quickDist <= 4) {
+              score -= (300 * reassembleFactor).round();
+            } else {
+              score -= (200 * reassembleFactor).round();
+            }
           }
         }
       } else if (discardGroupCharSet.length == 2) {
