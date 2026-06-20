@@ -1436,13 +1436,13 @@ class AIStrategyHard extends AIStrategy {
           // 真正的完整句，出的牌有冗余，出1张后句仍然完整，不惩罚
         } else {
           // 真正的完整句，出的牌只有1张，出牌后会破坏句
-          // 惩罚力度：距离越近越不应该拆句
+          // 句型排名29，远高于半靠型排名33，破坏完整句的惩罚必须大于破坏靠
           if (quickDist <= 2) {
-            score -= 300;
+            score -= 400;
           } else if (quickDist <= 4) {
-            score -= 200;
+            score -= 300;
           } else {
-            score -= 100;
+            score -= 200;
           }
         }
       } else if (discardGroupCharSet.length == 2) {
@@ -1507,12 +1507,13 @@ class AIStrategyHard extends AIStrategy {
               }
             } else {
               // 普句靠(进张+0胡)，破坏代价较小
+              // 半靠型排名33，低于句型排名29，惩罚必须小于破坏完整句
               if (quickDist <= 2) {
-                score -= 200 + missingRem * 20;
+                score -= 150 + missingRem * 10;
               } else if (quickDist <= 4) {
-                score -= 150 + missingRem * 15;
+                score -= 100 + missingRem * 8;
               } else {
-                score -= 100 + missingRem * 10;
+                score -= 50 + missingRem * 5;
               }
             }
           }
