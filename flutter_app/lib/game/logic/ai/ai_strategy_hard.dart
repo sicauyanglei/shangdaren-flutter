@@ -3652,6 +3652,12 @@ class AIStrategyHard extends AIStrategy {
         return 250; // 精招+精靠
       case '招对型':
         return 220; // 精招+银对
+      case '坎对孤张型':
+        return 210; // 精坎/银坎+银对+精单/银单（对子比半靠更有价值）
+      case '坎对对型':
+        return 190; // 精坎/银坎+银对+银对
+      case '招对孤张型':
+        return 260; // 精招+银对+精单/银单
       default:
         return _cardGroupTypeScore[type] ?? 0;
     }
@@ -3814,8 +3820,8 @@ class AIStrategyHard extends AIStrategy {
     // 对中一张（出对中一张，保留完整集）
     if (discardCount >= 2 && discardCount < 3) {
       // 检查是否是"含对的牌型"中出对
-      if (currentType.contains('对') && !currentType.contains('孤张')) {
-        // 含对的牌型，出对中一张
+      if (currentType.contains('对')) {
+        // 含对的牌型（包括复合类型如坎对孤张型），出对中一张
         // 但十对路线绝不出对子
         if (isShiDuiRoute) {
           cardSelectionBonus -= 200; // 十对路线重罚出对子
@@ -3825,7 +3831,7 @@ class AIStrategyHard extends AIStrategy {
           if (rem == 0) {
             cardSelectionBonus += 80; // 死对子，优先出
           } else {
-            cardSelectionBonus += 20; // 普通对子，小幅鼓励
+            cardSelectionBonus -= 30; // 活对子，惩罚出对中一张（破坏对子）
           }
         }
       }
