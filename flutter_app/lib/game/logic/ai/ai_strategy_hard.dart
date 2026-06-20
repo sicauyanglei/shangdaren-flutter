@@ -1521,12 +1521,17 @@ class AIStrategyHard extends AIStrategy {
             } else {
               // 普句靠(进张+0胡)，破坏代价较小
               // 半靠型排名33，低于句型排名29，惩罚必须小于破坏完整句
+              // 动态调整：缺失字剩余0→拆靠后无法重组→惩罚降低(拆了损失小)
+              // 缺失字剩余多→拆靠后容易重组→惩罚不变(但出牌后可再摸回)
+              final kaoFactor = missingRem == 0
+                  ? 0.3
+                  : (1.0 - (4 - missingRem).clamp(0, 3) * 0.1);
               if (quickDist <= 2) {
-                score -= 150 + missingRem * 10;
+                score -= (150 * kaoFactor).round();
               } else if (quickDist <= 4) {
-                score -= 100 + missingRem * 8;
+                score -= (100 * kaoFactor).round();
               } else {
-                score -= 50 + missingRem * 5;
+                score -= (50 * kaoFactor).round();
               }
             }
           }
@@ -1670,7 +1675,18 @@ class AIStrategyHard extends AIStrategy {
             );
             if (allCharsHave2) {
               // 对对型拆对子，排名30，优先于拆句(-200)但低于半靠(+80)
-              score += 40; // 对对型拆对子加分
+              // 动态调整：对子剩余0→死对子，加分高；剩余多→碰坎概率高，加分低
+              final pairRem2 = _remainingCount(
+                cardToDiscard.character,
+                visibleCount,
+              );
+              if (pairRem2 == 0) {
+                score += 80; // 死对子，优先拆
+              } else if (pairRem2 == 1) {
+                score += 40; // 碰坎概率低
+              } else {
+                score += 20; // 碰坎概率高，加分最低
+              }
             } else {
               // 检查出的是否是金对/精对（上上/福福），金对8胡不能拆
               final isJingPair =
@@ -1729,14 +1745,18 @@ class AIStrategyHard extends AIStrategy {
               // discardCountInGroup >= 2：拆对子
               // 对型排名32，介于半靠(33)和句型(29)之间
               // 拆对子优先于拆句，但次于拆半靠
-              // 给予正向加分+40，低于半靠(+80)但高于拆句(-200)
+              // 动态调整：对子剩余0→死对子，优先拆(+80)
+              // 对子剩余1→碰坎概率低，加分较高
+              // 对子剩余2+→碰坎概率高，加分较低
               if (pairRem > 0) {
                 // 对子可以碰成坎获得胡数，但拆对子仍优先于拆句
                 // 胡数越少，对子碰坎价值越高，适当降低加分
+                // 剩余张数越多，碰坎概率越高，适当降低加分
                 final huBonus = huBefore < 6
                     ? 0.0
                     : (huBefore < 11 ? 20.0 : 40.0);
-                score += huBonus;
+                final remFactor = pairRem >= 2 ? 0.6 : 1.0;
+                score += (huBonus * remFactor).roundToDouble();
               } else {
                 // 死对子（剩余0张），无法碰成坎，优先拆
                 score += 80;
