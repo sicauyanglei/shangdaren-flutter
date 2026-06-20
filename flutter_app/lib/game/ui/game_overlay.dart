@@ -281,7 +281,8 @@ class _GameOverlayState extends State<GameOverlay> {
               !gameState.showLiujuResult)
             Builder(
               builder: (context) {
-                final handTopY = _handTopY(player1?.hand ?? []);
+                // 按钮纵坐标固定为初始位置（maxStacks=1时的位置），不随手牌上下移动
+                const initialButtonTopY = _designHeight - _handCardH + 80;
                 // 按照8组牌满宽度计算，不随手牌实际宽度移动
                 const maxGroupCount = 8;
                 const fullHandW =
@@ -292,7 +293,7 @@ class _GameOverlayState extends State<GameOverlay> {
                 const buttonW = 210.0;
                 const buttonH = 72.0;
                 double buttonLeftX = handRightX + buttonGap;
-                double buttonTopY = handTopY;
+                double buttonTopY = initialButtonTopY;
                 // 玩家2区域左边界
                 const player2LeftBound =
                     _designWidth - _player2RightPadding - _player2MaxWidth;
