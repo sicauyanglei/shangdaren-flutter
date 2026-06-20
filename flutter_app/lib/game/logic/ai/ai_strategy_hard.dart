@@ -1437,12 +1437,25 @@ class AIStrategyHard extends AIStrategy {
         } else {
           // 真正的完整句，出的牌只有1张，出牌后会破坏句
           // 句型排名29，远高于半靠型排名33，破坏完整句的惩罚必须大于破坏靠
+          // 动态调整：句中缺失字剩余0→拆句后无法重组，惩罚不变
+          // 句中缺失字剩余多→拆句后容易重组，惩罚降低
+          final missingChars = _groupChars[discardGroup - 1]
+              .where((ch) => !discardGroupCharSet.contains(ch))
+              .toList();
+          int missingRem = 0;
+          for (final ch in missingChars) {
+            missingRem += _remainingCount(ch, visibleCount);
+          }
+          // missingRem=0→无法重组→惩罚不变; missingRem≥4→容易重组→惩罚降低30%
+          final reassembleFactor = missingRem == 0
+              ? 1.0
+              : (1.0 - (missingRem * 0.05).clamp(0.0, 0.3));
           if (quickDist <= 2) {
-            score -= 400;
+            score -= (400 * reassembleFactor).round();
           } else if (quickDist <= 4) {
-            score -= 300;
+            score -= (300 * reassembleFactor).round();
           } else {
-            score -= 200;
+            score -= (200 * reassembleFactor).round();
           }
         }
       } else if (discardGroupCharSet.length == 2) {
@@ -1734,17 +1747,42 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 依赖胡数路线下，胡数≤8时，拆1/8门牌的惩罚大于拆句(-200)
-    // 确保优先级：孤张 > 半靠 > 对子 > 拆句 > 拆1/8门
+    // 依赖胡数路线下，胡数≤8时，拆1/8门牌的惩罚动态调整
+    // 基础惩罚大于拆句(-200)，但根据剩余张数动态调整：
+    // - 精字(上/福)剩余多→保护力度大
+    // - 精字剩余0→门1/8进张断，保护力度降低，接近拆句惩罚
+    // - 银字(大/人/禄/寿)剩余多→有精句潜力，保护力度中等
+    // - 银字剩余0→无进张，保护力度大幅降低
     // 黑元路线例外（不需要门1/8）
     if (huBefore <= 8 &&
         shiDuiPotential <= 0 &&
         heiYuanPotential <= 0 &&
         (discardGroup == 1 || discardGroup == 8)) {
-      // 惩罚力度随胡数降低而增大，且必须超过拆句惩罚(-200)
-      // 8胡→-210, 0胡→-370
-      final men18Penalty = 210 + (8 - huBefore) * 20;
-      score -= men18Penalty;
+      // 计算该门精字和银字的剩余张数
+      final groupChars = _groupChars[discardGroup - 1];
+      final jingChar = discardGroup == 1 ? '上' : '福';
+      final jingRem = _remainingCount(jingChar, visibleCount);
+      final yinChars = groupChars.where((ch) => ch != jingChar);
+      final yinMinRem = yinChars
+          .map((ch) => _remainingCount(ch, visibleCount))
+          .reduce((a, b) => a < b ? a : b);
+
+      // 基础惩罚：必须超过拆句(-200)
+      double basePenalty = 210 + (8 - huBefore) * 20.0;
+
+      // 精字剩余张数调整：精字剩余0→保护力度降低50%
+      if (jingRem == 0) {
+        basePenalty *= 0.5;
+      } else if (jingRem == 1) {
+        basePenalty *= 0.75;
+      }
+
+      // 银字剩余张数调整：所有银字剩余0→保护力度再降低30%
+      if (yinMinRem == 0) {
+        basePenalty *= 0.7;
+      }
+
+      score -= basePenalty;
     }
 
     // 胡数足够(>=11)时的出牌优先级：优先出单张，保留对子/坎
