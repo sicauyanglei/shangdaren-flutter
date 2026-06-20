@@ -3592,6 +3592,16 @@ class AIStrategyHard extends AIStrategy {
       cardSelectionBonus += 40; // 半靠型，出任一张
     }
 
+    // 门1/8对孤张型特例：银对时优先出对中字保留银靠（精句潜力4胡 > 普坎潜力3胡）
+    if (currentType == '对孤张型' &&
+        (sentence == 1 || sentence == 8) &&
+        discardCount >= 2 &&
+        _isYin(cardToDiscard) &&
+        !isShiDuiRoute) {
+      // 银对（大大/人人/禄禄/寿寿），出对中字保留银靠（大人/禄寿等）有精句潜力
+      cardSelectionBonus += 100; // 高于孤张的80，优先出对中字
+    }
+
     // 对中一张（出对中一张，保留完整集）
     if (discardCount >= 2 && discardCount < 3) {
       // 检查是否是"含对的牌型"中出对
