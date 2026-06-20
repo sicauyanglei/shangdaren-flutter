@@ -3683,6 +3683,18 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 11. 低胡数时门1/8保护：胡数≤8时，门1/8牌保留优先级高于门2-7的半靠和对子
+    // 因为门1/8含精字，精单4胡、精靠4胡、精句4胡，是低胡数时凑胡数的关键
+    if ((sentence == 1 || sentence == 8) && heiYuanPotential <= 0) {
+      final huScore = _evaluateHuScore(player);
+      if (huScore <= 8) {
+        // 低胡数时，门1/8的任何牌型都应优先保留
+        // 惩罚力度随胡数降低而增大
+        final lowHuPenalty = (8 - huScore) * 30.0; // 8胡→0, 0胡→-240
+        cardSelectionBonus -= lowHuPenalty;
+      }
+    }
+
     return rankScore + lossPenalty + menAdjustment + cardSelectionBonus;
   }
 
