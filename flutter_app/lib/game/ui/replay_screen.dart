@@ -77,6 +77,11 @@ class _ReplayScreenState extends State<ReplayScreen>
   int _flashCardId = -1;
   // 摸牌标记（最后摸的牌ID，用于主视角显示"摸"字）
   int _moCardId = -1;
+  // 牌堆剩余数量
+  int _deckCount = 0;
+  // 中央最后出的牌（横放显示）
+  Card? _lastPlayedCard;
+  int _lastPlayedPlayerIndex = -1;
 
   // 回放结束后的结果面板
   bool _showResult = false;
@@ -131,6 +136,15 @@ class _ReplayScreenState extends State<ReplayScreen>
       _hands[i] = GameRecorder.deserializeHand(widget.replay.initialHands[i]);
       _sortHand(i);
     }
+    // 初始牌堆 = 96 - 初始手牌总数
+    int totalHand = 0;
+    for (final h in _hands) {
+      totalHand += h.length;
+    }
+    _deckCount = 96 - totalHand;
+    _lastPlayedCard = null;
+    _lastPlayedPlayerIndex = -1;
+    _moCardId = -1;
   }
 
   void _startReplay() {
@@ -584,11 +598,16 @@ class _ReplayScreenState extends State<ReplayScreen>
         final card = _deserializeCard(action.data['card']);
         _hands[pi].add(card);
         _sortHand(pi);
+        _deckCount--;
+        _moCardId = card.id;
         break;
       case 'discard':
         final card = _deserializeCard(action.data['card']);
         _hands[pi].removeWhere((Card c) => c.id == card.id);
         _discards[pi].add(card);
+        _lastPlayedCard = card;
+        _lastPlayedPlayerIndex = pi;
+        _moCardId = -1;
         break;
       case 'chi':
         final fromCard = _deserializeCard(action.data['fromCard']);
@@ -605,6 +624,8 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: chiCards.any((Card c) => c.isJing),
           ),
         );
+        _lastPlayedCard = null;
+        _moCardId = -1;
         break;
       case 'peng':
         final card = _deserializeCard(action.data['card']);
@@ -632,6 +653,8 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
         );
+        _lastPlayedCard = null;
+        _moCardId = -1;
         break;
       case 'zhao':
         final card = _deserializeCard(action.data['card']);
@@ -659,6 +682,8 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: zhaoCards, type: MeldType.zhao, isJing: card.isJing),
         );
+        _lastPlayedCard = null;
+        _moCardId = -1;
         break;
       case 'zhao_from_hand':
         final cards = _deserializeCardList(action.data['cards']);
@@ -672,12 +697,16 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: cards.any((Card c) => c.isJing),
           ),
         );
+        _lastPlayedCard = null;
+        _moCardId = -1;
         break;
       case 'hu':
       case 'zimo':
         final card = _deserializeCard(action.data['card']);
         _hands[pi].add(card);
         _sortHand(pi);
+        _lastPlayedCard = null;
+        _moCardId = -1;
         break;
     }
   }
@@ -818,6 +847,28 @@ class _ReplayScreenState extends State<ReplayScreen>
               child: _buildRightMeldsAndDiscards(positions[1]),
             ),
           ),
+          // 牌堆（顶部中央）
+          if (_deckCount > 0)
+            Positioned(
+              left: (designWidth / 2 - 40) * scale,
+              top: 9.6 * scale,
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topLeft,
+                child: _buildDeck(),
+              ),
+            ),
+          // 中央横放卡牌（最后出的牌）
+          if (_lastPlayedCard != null)
+            Positioned(
+              left: (designWidth / 2 - 80) * scale,
+              top: 55.0 * scale,
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topLeft,
+                child: _buildLastPlayedCard(),
+              ),
+            ),
           // 飞牌动画Overlay层
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 结果面板（胡牌/流局）
@@ -1228,56 +1279,26 @@ class _ReplayScreenState extends State<ReplayScreen>
       groupWidths.add(groupW);
     }
 
-    // 多行布局，每行最多3组，组间间隔2px
-    final List<Widget> rows = [];
-    List<Widget> currentGroups = [];
-    double currentRowWidth = 0;
-    int groupCountInRow = 0;
+    // 单行布局，使用FittedBox自动缩放适应宽度
     final maxW = isRight ? rightMaxW : leftMaxW;
-
-    for (int i = 0; i < groupWidgets.length; i++) {
-      final gw = groupWidgets[i];
-      final groupW = groupWidths[i];
-      final newWidth = currentGroups.isEmpty
-          ? groupW
-          : currentRowWidth + 2 + groupW;
-      if (groupCountInRow >= 3 ||
-          (currentGroups.isNotEmpty && newWidth > maxW)) {
-        rows.add(
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
-            children: currentGroups,
-          ),
-        );
-        currentGroups = [];
-        currentRowWidth = 0;
-        groupCountInRow = 0;
-      }
-      if (currentGroups.isNotEmpty) {
-        currentGroups.add(const SizedBox(width: 2));
-        currentRowWidth += 2;
-      }
-      currentGroups.add(gw);
-      currentRowWidth += groupW;
-      groupCountInRow++;
-    }
-    if (currentGroups.isNotEmpty) {
-      rows.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
-          children: currentGroups,
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
-      children: rows,
+      textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        for (int i = 0; i < groupWidgets.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          groupWidgets[i],
+        ],
+      ],
+    );
+
+    return SizedBox(
+      width: maxW,
+      child: FittedBox(
+        alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
+        fit: BoxFit.scaleDown,
+        child: row,
+      ),
     );
   }
 
@@ -1577,6 +1598,94 @@ class _ReplayScreenState extends State<ReplayScreen>
           ],
         ],
       ),
+    );
+  }
+
+  /// 构建牌堆
+  Widget _buildDeck() {
+    const deckCardW = 80.0;
+    const deckCardH = 20.0;
+    final displayCount = _deckCount > 20
+        ? 5
+        : (_deckCount / 4).ceil().clamp(1, 5);
+    return SizedBox(
+      width: deckCardW + (displayCount - 1) * 4,
+      height: deckCardH + (displayCount - 1) * 1,
+      child: Stack(
+        children: [
+          for (int i = 0; i < displayCount; i++)
+            Positioned(
+              left: i * 4.0,
+              top: i * 1.0,
+              child: Container(
+                width: deckCardW,
+                height: deckCardH,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2d5a3d),
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(
+                    color: const Color(0xFF4a8a5e),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(1, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // 牌数指示
+          Positioned.fill(
+            child: Center(
+              child: Text(
+                '$_deckCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(color: Color(0xFFffd700), blurRadius: 12),
+                    Shadow(color: Colors.black, blurRadius: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建中央横放卡牌（最后出的牌）
+  Widget _buildLastPlayedCard() {
+    final pinyin = AtlasLoader.charToPinyin[_lastPlayedCard!.character];
+    const hCardW = 160.0;
+    const hCardH = 40.0;
+    return Container(
+      width: hCardW,
+      height: hCardH,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 8,
+            offset: const Offset(2, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: pinyin != null
+          ? Image.asset(
+              'assets/html/images/s/$pinyin.png',
+              width: hCardW,
+              height: hCardH,
+              fit: BoxFit.contain,
+            )
+          : Container(color: Colors.white.withOpacity(0.85)),
     );
   }
 

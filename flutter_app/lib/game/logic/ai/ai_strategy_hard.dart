@@ -1381,14 +1381,16 @@ class AIStrategyHard extends AIStrategy {
     );
     score += cardGroupTypeScore * 0.5;
 
+    double lookaheadScore = 0;
     if (distToTing <= 4) {
-      score += _lookaheadScore(
+      lookaheadScore = _lookaheadScore(
         testHand,
         player.melds,
         visibleCount,
         totalUnknown,
         availableChars,
       );
+      score += lookaheadScore;
     }
 
     if (shiDuiPotential > 0) {
@@ -1412,7 +1414,8 @@ class AIStrategyHard extends AIStrategy {
 
     // 破坏完整句惩罚：出牌导致手牌中某个完整句被拆散时，施加惩罚
     // 完整句是已确定的面子，拆散它意味着需要重新摸牌来补回，代价很大
-    {
+    // 十对路线不需要句，跳过此惩罚
+    if (shiDuiPotential <= 0) {
       final discardGroup = cardToDiscard.sentence;
       final discardGroupCards = player.hand
           .where((c) => c.sentence == discardGroup)
@@ -1428,8 +1431,9 @@ class AIStrategyHard extends AIStrategy {
           groupCharCountForJu[c.character] =
               (groupCharCountForJu[c.character] ?? 0) + 1;
         }
-        final hasKanOrZhaoInGroup =
-            groupCharCountForJu.values.any((cnt) => cnt >= 3);
+        final hasKanOrZhaoInGroup = groupCharCountForJu.values.any(
+          (cnt) => cnt >= 3,
+        );
         // 检查出的牌在该组中是否有冗余（2张以上）
         final discardCountInGroup = discardGroupCards
             .where((c) => c.character == cardToDiscard.character)
@@ -1543,7 +1547,7 @@ class AIStrategyHard extends AIStrategy {
           }
         }
       }
-    }
+    } // end if (shiDuiPotential <= 0)
 
     score += (10 - distToTing) * 120;
 
@@ -1578,7 +1582,12 @@ class AIStrategyHard extends AIStrategy {
       if (isShiDui) {
         // 十对路线：保留对子，优先出孤张
         if (discardGroupCharSet.length == 1) {
-          score += 250; // 孤张最优先
+          final selfCount = groupCharCount[cardToDiscard.character] ?? 0;
+          if (selfCount >= 2) {
+            score -= 150; // 十对路线绝不出对子
+          } else {
+            score += 250; // 孤张最优先
+          }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
             score += 100; // 普句多一张，出多余的对子张
@@ -1670,11 +1679,26 @@ class AIStrategyHard extends AIStrategy {
       } else {
         // 默认普通胡牌路线：普单 > 对子+独立单张 > 普句多一张 > 普靠 > 拆句
         if (discardGroupCharSet.length == 1) {
-          score += 200; // 普单(孤张)最优先
+          final selfCount = groupCharCount[cardToDiscard.character] ?? 0;
+          if (selfCount >= 2) {
+            // 对子（2张同字）：拆对子惩罚
+            final pairRem = _remainingCount(
+              cardToDiscard.character,
+              visibleCount,
+            );
+            if (pairRem > 0) {
+              score -= 100; // 对子可碰成坎获胡数，惩罚
+            } else {
+              score += 80; // 死对子，拆掉加分
+            }
+          } else {
+            score += 200; // 普单(孤张)最优先
+          }
         } else if (discardGroupCharSet.length == 3) {
           // 检查组内是否有坎/招（3张或4张同字）
-          final hasKanOrZhaoInGroup =
-              groupCharCount.values.any((cnt) => cnt >= 3);
+          final hasKanOrZhaoInGroup = groupCharCount.values.any(
+            (cnt) => cnt >= 3,
+          );
           if (discardCountInGroup >= 2) {
             // 检查是否所有字都有2张（如七七十十生生）
             // 这种情况出任何一张是拆对子，不是"句多一张"
@@ -1706,7 +1730,7 @@ class AIStrategyHard extends AIStrategy {
                 // 金对8胡，拆掉损失巨大，重罚
                 score -= 300;
               } else {
-                score += 120; // 普句多一张
+                score += 250; // 普句多一张，形成完整句，价值高
               }
             }
           } else if (hasKanOrZhaoInGroup) {
@@ -1783,6 +1807,7 @@ class AIStrategyHard extends AIStrategy {
     // - 银字(大/人/禄/寿)剩余多→有精句潜力，保护力度中等
     // - 银字剩余0→无进张，保护力度大幅降低
     // 黑元路线例外（不需要门1/8）
+    final discardGroup = cardToDiscard.sentence;
     if (huBefore <= 8 &&
         shiDuiPotential <= 0 &&
         heiYuanPotential <= 0 &&
@@ -1821,7 +1846,6 @@ class AIStrategyHard extends AIStrategy {
         heiYuanPotential <= 0 &&
         hongYuanPotential <= 0 &&
         kuHuPotential <= 0) {
-      final discardGroup = cardToDiscard.sentence;
       final discardGroupCards = player.hand
           .where((c) => c.sentence == discardGroup)
           .toList();
@@ -1838,8 +1862,22 @@ class AIStrategyHard extends AIStrategy {
       final hasPairInGroup = groupCharCount.values.any((cnt) => cnt >= 2);
 
       if (discardGroupCharSet.length == 1) {
-        // 孤张/单张（同组只有1种字）：最优先出
-        score += 200;
+        // 同组只有1种字：区分单张和对子
+        final selfCount = groupCharCount[cardToDiscard.character] ?? 0;
+        if (selfCount >= 2) {
+          // 对子（2张同字）：拆对子惩罚
+          final pairRem = _remainingCount(
+            cardToDiscard.character,
+            visibleCount,
+          );
+          if (pairRem > 0) {
+            score -= 100; // 对子可碰成坎获胡数，惩罚
+          } else {
+            score += 80; // 死对子，拆掉加分
+          }
+        } else {
+          score += 200; // 真正的孤张/单张，最优先出
+        }
       } else if (discardGroupCharSet.length == 2) {
         if (hasPairInGroup) {
           // 检查对子是否为死对子（剩余0张，无法碰成坎）
@@ -1888,8 +1926,9 @@ class AIStrategyHard extends AIStrategy {
             score += 80;
           }
         } else {
-          // 句多一张：出多余的对子张
-          score += 100;
+          // 句多一张：出多余的对子张，形成完整句
+          // 完整句是确定的面子，价值高于坎/招+靠中单张（破坏靠）
+          score += 280;
         }
       }
     }
@@ -2056,7 +2095,6 @@ class AIStrategyHard extends AIStrategy {
 
     // 组进张效率比较：优先拆进张少的组，保留进张多的组
     // 计算出牌所在组的进张数，与其他组的进张数比较
-    final discardGroup = cardToDiscard.sentence;
     final discardGroupCards = player.hand
         .where((c) => c.sentence == discardGroup)
         .toList();
@@ -2200,13 +2238,20 @@ class AIStrategyHard extends AIStrategy {
       );
       final newDist = _distanceToTing(simHand, melds);
       final improvement = currentDist - newDist;
+
       if (improvement > 0) {
         totalImproveProb += prob * improvement;
       }
     }
 
-    if (totalImproveProb <= 0.01) return currentDist * 2.0;
-    return currentDist / totalImproveProb;
+    if (totalImproveProb <= 0.01) {
+      return currentDist * 2.0;
+    }
+
+    // 限制预期步数上限，避免低概率进张导致极端高值
+    // currentDist * 2.0 是无进张时的fallback，有进张时不应超过此值太多
+    final rawResult = currentDist / totalImproveProb;
+    return rawResult.clamp(0.0, currentDist * 2.0);
   }
 
   /// 评估出牌的危险性（被具他人胡牌的概率）
@@ -2939,6 +2984,7 @@ class AIStrategyHard extends AIStrategy {
 
       if (dist < 0) dist = 0;
       if (dist > 10) dist = 10;
+
       if (dist < bestDist) bestDist = dist;
     }
 
@@ -3119,8 +3165,7 @@ class AIStrategyHard extends AIStrategy {
         final presentChars = groupChars
             .where((c) => (byChar[c] ?? 0) >= 1)
             .toList();
-        final hasPairInPresent = presentChars
-            .any((c) => (byChar[c] ?? 0) >= 2);
+        final hasPairInPresent = presentChars.any((c) => (byChar[c] ?? 0) >= 2);
         // 已在靠中计算：2种字各1张且无对子（纯靠）
         // 已在句中计算：3种字齐全
         // 对子旁边的单张不算靠，需要评估为独立单张
@@ -3235,28 +3280,78 @@ class AIStrategyHard extends AIStrategy {
 
   /// 牌型名称枚举（对应 card-group-type.md 的34种牌型）
   static const Map<String, int> _cardGroupTypeRank = {
-    '招招招型': 1, '招招坎型': 2, '招招对型': 3, '招坎坎型': 4,
-    '招招孤张型': 5, '招招型': 6, '招坎对型': 7, '坎坎坎型': 8,
-    '招坎孤张型': 9, '招坎型': 10, '坎坎对型': 11, '招对对型': 12,
-    '招对孤张型': 13, '招对型': 14, '坎坎孤张型': 15, '坎坎型': 16,
-    '招半靠型': 17, '招孤张型': 18, '招型': 19, '坎对对型': 20,
-    '句句型': 21, '坎对孤张型': 22, '坎对型': 23, '坎半靠型': 24,
-    '坎孤张型': 25, '坎型': 26, '句半靠型': 27, '句孤张型': 28,
-    '句型': 29, '对对型': 30, '对孤张型': 31, '对型': 32,
-    '半靠型': 33, '孤张型': 34,
+    '招招招型': 1,
+    '招招坎型': 2,
+    '招招对型': 3,
+    '招坎坎型': 4,
+    '招招孤张型': 5,
+    '招招型': 6,
+    '招坎对型': 7,
+    '坎坎坎型': 8,
+    '招坎孤张型': 9,
+    '招坎型': 10,
+    '坎坎对型': 11,
+    '招对对型': 12,
+    '招对孤张型': 13,
+    '招对型': 14,
+    '坎坎孤张型': 15,
+    '坎坎型': 16,
+    '招半靠型': 17,
+    '招孤张型': 18,
+    '招型': 19,
+    '坎对对型': 20,
+    '句句型': 21,
+    '坎对孤张型': 22,
+    '坎对型': 23,
+    '坎半靠型': 24,
+    '坎孤张型': 25,
+    '坎型': 26,
+    '句半靠型': 27,
+    '句孤张型': 28,
+    '句型': 29,
+    '对对型': 30,
+    '对孤张型': 31,
+    '对型': 32,
+    '半靠型': 33,
+    '孤张型': 34,
   };
 
   /// 牌型结构分（门2-7普字基准）
   static const Map<String, int> _cardGroupTypeScore = {
-    '招招招型': 300, '招招坎型': 260, '招招对型': 220, '招坎坎型': 220,
-    '招招孤张型': 200, '招招型': 200, '招坎对型': 180, '坎坎坎型': 180,
-    '招坎孤张型': 160, '招坎型': 160, '坎坎对型': 140, '招对对型': 140,
-    '招对孤张型': 120, '招对型': 120, '坎坎孤张型': 120, '坎坎型': 120,
-    '招半靠型': 110, '招孤张型': 100, '招型': 100, '坎对对型': 100,
-    '句句型': 100, '坎对孤张型': 80, '坎对型': 80, '坎半靠型': 70,
-    '坎孤张型': 60, '坎型': 60, '句半靠型': 60, '句孤张型': 50,
-    '句型': 50, '对对型': 40, '对孤张型': 20, '对型': 20,
-    '半靠型': 10, '孤张型': 0,
+    '招招招型': 300,
+    '招招坎型': 260,
+    '招招对型': 220,
+    '招坎坎型': 220,
+    '招招孤张型': 200,
+    '招招型': 200,
+    '招坎对型': 180,
+    '坎坎坎型': 180,
+    '招坎孤张型': 160,
+    '招坎型': 160,
+    '坎坎对型': 140,
+    '招对对型': 140,
+    '招对孤张型': 120,
+    '招对型': 120,
+    '坎坎孤张型': 120,
+    '坎坎型': 120,
+    '招半靠型': 110,
+    '招孤张型': 100,
+    '招型': 100,
+    '坎对对型': 100,
+    '句句型': 100,
+    '坎对孤张型': 80,
+    '坎对型': 80,
+    '坎半靠型': 70,
+    '坎孤张型': 60,
+    '坎型': 60,
+    '句半靠型': 60,
+    '句孤张型': 50,
+    '句型': 50,
+    '对对型': 40,
+    '对孤张型': 20,
+    '对型': 20,
+    '半靠型': 10,
+    '孤张型': 0,
   };
 
   /// 对一手牌中指定门的牌型进行分类
@@ -3508,9 +3603,7 @@ class AIStrategyHard extends AIStrategy {
         }
       case '坎半靠型':
         {
-          final singles = groupChars
-              .where((ch) => byChar[ch]! == 1)
-              .toList();
+          final singles = groupChars.where((ch) => byChar[ch]! == 1).toList();
           if (singles.any((ch) => remByChar[ch] == 0)) {
             return '坎孤张型';
           }
@@ -3518,9 +3611,7 @@ class AIStrategyHard extends AIStrategy {
         }
       case '招半靠型':
         {
-          final singles = groupChars
-              .where((ch) => byChar[ch]! == 1)
-              .toList();
+          final singles = groupChars.where((ch) => byChar[ch]! == 1).toList();
           if (singles.any((ch) => remByChar[ch] == 0)) {
             return '招孤张型';
           }
@@ -3548,24 +3639,88 @@ class AIStrategyHard extends AIStrategy {
     }
     // 门1/8精字分值映射
     switch (type) {
-      case '孤张型': return 40; // 精单
-      case '半靠型': return 50; // 精靠
-      case '对型': return 20; // 银对(大/人/禄/寿的对)
-      case '对孤张型': return 60; // 银对+精单/银靠+精单，取最优拆解
-      case '句型': return 90; // 精句
-      case '坎型': return 150; // 精坎(上上上/福福福) 或 银坎
-      case '招型': return 200; // 精招
-      case '句孤张型': return 90; // 精句+精单/银单
-      case '对对型': return 40; // 银对+银对
-      case '坎孤张型': return 150; // 精坎+精单 或 银坎+银单
-      case '句半靠型': return 140; // 精句+精靠
-      case '坎半靠型': return 200; // 精坎+精靠 或 银坎+银靠
-      case '坎对型': return 170; // 精坎+银对 或 银坎+银对
-      case '招孤张型': return 200; // 精招+精单
-      case '招半靠型': return 250; // 精招+精靠
-      case '招对型': return 220; // 精招+银对
-      default: return _cardGroupTypeScore[type] ?? 0;
+      case '孤张型':
+        return 40; // 精单
+      case '半靠型':
+        return 50; // 精靠
+      case '对型':
+        return 20; // 银对(大/人/禄/寿的对)
+      case '对孤张型':
+        return 60; // 银对+精单/银靠+精单，取最优拆解
+      case '句型':
+        return 90; // 精句
+      case '坎型':
+        return 150; // 精坎(上上上/福福福) 或 银坎
+      case '招型':
+        return 200; // 精招
+      case '句孤张型':
+        return 90; // 精句+精单/银单
+      case '对对型':
+        return 40; // 银对+银对
+      case '坎孤张型':
+        return 150; // 精坎+精单 或 银坎+银单
+      case '句半靠型':
+        return 140; // 精句+精靠
+      case '坎半靠型':
+        return 200; // 精坎+精靠 或 银坎+银靠
+      case '坎对型':
+        return 170; // 精坎+银对 或 银坎+银对
+      case '招孤张型':
+        return 200; // 精招+精单
+      case '招半靠型':
+        return 250; // 精招+精靠
+      case '招对型':
+        return 220; // 精招+银对
+      default:
+        return _cardGroupTypeScore[type] ?? 0;
     }
+  }
+
+  /// 获取修正后的牌型结构分（区分精对和银对）
+  /// _getCardGroupTypeScoreForMen中"对型"统一返回20(银对分值)，
+  /// 但精对(上上/福福)有8胡，分值应远高于银对(0胡)
+  int _getAdjustedScoreForJingPair(String type, int sentence, List<Card> hand) {
+    final baseScore = _getCardGroupTypeScoreForMen(type, sentence);
+    if (sentence != 1 && sentence != 8) return baseScore;
+
+    // 检查门1/8是否存在精对(上上/福福)
+    final jingChar = sentence == 1 ? '上' : '福';
+    final jingCount = hand
+        .where((c) => c.sentence == sentence && c.character == jingChar)
+        .length;
+
+    if (jingCount >= 2) {
+      // 精对存在，修正含"对"的牌型分值
+      switch (type) {
+        case '对型':
+          return 80; // 精对8胡（原20=银对0胡）
+        case '对孤张型':
+          return 100; // 精对8胡+孤张（原60）
+        case '对对型':
+          return 100; // 精对8胡+银对0胡（原40）
+        case '坎对型':
+          return 200; // 坎+精对8胡（原170=坎+银对）
+        case '招对型':
+          return 250; // 招+精对8胡（原220=招+银对）
+        case '招对孤张型':
+          return 230; // 招+精对8胡+孤张（原200=招+银对+孤张）
+        case '坎对孤张型':
+          return 180; // 坎+精对8胡+孤张（原140=坎+银对+孤张）
+        case '坎对对型':
+          return 200; // 坎+精对8胡+银对（原160=坎+银对+银对）
+        case '招对对型':
+          return 250; // 招+精对8胡+银对（原200=招+银对+银对）
+        case '坎坎对型':
+          return 230; // 坎坎+精对8胡（原200=坎坎+银对）
+        case '招坎对型':
+          return 280; // 招坎+精对8胡（原240=招坎+银对）
+        case '招招对型':
+          return 300; // 招招+精对8胡（原260=招招+银对）
+        default:
+          return baseScore;
+      }
+    }
+    return baseScore;
   }
 
   /// 根据胡牌类型路线获取门间优先级权重
@@ -3634,21 +3789,30 @@ class AIStrategyHard extends AIStrategy {
       isShiDuiRoute,
     );
     final currentRank = _getRetentionRank(currentType);
-    final currentScore = _getCardGroupTypeScoreForMen(currentType, sentence);
+    final currentScore = _getAdjustedScoreForJingPair(
+      currentType,
+      sentence,
+      hand,
+    );
 
     // 2. 分类出牌后的牌型
+    final handAfterDiscard = List<Card>.from(hand)
+      ..removeWhere(
+        (c) =>
+            c.character == cardToDiscard.character &&
+            c.sentence == cardToDiscard.sentence,
+      );
     final typeAfterDiscard = _classifyCardGroupType(
       sentence,
-      List<Card>.from(hand)
-        ..removeWhere(
-          (c) =>
-              c.character == cardToDiscard.character &&
-              c.sentence == cardToDiscard.sentence,
-        ),
+      handAfterDiscard,
       visibleCount,
       isShiDuiRoute,
     );
-    final scoreAfterDiscard = _getCardGroupTypeScoreForMen(typeAfterDiscard, sentence);
+    final scoreAfterDiscard = _getAdjustedScoreForJingPair(
+      typeAfterDiscard,
+      sentence,
+      handAfterDiscard,
+    );
 
     // 3. 计算结构分损失
     final scoreLoss = currentScore - scoreAfterDiscard;
@@ -3842,6 +4006,44 @@ class AIStrategyHard extends AIStrategy {
     final heiYuanPotential = _evaluateHeiYuanPotential(player);
     if (heiYuanPotential > 0 && (card.sentence == 1 || card.sentence == 8)) {
       return false;
+    }
+
+    // 吃牌特例：一句多一张要吃牌时（非1/8门），
+    // 手牌没有孤张（非1/8门）并且没有其它门一句多一个字（非1/8门），
+    // 不吃牌直接摸牌
+    if (card.sentence != 1 && card.sentence != 8) {
+      final cardSentence = card.sentence;
+      final sentenceCards = player.hand
+          .where((c) => c.sentence == cardSentence)
+          .toList();
+      final sentenceChars = sentenceCards.map((c) => c.character).toSet();
+      // 吃的牌所在门是"一句多一张"状态（4张，3种字）
+      if (sentenceCards.length == 4 && sentenceChars.length == 3) {
+        // 检查手牌中是否有非1/8门的孤张（该门只有1张牌）
+        bool hasLoneCard = false;
+        for (int s = 2; s <= 7; s++) {
+          final sCards = player.hand.where((h) => h.sentence == s).toList();
+          if (sCards.length == 1) {
+            hasLoneCard = true;
+            break;
+          }
+        }
+        // 检查是否有其它门（非1/8门，排除当前吃的门）也是"一句多一张"
+        bool hasOtherSentenceExtra = false;
+        for (int s = 2; s <= 7; s++) {
+          if (s == cardSentence) continue;
+          final sCards = player.hand.where((h) => h.sentence == s).toList();
+          final sChars = sCards.map((h) => h.character).toSet();
+          if (sCards.length == 4 && sChars.length == 3) {
+            hasOtherSentenceExtra = true;
+            break;
+          }
+        }
+        // 没有孤张且没有其它门多一张，不吃牌直接摸牌
+        if (!hasLoneCard && !hasOtherSentenceExtra) {
+          return false;
+        }
+      }
     }
 
     // 尝试所有可能的吃法，选最优
