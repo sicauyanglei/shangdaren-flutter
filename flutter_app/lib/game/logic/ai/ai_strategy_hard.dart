@@ -4055,18 +4055,21 @@ class AIStrategyHard extends AIStrategy {
     if (availableChars.length < 2) return false;
 
     double bestBenefit = -1;
+    List<String>? bestNeededChars;
     // 如果3种字都有，尝试2种吃法
     if (availableChars.length == 2) {
       bestBenefit = _evaluateChiBenefit(player, card, state);
+      bestNeededChars = availableChars;
     } else {
       // 3种字都有，比较2种吃法
       for (int i = 0; i < availableChars.length; i++) {
         for (int j = i + 1; j < availableChars.length; j++) {
-          final benefit = _evaluateChiBenefitWithChars(player, card, [
-            availableChars[i],
-            availableChars[j],
-          ], state);
-          if (benefit > bestBenefit) bestBenefit = benefit;
+          final neededPair = [availableChars[i], availableChars[j]];
+          final benefit = _evaluateChiBenefitWithChars(player, card, neededPair, state);
+          if (benefit > bestBenefit) {
+            bestBenefit = benefit;
+            bestNeededChars = neededPair;
+          }
         }
       }
     }
@@ -4086,8 +4089,55 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 吃后听牌（bestBenefit>=10000）时允许吃
-    if (player.isTing) return bestBenefit >= 10000;
+    // 已听牌时，只有吃后仍听牌才允许吃
+    if (player.isTing) {
+      if (bestBenefit < 10000) return false;
+      // 吃后仍听牌，但需要检查吃牌是否真正改善了听牌状态
+      // 如果吃前已经是听牌，且吃后听牌等待的牌没有增加，不吃（直接摸牌更优）
+      final currentTing = _checkTingCached(player);
+      if (currentTing.isTing && bestNeededChars != null) {
+        // 构建吃后状态来检查听牌
+        final testHand = List<Card>.from(player.hand);
+        for (final ch in bestNeededChars) {
+          testHand.removeWhere((c) => c.character == ch);
+        }
+        final newMeld = Meld(
+          cards: [
+            card,
+            ...bestNeededChars.map((ch) => player.hand.firstWhere((c) => c.character == ch)),
+          ],
+          type: MeldType.ju,
+          isJing: card.isJing,
+        );
+        // 找吃后最优出牌
+        final visibleCount = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+        final totalUnknown = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+        final (bestHand, _) = _findBestDiscardAfterMeld(
+          testHand,
+          [...player.melds, newMeld],
+          visibleCount: visibleCount,
+          totalUnknown: totalUnknown,
+        );
+        final testPlayer = Player(
+          id: player.id,
+          name: player.name,
+          type: player.type,
+          hand: bestHand,
+          melds: [...player.melds, newMeld],
+        );
+        final afterTing = _checkTingCached(testPlayer);
+        if (afterTing.isTing) {
+          // 吃前后都听牌，比较等待牌数量
+          // 如果吃后等待牌数量没有增加，吃牌无收益，不应吃
+          final beforeCount = currentTing.tingCards.length;
+          final afterCount = afterTing.tingCards.length;
+          if (afterCount <= beforeCount) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
 
     // 破坏完整句保护：吃牌会破坏手牌中已有的纯单张完整句（3种字都只有1张）时，
     // 除非吃后听牌，否则不吃
