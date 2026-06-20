@@ -1734,6 +1734,19 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 依赖胡数路线下，胡数≤8时，拆1/8门牌的惩罚大于拆句(-200)
+    // 确保优先级：孤张 > 半靠 > 对子 > 拆句 > 拆1/8门
+    // 黑元路线例外（不需要门1/8）
+    if (huBefore <= 8 &&
+        shiDuiPotential <= 0 &&
+        heiYuanPotential <= 0 &&
+        (discardGroup == 1 || discardGroup == 8)) {
+      // 惩罚力度随胡数降低而增大，且必须超过拆句惩罚(-200)
+      // 8胡→-210, 0胡→-370
+      final men18Penalty = 210 + (8 - huBefore) * 20;
+      score -= men18Penalty;
+    }
+
     // 胡数足够(>=11)时的出牌优先级：优先出单张，保留对子/坎
     // 对子可通过碰成坎获得胡数，坎是已确定的胡数来源，都不应轻易拆
     if (huBefore >= 11 &&
@@ -3687,17 +3700,8 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 11. 低胡数时门1/8保护：胡数≤8时，门1/8牌保留优先级提升
-    // 门1/8含精字(上/福)和银字(大/人/禄/寿)，低胡数时都有精句潜力
-    // 但保护力度不能大到让AI宁愿拆句型也不出门1/8的孤张
-    // 系数15: 8胡→0, 0胡→-120，足以保护门1/8优于半靠/对，但不超过破坏句型惩罚(-200)
-    if ((sentence == 1 || sentence == 8) && heiYuanPotential <= 0) {
-      final huScore = _evaluateHuScore(player);
-      if (huScore <= 8) {
-        final lowHuPenalty = (8 - huScore) * 15.0; // 8胡→0, 0胡→-120
-        cardSelectionBonus -= lowHuPenalty;
-      }
-    }
+    // 11. 低胡数时门1/8保护已移至主评分函数_evaluateDiscardComprehensiveWithDist
+    // 主评分函数中的惩罚(-210~-370)大于拆句惩罚(-200)，确保拆1/8门在拆句之后
 
     return rankScore + lossPenalty + menAdjustment + cardSelectionBonus;
   }
