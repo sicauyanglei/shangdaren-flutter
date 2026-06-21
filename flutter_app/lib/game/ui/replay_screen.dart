@@ -717,6 +717,26 @@ class _ReplayScreenState extends State<ReplayScreen>
     return size.width / designWidth;
   }
 
+  /// 计算底部主视角手牌顶部Y坐标（设计坐标）
+  /// 手牌底部在设计坐标 designHeight + 80（因为 bottom: -80）
+  double _mainHandTopY(List<Card> hand) {
+    final groups = <int, List<Card>>{};
+    for (final card in hand) {
+      groups.putIfAbsent(card.sentence, () => []).add(card);
+    }
+    int maxStack = 0;
+    for (final g in groups.values) {
+      final charGroups = <String, List<Card>>{};
+      for (final c in g) {
+        charGroups.putIfAbsent(c.character, () => []).add(c);
+      }
+      if (charGroups.length > maxStack) maxStack = charGroups.length;
+    }
+    if (maxStack == 0) return designHeight;
+    final groupH = (maxStack - 1) * handStackVisible + handCardH;
+    return designHeight + 80 - groupH;
+  }
+
   /// 根据主视角获取位置映射
   /// 返回 [leftPlayerIndex, rightPlayerIndex, bottomPlayerIndex]
   List<int> get _positionMap {
@@ -828,7 +848,8 @@ class _ReplayScreenState extends State<ReplayScreen>
           // 飞牌动画Overlay层
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 结果面板（胡牌/流局）
-          if (_showResult) _buildResultOverlay(scale),
+          if (_showResult)
+            _buildResultOverlay(scale, _mainHandTopY(_hands[positions[2]])),
           // 胡牌徽章（赢家/点炮者头像旁边）
           if (_showResult && widget.replay.resultType == 'hu')
             ..._buildHuBadges(scale, positions),
@@ -1856,7 +1877,7 @@ class _ReplayScreenState extends State<ReplayScreen>
   }
 
   /// 构建回放结束后的结果面板（胡牌/流局）
-  Widget _buildResultOverlay(double scale) {
+  Widget _buildResultOverlay(double scale, double mainHandTopY) {
     final resultType = widget.replay.resultType;
     final resultData = widget.replay.resultData;
     final isLiuju = resultType == 'liuju';
@@ -1877,12 +1898,12 @@ class _ReplayScreenState extends State<ReplayScreen>
     // 胡型颜色
     Color huTypeColor = _getHuTypeColor(huType);
 
-    // 定位在屏幕中上部，避免与底部手牌重叠
-    // 底部手牌区域约从y=580开始（设计坐标），面板放在y=80~380区域
+    // 定位在底部手牌上方（与正常游戏一致），避免与AI手牌区域重叠
     final panelW = 600.0;
     final panelH = isLiuju ? 120.0 : 280.0;
     final panelLeft = (designWidth - panelW) / 2;
-    final panelTop = 80.0;
+    final panelBottomY = mainHandTopY - 10;
+    final panelTop = panelBottomY - panelH;
 
     return Positioned(
       left: panelLeft * scale,
