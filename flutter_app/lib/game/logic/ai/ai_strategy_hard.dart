@@ -1703,8 +1703,11 @@ class AIStrategyHard extends AIStrategy {
 
     double score = potential;
 
-    // 提前计算出牌后胡数，用于后续胡数相关判断
+    // 提前计算出牌前后胡数，用于后续胡数相关判断
+    final huBefore = _evaluateHuScore(player);
     final huAfter = _evaluateHuScore(testPlayer);
+    final huBeforeInt = huBefore.toInt();
+    final huAfterInt = huAfter.toInt();
 
     // 门结构评分补充（按 men-structure-score.md 规则）
     // 计算出牌后所有门的结构总分变化，作为细粒度门级评估
@@ -1734,8 +1737,8 @@ class AIStrategyHard extends AIStrategy {
       heiYuanPotential,
       hongYuanPotential,
       kuHuPotential,
-      huBefore,
-      huAfter,
+      huBeforeInt,
+      huAfterInt,
     );
     score += cardGroupTypeScore * 0.5;
 
@@ -1955,7 +1958,6 @@ class AIStrategyHard extends AIStrategy {
     // 黑元：无碰无招，优先拆对子(避免对子变碰破坏黑元资格)
     // 红元：组1/组8句优先保留，优先出非组1/8的孤张
     // 枯胡：6坎+1对，优先出靠/句中的单张，保留对子和坎
-    final huBefore = _evaluateHuScore(player);
     if (huBefore < 11) {
       final discardGroup = cardToDiscard.sentence;
       final discardGroupCards = player.hand
@@ -2235,8 +2237,7 @@ class AIStrategyHard extends AIStrategy {
       score -= basePenalty;
     }
 
-    // 胡数评估：提前计算出牌后的胡数，供后续逻辑使用
-    final huAfter = _evaluateHuScore(testPlayer);
+    // 胡数评估：计算胡数损失，供后续逻辑使用
     final huLoss = huBefore - huAfter;
 
     // 胡数足够(>=11)时的出牌优先级：优先出单张，保留对子/坎
@@ -2338,7 +2339,6 @@ class AIStrategyHard extends AIStrategy {
 
     // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
-    final huLoss = huBefore - huAfter;
     // 黑元路线下，打出门1/8牌(精字/银字)会损失胡数，但这是清理门1/8的必要代价
     // 黑元是特殊胡牌类型，不受11胡限制，所以不惩罚门1/8牌的胡数损失
     final isHeiYuanRoute = heiYuanPotential > 0;
