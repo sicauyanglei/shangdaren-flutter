@@ -1912,8 +1912,8 @@ class _ReplayScreenState extends State<ReplayScreen>
     Color huTypeColor = _getHuTypeColor(huType);
 
     // 定位在底部手牌上方（与正常游戏一致），避免与AI手牌区域重叠
-    final panelW = 600.0;
-    final panelH = isLiuju ? 120.0 : 280.0;
+    final panelW = 640.0;
+    final panelH = isLiuju ? 100.0 : 220.0;
     final panelLeft = (designWidth - panelW) / 2;
     final panelBottomY = mainHandTopY - 10;
     final panelTop = panelBottomY - panelH;
@@ -1947,7 +1947,7 @@ class _ReplayScreenState extends State<ReplayScreen>
                 Text(
                   isLiuju ? '流局' : '$winnerName 胡牌!',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 22,
                     color: const Color(0xFFffd700),
                     fontWeight: FontWeight.bold,
                     shadows: [
@@ -1962,10 +1962,10 @@ class _ReplayScreenState extends State<ReplayScreen>
                   const SizedBox(height: 8),
                   const Text(
                     '牌堆已空，本局结束',
-                    style: TextStyle(fontSize: 18, color: Colors.white70),
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
                   ),
                 ] else ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
                   Wrap(
                     spacing: 8,
@@ -1994,7 +1994,7 @@ class _ReplayScreenState extends State<ReplayScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   // 玩家分数变化
                   if (scoreChanges != null)
                     ..._buildScoreChanges(
