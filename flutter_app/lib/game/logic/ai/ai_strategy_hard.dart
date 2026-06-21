@@ -1726,7 +1726,6 @@ class AIStrategyHard extends AIStrategy {
 
     // card-group-type.md 规则评分：牌型分类、保留价值排名、门间优先级、剩余张数动态调整
     // 作为出牌决策的补充评分，权重适中
-    final huBeforeForGroupType = _evaluateHuScore(player).toInt();
     final cardGroupTypeScore = _evaluateDiscardByCardGroupType(
       player,
       cardToDiscard,
@@ -1735,12 +1734,8 @@ class AIStrategyHard extends AIStrategy {
       heiYuanPotential,
       hongYuanPotential,
       kuHuPotential,
-<<<<<<< Updated upstream
       huBefore,
       huAfter,
-=======
-      huBeforeForGroupType,
->>>>>>> Stashed changes
     );
     score += cardGroupTypeScore * 0.5;
 
@@ -2341,15 +2336,11 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-<<<<<<< Updated upstream
     // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
     final huLoss = huBefore - huAfter;
     // 黑元路线下，打出门1/8牌(精字/银字)会损失胡数，但这是清理门1/8的必要代价
     // 黑元是特殊胡牌类型，不受11胡限制，所以不惩罚门1/8牌的胡数损失
-=======
-    // 胡数损失惩罚：出牌导致胡数下降时惩罚，破坏胡数资格时重罚
->>>>>>> Stashed changes
     final isHeiYuanRoute = heiYuanPotential > 0;
     final isDiscardGroup18 =
         cardToDiscard.sentence == 1 || cardToDiscard.sentence == 8;
@@ -4196,10 +4187,7 @@ class AIStrategyHard extends AIStrategy {
     double hongYuanPotential,
     double kuHuPotential,
     int huBefore,
-<<<<<<< Updated upstream
     int huAfter,
-=======
->>>>>>> Stashed changes
   ) {
     final sentence = cardToDiscard.sentence;
     final hand = player.hand;

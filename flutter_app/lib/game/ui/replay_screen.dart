@@ -304,11 +304,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final cardW = isMain ? _flyHandCardW : _flyMeldCardW;
     final cardH = isMain ? _flyHandCardH : _flyMeldCardH;
 
-<<<<<<< Updated upstream
-    // 阶段1: 牌堆 → 中央 (0.35s)
-=======
     // 阶段1: 牌堆 → 中央 (0.3s)
->>>>>>> Stashed changes
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -321,17 +317,10 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: 160,
         toH: 40,
-<<<<<<< Updated upstream
-        duration: Duration(milliseconds: (350 * sf).round()),
-      ),
-    );
-    // 阶段2: 中央 → 手牌 (0.5s, 延迟0.35s)
-=======
         duration: Duration(milliseconds: (300 * sf).round()),
       ),
     );
     // 阶段2: 中央 → 手牌 (0.4s, 延迟0.3s)
->>>>>>> Stashed changes
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -344,24 +333,15 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: cardW,
         toH: cardH,
-<<<<<<< Updated upstream
-        duration: Duration(milliseconds: (500 * sf).round()),
-        delay: Duration(milliseconds: (350 * sf).round()),
-=======
         duration: Duration(milliseconds: (400 * sf).round()),
         delay: Duration(milliseconds: (300 * sf).round()),
->>>>>>> Stashed changes
       ),
     );
 
     if (isMain) _moCardId = card.id;
     _runAnimation(
       action,
-<<<<<<< Updated upstream
-      totalDuration: Duration(milliseconds: (850 * sf).round()),
-=======
       totalDuration: Duration(milliseconds: (700 * sf).round()),
->>>>>>> Stashed changes
     );
   }
 
@@ -385,22 +365,14 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: fromH,
         toW: _flySmallCardW * 1.5,
         toH: _flySmallCardH * 1.5,
-<<<<<<< Updated upstream
-        duration: Duration(milliseconds: (500 * sf).round()),
-=======
         duration: Duration(milliseconds: (400 * sf).round()),
->>>>>>> Stashed changes
         flash: true,
       ),
     );
 
     _runAnimation(
       action,
-<<<<<<< Updated upstream
-      totalDuration: Duration(milliseconds: (700 * sf).round()),
-=======
       totalDuration: Duration(milliseconds: (600 * sf).round()),
->>>>>>> Stashed changes
     );
   }
 
@@ -1939,25 +1911,6 @@ class _ReplayScreenState extends State<ReplayScreen>
     // 胡型颜色
     Color huTypeColor = _getHuTypeColor(huType);
 
-<<<<<<< Updated upstream
-    final panelW = 640.0;
-    final panelH = isLiuju ? 100.0 : 220.0;
-
-    // 计算手牌高度（设计坐标）
-    final handGroupH = _calcHandGroupH();
-    // 手牌定位: bottom: -80*scale, 视觉高度: handGroupH*scale
-    // 手牌顶部距Stack底部 = (handGroupH - 80) * scale
-    // 面板底部在手牌顶部上方10px(设计坐标，与game_board一致)
-    // 面板底部距Stack底部 = (handGroupH - 80 + 10) * scale = (handGroupH - 70) * scale
-    final panelBottom = (handGroupH - 70) * scale;
-
-    return Positioned(
-      left: (designWidth - panelW) / 2 * scale,
-      bottom: panelBottom,
-      child: Transform.scale(
-        scale: scale,
-        alignment: Alignment.bottomCenter,
-=======
     // 定位在底部手牌上方（与正常游戏一致），避免与AI手牌区域重叠
     final panelW = 600.0;
     final panelH = isLiuju ? 120.0 : 280.0;
@@ -1971,7 +1924,6 @@ class _ReplayScreenState extends State<ReplayScreen>
       child: Transform.scale(
         scale: scale,
         alignment: Alignment.topCenter,
->>>>>>> Stashed changes
         child: SizedBox(
           width: panelW,
           height: panelH,
@@ -1995,11 +1947,7 @@ class _ReplayScreenState extends State<ReplayScreen>
                 Text(
                   isLiuju ? '流局' : '$winnerName 胡牌!',
                   style: TextStyle(
-<<<<<<< Updated upstream
-                    fontSize: 22,
-=======
                     fontSize: 28,
->>>>>>> Stashed changes
                     color: const Color(0xFFffd700),
                     fontWeight: FontWeight.bold,
                     shadows: [
@@ -2014,17 +1962,10 @@ class _ReplayScreenState extends State<ReplayScreen>
                   const SizedBox(height: 8),
                   const Text(
                     '牌堆已空，本局结束',
-<<<<<<< Updated upstream
-                    style: TextStyle(fontSize: 16, color: Colors.white70),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 12),
-=======
                     style: TextStyle(fontSize: 18, color: Colors.white70),
                   ),
                 ] else ...[
                   const SizedBox(height: 16),
->>>>>>> Stashed changes
                   // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
                   Wrap(
                     spacing: 8,
@@ -2053,11 +1994,7 @@ class _ReplayScreenState extends State<ReplayScreen>
                       ),
                     ],
                   ),
-<<<<<<< Updated upstream
-                  const SizedBox(height: 14),
-=======
                   const SizedBox(height: 20),
->>>>>>> Stashed changes
                   // 玩家分数变化
                   if (scoreChanges != null)
                     ..._buildScoreChanges(
