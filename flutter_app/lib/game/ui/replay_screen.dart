@@ -432,7 +432,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     );
   }
 
-  /// 吃/碰/招动画：弃牌区的牌+手牌的牌 → 组合牌区
+  /// 吃/碰/招动画：弃牌区的牌+手牌的牌 → 中央组牌展示 → 组合牌区
   void _startMeldAnimation(
     ReplayAction action,
     int pi,
@@ -445,27 +445,10 @@ class _ReplayScreenState extends State<ReplayScreen>
     final fromW = isMain ? _flyHandCardW : _flyMeldCardW;
     final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
 
-    // 从中央(弃牌区)飞来的牌
+    // 收集所有参与组牌的牌
     final fromCard = _deserializeCard(
       action.data['fromCard'] ?? action.data['card'],
     );
-    _flyingCards.add(
-      _FlyCard(
-        card: fromCard,
-        faceUp: true,
-        fromX: _centerPos.dx,
-        fromY: _centerPos.dy,
-        toX: meldPos.dx,
-        toY: meldPos.dy,
-        fromW: _flySmallCardW * 1.5,
-        fromH: _flySmallCardH * 1.5,
-        toW: _flyMeldCardW,
-        toH: _flyMeldCardH,
-        duration: Duration(milliseconds: (500 * sf).round()),
-      ),
-    );
-
-    // 从手牌飞来的牌
     List<Card> handCards;
     if (meldType == 'chi') {
       handCards = _deserializeCardList(action.data['cards']);
@@ -478,33 +461,91 @@ class _ReplayScreenState extends State<ReplayScreen>
         handCards.add(card);
       }
     }
+    final allCards = [fromCard, ...handCards];
 
-    for (int i = 0; i < handCards.length; i++) {
+    // 中央组牌展示位置计算
+    final meldCenterY = _centerPos.dy * 0.64;
+    final meldScale = 0.5;
+    final meldCardW = _flyHandCardW * meldScale;
+    final meldCardH = _flyHandCardH * meldScale;
+    final gap = 2.0;
+    final totalW = allCards.length * meldCardW + (allCards.length - 1) * gap;
+    final startX = _centerPos.dx - totalW / 2;
+
+    // 阶段1: 所有牌飞到中央组牌位置
+    final phase1Duration = 400; // ms
+    final showDuration = 450; // ms 在中央展示
+    final phase2Duration = 300; // ms
+    final phase2Stagger = 80; // ms
+
+    for (int i = 0; i < allCards.length; i++) {
+      double srcX, srcY, srcW, srcH;
+      if (i == 0) {
+        // 第一张牌来自弃牌区(中央)
+        srcX = _centerPos.dx;
+        srcY = _centerPos.dy;
+        srcW = _flySmallCardW * 1.5;
+        srcH = _flySmallCardH * 1.5;
+      } else {
+        // 其余牌来自手牌
+        srcX = handPos.dx + (i - 1) * 10;
+        srcY = handPos.dy;
+        srcW = fromW;
+        srcH = fromH;
+      }
+
+      final toX = startX + i * (meldCardW + gap);
+      final toY = meldCenterY;
+
       _flyingCards.add(
         _FlyCard(
-          card: handCards[i],
+          card: allCards[i],
           faceUp: true,
-          fromX: handPos.dx + (i - 1) * 10,
-          fromY: handPos.dy,
+          fromX: srcX,
+          fromY: srcY,
+          toX: toX,
+          toY: toY,
+          fromW: srcW,
+          fromH: srcH,
+          toW: meldCardW,
+          toH: meldCardH,
+          duration: Duration(milliseconds: (phase1Duration * sf).round()),
+          delay: Duration(milliseconds: ((i - 1).clamp(0, 999) * 80 * sf).round()),
+        ),
+      );
+    }
+
+    // 阶段2: 从中央组牌位置飞到组合牌区
+    final phase2BaseDelay = phase1Duration + showDuration;
+    for (int i = 0; i < allCards.length; i++) {
+      final fromCenterX = startX + i * (meldCardW + gap);
+      final fromCenterY = meldCenterY;
+
+      _flyingCards.add(
+        _FlyCard(
+          card: allCards[i],
+          faceUp: true,
+          fromX: fromCenterX,
+          fromY: fromCenterY,
           toX: meldPos.dx + (i + 1) * (_flyMeldCardW * 0.5),
           toY: meldPos.dy,
-          fromW: fromW,
-          fromH: fromH,
+          fromW: meldCardW,
+          fromH: meldCardH,
           toW: _flyMeldCardW,
           toH: _flyMeldCardH,
-          duration: Duration(milliseconds: (500 * sf).round()),
-          delay: Duration(milliseconds: (i * 80 * sf).round()),
+          duration: Duration(milliseconds: (phase2Duration * sf).round()),
+          delay: Duration(milliseconds: ((phase2BaseDelay + i * phase2Stagger) * sf).round()),
         ),
       );
     }
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (800 * sf).round()),
+      totalDuration: Duration(milliseconds: ((phase2BaseDelay + (allCards.length - 1) * phase2Stagger + phase2Duration) * sf).round()),
     );
   }
 
-  /// 手牌招动画：手牌4张 → 组合牌区
+  /// 手牌招动画：手牌4张 → 中央组牌展示 → 组合牌区
   void _startZhaoFromHandAnimation(ReplayAction action, int pi, double sf) {
     final meldPos = _playerMeldPos(pi);
     final handPos = _playerHandPos(pi);
@@ -513,28 +554,70 @@ class _ReplayScreenState extends State<ReplayScreen>
     final fromH = isMain ? _flyHandCardH : _flyMeldCardH;
     final cards = _deserializeCardList(action.data['cards']);
 
+    // 中央组牌展示位置计算
+    final meldCenterY = _centerPos.dy * 0.64;
+    final meldScale = 0.5;
+    final meldCardW = _flyHandCardW * meldScale;
+    final meldCardH = _flyHandCardH * meldScale;
+    final gap = 2.0;
+    final totalW = cards.length * meldCardW + (cards.length - 1) * gap;
+    final startX = _centerPos.dx - totalW / 2;
+
+    // 阶段1: 手牌飞到中央组牌位置
+    final phase1Duration = 400; // ms
+    final showDuration = 450; // ms 在中央展示
+    final phase2Duration = 300; // ms
+    final phase2Stagger = 80; // ms
+
     for (int i = 0; i < cards.length; i++) {
+      final toX = startX + i * (meldCardW + gap);
+      final toY = meldCenterY;
+
       _flyingCards.add(
         _FlyCard(
           card: cards[i],
           faceUp: true,
           fromX: handPos.dx + (i - 1) * 10,
           fromY: handPos.dy,
-          toX: meldPos.dx + i * (_flyMeldCardW * 0.5),
-          toY: meldPos.dy,
+          toX: toX,
+          toY: toY,
           fromW: fromW,
           fromH: fromH,
+          toW: meldCardW,
+          toH: meldCardH,
+          duration: Duration(milliseconds: (phase1Duration * sf).round()),
+          delay: Duration(milliseconds: (i * 80 * sf).round()),
+        ),
+      );
+    }
+
+    // 阶段2: 从中央组牌位置飞到组合牌区
+    final phase2BaseDelay = phase1Duration + showDuration;
+    for (int i = 0; i < cards.length; i++) {
+      final fromCenterX = startX + i * (meldCardW + gap);
+      final fromCenterY = meldCenterY;
+
+      _flyingCards.add(
+        _FlyCard(
+          card: cards[i],
+          faceUp: true,
+          fromX: fromCenterX,
+          fromY: fromCenterY,
+          toX: meldPos.dx + i * (_flyMeldCardW * 0.5),
+          toY: meldPos.dy,
+          fromW: meldCardW,
+          fromH: meldCardH,
           toW: _flyMeldCardW,
           toH: _flyMeldCardH,
-          duration: Duration(milliseconds: (500 * sf).round()),
-          delay: Duration(milliseconds: (i * 80 * sf).round()),
+          duration: Duration(milliseconds: (phase2Duration * sf).round()),
+          delay: Duration(milliseconds: ((phase2BaseDelay + i * phase2Stagger) * sf).round()),
         ),
       );
     }
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (800 * sf).round()),
+      totalDuration: Duration(milliseconds: ((phase2BaseDelay + (cards.length - 1) * phase2Stagger + phase2Duration) * sf).round()),
     );
   }
 
