@@ -331,6 +331,17 @@ class AIStrategyHard extends AIStrategy {
     if (group18Count <= 3) {
       final totalHu = _evaluateHuScore(player);
       if (totalHu <= 10) {
+        // 严格条件1：手牌中不能有坎（3张同字）或招（4张同字）
+        // 坎/招一旦形成碰牌就破坏黑元资格，且坎占用3张同字难以改成句
+        final byChar = <String, int>{};
+        for (final c in player.hand) {
+          byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+        }
+        final hasHandKanOrZhao = byChar.values.any((cnt) => cnt >= 3);
+        if (hasHandKanOrZhao) return -1;
+
+        // 严格条件2：手牌结构需要接近黑元（6句+1靠）
+        // 统计手牌中可成句的组合数（含已提取句和潜在句）
         int sentenceCount = 0;
         for (final meld in player.melds) {
           if (meld.type == MeldType.ju) sentenceCount++;
@@ -339,6 +350,27 @@ class AIStrategyHard extends AIStrategy {
         final handASet = <Meld>[];
         HuCalculator.extractJu(handRemaining, handASet);
         sentenceCount += handASet.length;
+
+        // 黑元需要6句+1靠，已有句数+潜在句数（半靠）至少要达到4
+        // 否则距离黑元太远，不应主动追求
+        // 统计潜在句数：同门有2种不同字各1张（半靠），差1张成句
+        final handRemaining2 = List<Card>.from(player.hand);
+        final handASet2 = <Meld>[];
+        HuCalculator.extractJu(handRemaining2, handASet2);
+        final bySentence = <int, Set<String>>{};
+        for (final c in handRemaining2) {
+          bySentence.putIfAbsent(c.sentence, () => <String>{});
+          bySentence[c.sentence]!.add(c.character);
+        }
+        int potentialSentences = 0;
+        for (final entry in bySentence.entries) {
+          if (entry.value.length == 2) {
+            potentialSentences++;
+          }
+        }
+        final totalPotentialSentences = sentenceCount + potentialSentences;
+        if (totalPotentialSentences < 4) return -1;
+
         // 门1/8牌越少，潜力越高（越接近完全黑元）
         return 50.0 + sentenceCount * 30.0 + (3 - group18Count) * 10.0;
       }
@@ -489,42 +521,55 @@ class AIStrategyHard extends AIStrategy {
 
     int bestDist = 99;
     List<Card> bestHand = hand;
+    // 记录当前最佳弃牌的对子状态：0=孤张, 1=对子以上
+    // 距离相同时优先弃孤张，保留对子（与selectDiscard的综合评分保持一致）
+    int bestPairStatus = 99;
 
     for (final card in hand) {
       final testHand = List<Card>.from(hand);
       testHand.remove(card);
       final dist = _distanceToTing(testHand, melds);
+      // 该牌在手牌中的数量：1=孤张, >=2=对子以上
+      final cardCount = hand.where((c) => c.character == card.character).length;
+      final pairStatus = cardCount >= 2 ? 1 : 0;
+
       if (dist < bestDist) {
         bestDist = dist;
         bestHand = testHand;
-      } else if (dist == bestDist &&
-          visibleCount != null &&
-          totalUnknown != null) {
-        // 距离相同时，优先出进张少的牌（保留进张多的牌）
-        final discardGroup = card.sentence;
-        int discardRem = 0;
-        for (final ch in _groupChars[discardGroup - 1]) {
-          if (!testHand.any((c) => c.character == ch)) {
-            discardRem += _remainingCount(ch, visibleCount);
-          }
-        }
-        final bestCard = bestHand.isNotEmpty
-            ? hand.firstWhere(
-                (c) => !bestHand.contains(c),
-                orElse: () => hand.first,
-              )
-            : hand.first;
-        final bestGroup = bestCard.sentence;
-        int bestRem = 0;
-        for (final ch in _groupChars[bestGroup - 1]) {
-          if (!bestHand.any((c) => c.character == ch)) {
-            bestRem += _remainingCount(ch, visibleCount);
-          }
-        }
-        // 出进张少的牌，保留进张多的
-        if (discardRem < bestRem) {
-          bestDist = dist;
+        bestPairStatus = pairStatus;
+      } else if (dist == bestDist) {
+        // 距离相同时，优先弃孤张（pairStatus=0），保留对子（pairStatus=1）
+        if (pairStatus < bestPairStatus) {
           bestHand = testHand;
+          bestPairStatus = pairStatus;
+        } else if (pairStatus == bestPairStatus &&
+            visibleCount != null &&
+            totalUnknown != null) {
+          // 距离和对子状态都相同，优先出进张少的牌（保留进张多的牌）
+          final discardGroup = card.sentence;
+          int discardRem = 0;
+          for (final ch in _groupChars[discardGroup - 1]) {
+            if (!testHand.any((c) => c.character == ch)) {
+              discardRem += _remainingCount(ch, visibleCount);
+            }
+          }
+          final bestCard = bestHand.isNotEmpty
+              ? hand.firstWhere(
+                  (c) => !bestHand.contains(c),
+                  orElse: () => hand.first,
+                )
+              : hand.first;
+          final bestGroup = bestCard.sentence;
+          int bestRem = 0;
+          for (final ch in _groupChars[bestGroup - 1]) {
+            if (!bestHand.any((c) => c.character == ch)) {
+              bestRem += _remainingCount(ch, visibleCount);
+            }
+          }
+          // 出进张少的牌，保留进张多的
+          if (discardRem < bestRem) {
+            bestHand = testHand;
+          }
         }
       }
     }
@@ -618,7 +663,11 @@ class AIStrategyHard extends AIStrategy {
 
     final testHand = List<Card>.from(hand);
     for (final ch in neededChars) {
-      testHand.removeWhere((c) => c.character == ch);
+      // 吃牌只消耗1张该字，而不是所有（避免破坏多余对子/坎）
+      final idx = testHand.indexWhere((c) => c.character == ch);
+      if (idx >= 0) {
+        testHand.removeAt(idx);
+      }
     }
 
     final newMeld = Meld(
@@ -694,6 +743,22 @@ class AIStrategyHard extends AIStrategy {
     benefit -= probLoss * 50;
     benefit -= consumptionCost;
 
+    // 绝版孤张惩罚：吃牌后手牌中如果有绝版牌（剩余0张）且只有1张，
+    // 该牌无法组成任何组合（对子/坎/句），是死牌，严重惩罚
+    final bestHandCharCount = <String, int>{};
+    for (final c in bestHand) {
+      bestHandCharCount[c.character] =
+          (bestHandCharCount[c.character] ?? 0) + 1;
+    }
+    for (final entry in bestHandCharCount.entries) {
+      if (entry.value == 1) {
+        final rem = _remainingCount(entry.key, visibleCount);
+        if (rem == 0) {
+          benefit -= 800;
+        }
+      }
+    }
+
     return benefit;
   }
 
@@ -766,7 +831,11 @@ class AIStrategyHard extends AIStrategy {
 
     final testHand = List<Card>.from(hand);
     for (final ch in neededChars) {
-      testHand.removeWhere((c) => c.character == ch);
+      // 吃牌只消耗1张该字，而不是所有（避免破坏多余对子/坎）
+      final idx = testHand.indexWhere((c) => c.character == ch);
+      if (idx >= 0) {
+        testHand.removeAt(idx);
+      }
     }
 
     final newMeld = Meld(
@@ -851,6 +920,22 @@ class AIStrategyHard extends AIStrategy {
     benefit -= probLoss * 50;
 
     benefit -= consumptionCost;
+
+    // 绝版孤张惩罚：吃牌后手牌中如果有绝版牌（剩余0张）且只有1张，
+    // 该牌无法组成任何组合（对子/坎/句），是死牌，严重惩罚
+    final bestHandCharCount = <String, int>{};
+    for (final c in bestHand) {
+      bestHandCharCount[c.character] =
+          (bestHandCharCount[c.character] ?? 0) + 1;
+    }
+    for (final entry in bestHandCharCount.entries) {
+      if (entry.value == 1) {
+        final rem = _remainingCount(entry.key, visibleCount);
+        if (rem == 0) {
+          benefit -= 800;
+        }
+      }
+    }
 
     return benefit;
   }
@@ -2182,14 +2267,10 @@ class AIStrategyHard extends AIStrategy {
         visibleCount,
         totalUnknown,
       );
-      score += (10 - expSteps) * 50;
+      // expSteps仅估算下一步进张概率，未考虑完整路径，易高估（如dist=2但只有2张进张时算出38步）
+      // 仅奖励快速路径（expSteps<10），不对慢速路径施加惩罚（距离已在potential中体现）
+      score += math.max(0.0, (10 - expSteps) * 50);
     }
-
-    // 调试日志：打印出牌评分明细
-    GameLogger.i(
-      'AI_DISCARD_DETAIL',
-      '  card=${cardToDiscard.character} potential=${potential.toStringAsFixed(1)} distToTing=$distToTing menDelta=${(menScoreAfter - menScoreBefore).toStringAsFixed(1)} cardGroupType=${cardGroupTypeScore.toStringAsFixed(1)} finalScore=${score.toStringAsFixed(1)}',
-    );
 
     return score;
   }
