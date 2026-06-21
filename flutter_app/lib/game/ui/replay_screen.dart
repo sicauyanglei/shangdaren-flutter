@@ -816,14 +816,14 @@ class _ReplayScreenState extends State<ReplayScreen>
     final bottomIdx = positions[2];
     final rightIdx = positions[1];
     if (playerIndex == leftIdx) {
-      return Offset(aiAvatarLeft + 250 - 60, aiAvatarTop + 14 + 24 + 4);
+      return Offset(aiAvatarLeft + 260 - 60, aiAvatarTop + 14 + 24 + 4);
     } else if (playerIndex == bottomIdx) {
       return Offset(
-        myAvatarLeft + 250 - 60,
+        myAvatarLeft + 260 - 60,
         designHeight - myAvatarBottom - 14 - 24 - 4 - 20,
       );
     } else {
-      return Offset(designWidth - 9.6 - 250 + 20, aiAvatarTop + 14 + 24 + 4);
+      return Offset(designWidth - 9.6 - 260 + 20, aiAvatarTop + 14 + 24 + 4);
     }
   }
 
@@ -1077,7 +1077,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final handCount = _hands[playerIndex].length;
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 250),
+      constraints: const BoxConstraints(minWidth: 260),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.5),
@@ -2023,18 +2023,18 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     if (playerIndex == positions[0]) {
       // 左上玩家：徽章在头像右侧
-      left = (aiAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      left = (aiAvatarLeft + 260 + badgeGapFromAvatar) * scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = false;
     } else if (playerIndex == positions[2]) {
       // 底部玩家：徽章在头像右侧
-      left = (myAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      left = (myAvatarLeft + 260 + badgeGapFromAvatar) * scale;
       top = (designHeight - myAvatarBottom - 108) * scale;
       isRight = false;
     } else {
       // 右上玩家：徽章在头像左侧
       left =
-          (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
+          (designWidth - aiAvatarLeft - 260 - badgeGapFromAvatar - totalW) *
           scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = true;
