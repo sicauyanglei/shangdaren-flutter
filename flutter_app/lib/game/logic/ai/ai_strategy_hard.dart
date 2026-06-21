@@ -4056,8 +4056,23 @@ class AIStrategyHard extends AIStrategy {
       final totalHu = _evaluateHuScore(player);
       if (totalHu < 8) {
         final heiYuanPotential = _evaluateHeiYuanPotential(player);
-        if (heiYuanPotential <= 0 && _wouldBreakNormalPair(player, card)) {
-          return false;
+        if (heiYuanPotential <= 0) {
+          // 1. 吃牌破坏普通对子，不吃
+          if (_wouldBreakNormalPair(player, card)) {
+            return false;
+          }
+          // 2. 低胡数且吃的不是精字时，吃牌不提升胡数则优先摸牌提高胡数
+          // 例：手牌"人人丘己化千七七土尔小生八九九子禄禄寿"胡数=0，
+          // 吃"子"形成八九子句但胡数仍=0，不如摸牌有机会摸到上/福（精字4胡）
+          if (card.character != '上' && card.character != '福') {
+            final shiDuiPotential = _evaluateShiDuiPotential(player, state);
+            if (shiDuiPotential <= 0) {
+              final maxHuAfterChi = _calculateMaxHuAfterChi(player, card);
+              if (maxHuAfterChi <= totalHu) {
+                return false;
+              }
+            }
+          }
         }
       }
     }
@@ -4165,6 +4180,54 @@ class AIStrategyHard extends AIStrategy {
       return true;
     }
     return false;
+  }
+
+  /// 模拟吃牌后的胡数（吃牌后、出牌前），返回所有可能吃法中的最大胡数
+  /// 用于判断吃牌是否提升胡数
+  double _calculateMaxHuAfterChi(Player player, Card card) {
+    final otherChars = _getOtherCharsInGroup(card);
+    final availableChars = otherChars
+        .where((ch) => player.hand.any((c) => c.character == ch))
+        .toList();
+    if (availableChars.length < 2) return _evaluateHuScore(player);
+
+    double maxHu = _evaluateHuScore(player);
+
+    // 尝试所有可能的2字组合（C(n,2)种吃法）
+    for (int i = 0; i < availableChars.length; i++) {
+      for (int j = i + 1; j < availableChars.length; j++) {
+        final useChars = [availableChars[i], availableChars[j]];
+
+        final testHand = List<Card>.from(player.hand);
+        for (final ch in useChars) {
+          final idx = testHand.indexWhere((c) => c.character == ch);
+          if (idx >= 0) testHand.removeAt(idx);
+        }
+
+        final newMeld = Meld(
+          cards: [
+            card,
+            ...useChars.map(
+                (ch) => player.hand.firstWhere((c) => c.character == ch)),
+          ],
+          type: MeldType.ju,
+          isJing: card.isJing,
+        );
+
+        final testPlayer = Player(
+          id: player.id,
+          name: player.name,
+          type: player.type,
+          hand: testHand,
+          melds: [...player.melds, newMeld],
+        );
+
+        final hu = _evaluateHuScore(testPlayer);
+        if (hu > maxHu) maxHu = hu;
+      }
+    }
+
+    return maxHu;
   }
 
   @override
