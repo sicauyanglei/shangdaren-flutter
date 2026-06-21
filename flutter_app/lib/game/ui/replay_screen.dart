@@ -70,6 +70,8 @@ class _ReplayScreenState extends State<ReplayScreen>
   bool _isPlaying = false;
   bool _isPaused = false;
   double _speed = 1.0;
+  int _deckCount = 0;
+  Card? _lastPlayedCard;
   Timer? _timer;
   String _statusText = '';
   int _viewPlayerIndex = 1; // 主视角玩家，默认人类玩家
@@ -134,10 +136,14 @@ class _ReplayScreenState extends State<ReplayScreen>
     _hands = <List<Card>>[<Card>[], <Card>[], <Card>[]];
     _discards = <List<Card>>[<Card>[], <Card>[], <Card>[]];
     _melds = <List<Meld>>[<Meld>[], <Meld>[], <Meld>[]];
+    int totalDealt = 0;
     for (int i = 0; i < widget.replay.initialHands.length; i++) {
       _hands[i] = GameRecorder.deserializeHand(widget.replay.initialHands[i]);
+      totalDealt += _hands[i].length;
       _sortHand(i);
     }
+    _deckCount = 96 - totalDealt;
+    _lastPlayedCard = null;
   }
 
   void _startReplay() {
@@ -591,11 +597,13 @@ class _ReplayScreenState extends State<ReplayScreen>
         final card = _deserializeCard(action.data['card']);
         _hands[pi].add(card);
         _sortHand(pi);
+        _deckCount--;
         break;
       case 'discard':
         final card = _deserializeCard(action.data['card']);
         _hands[pi].removeWhere((Card c) => c.id == card.id);
         _discards[pi].add(card);
+        _lastPlayedCard = card;
         break;
       case 'chi':
         final fromCard = _deserializeCard(action.data['fromCard']);
@@ -612,6 +620,7 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: chiCards.any((Card c) => c.isJing),
           ),
         );
+        _lastPlayedCard = null;
         break;
       case 'peng':
         final card = _deserializeCard(action.data['card']);
@@ -639,6 +648,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
         );
+        _lastPlayedCard = null;
         break;
       case 'zhao':
         final card = _deserializeCard(action.data['card']);
@@ -666,6 +676,8 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: zhaoCards, type: MeldType.zhao, isJing: card.isJing),
         );
+        _deckCount--;
+        _lastPlayedCard = null;
         break;
       case 'zhao_from_hand':
         final cards = _deserializeCardList(action.data['cards']);
@@ -679,6 +691,7 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: cards.any((Card c) => c.isJing),
           ),
         );
+        _deckCount--;
         break;
       case 'hu':
       case 'zimo':
@@ -845,6 +858,10 @@ class _ReplayScreenState extends State<ReplayScreen>
               child: _buildRightMeldsAndDiscards(positions[1]),
             ),
           ),
+          // 牌堆 + 最近出的牌
+          if (_deckCount > 0) _buildDeck(scale),
+          if (_lastPlayedCard != null && !_showResult)
+            _buildLastPlayedCard(scale),
           // 飞牌动画Overlay层
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 结果面板（胡牌/流局）
@@ -1871,6 +1888,126 @@ class _ReplayScreenState extends State<ReplayScreen>
               Shadow(color: borderColor.withOpacity(0.6), blurRadius: 4),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 牌堆尺寸 - 与GameBoard一致
+  static const double deckCardW = 160.0;
+  static const double deckCardH = 40.0;
+  static const double deckScale = 0.5;
+
+  /// 构建牌堆（与GameBoard._renderDeck一致）
+  Widget _buildDeck(double scale) {
+    final displayCount = _getDeckLayerCount(_deckCount);
+    final deckW = deckCardW * deckScale;
+    final deckH = deckCardH * deckScale;
+    final deckX = (designWidth - deckW) / 2;
+    final deckY = 9.6;
+
+    return Positioned(
+      left: deckX * scale,
+      top: deckY * scale,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: deckW + (displayCount - 1) * 4 * deckScale,
+          height: deckH + (displayCount - 1) * 1 * deckScale,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (int i = 0; i < displayCount; i++)
+                Positioned(
+                  left: i * 4 * deckScale,
+                  top: i * 1 * deckScale,
+                  child: Opacity(
+                    opacity: 0.4 + (i / displayCount) * 0.6,
+                    child: Image.asset(
+                      'assets/html/images/v/back.png',
+                      width: deckW,
+                      height: deckH,
+                      fit: BoxFit.fill,
+                    ),
+                  ),
+                ),
+              // 牌堆数字
+              Positioned.fill(
+                child: Center(
+                  child: Text(
+                    '$_deckCount',
+                    style: TextStyle(
+                      color: const Color(0xFFFFFFFF),
+                      fontSize: 48 * deckScale,
+                      fontWeight: FontWeight.w900,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFFffd700),
+                          blurRadius: 24 * deckScale,
+                        ),
+                        Shadow(
+                          color: const Color(0xFFffd700),
+                          blurRadius: 12 * deckScale,
+                        ),
+                        Shadow(
+                          color: const Color(0xF0000000),
+                          blurRadius: 6 * deckScale,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  int _getDeckLayerCount(int count) {
+    if (count >= 60) return 10;
+    if (count >= 50) return 8;
+    if (count >= 40) return 7;
+    if (count >= 30) return 6;
+    if (count >= 20) return 5;
+    if (count >= 10) return 4;
+    if (count >= 5) return 3;
+    if (count > 0) return 2;
+    return 0;
+  }
+
+  /// 构建最近出的牌（横牌，在牌堆下方，与GameBoard._renderPlayedCards一致）
+  Widget _buildLastPlayedCard(double scale) {
+    final card = _lastPlayedCard!;
+    final pinyin = AtlasLoader.charToPinyin[card.character];
+    final cardW = deckCardW; // 160
+    final cardH = deckCardH; // 40
+    final cardX = (designWidth - cardW) / 2;
+    final cardY = 55.0;
+
+    return Positioned(
+      left: cardX * scale,
+      top: cardY * scale,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: cardW,
+          height: cardH,
+          child: pinyin != null
+              ? Image.asset(
+                  'assets/html/images/v/$pinyin.png',
+                  width: cardW,
+                  height: cardH,
+                  fit: BoxFit.fill,
+                )
+              : Container(
+                  width: cardW,
+                  height: cardH,
+                  color: Colors.white,
+                ),
         ),
       ),
     );
