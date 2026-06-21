@@ -360,7 +360,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final cardW = isMain ? _flyHandCardW : _flyMeldCardW;
     final cardH = isMain ? _flyHandCardH : _flyMeldCardH;
 
-    // 阶段1: 牌堆 → 中央 (0.2s)
+    // 阶段1: 牌堆 → 中央 (0.35s)
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -373,10 +373,10 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: 160,
         toH: 40,
-        duration: Duration(milliseconds: (200 * sf).round()),
+        duration: Duration(milliseconds: (350 * sf).round()),
       ),
     );
-    // 阶段2: 中央 → 手牌 (0.3s, 延迟0.2s)
+    // 阶段2: 中央 → 手牌 (0.5s, 延迟0.35s)
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -389,15 +389,15 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: cardW,
         toH: cardH,
-        duration: Duration(milliseconds: (300 * sf).round()),
-        delay: Duration(milliseconds: (200 * sf).round()),
+        duration: Duration(milliseconds: (500 * sf).round()),
+        delay: Duration(milliseconds: (350 * sf).round()),
       ),
     );
 
     if (isMain) _moCardId = card.id;
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (500 * sf).round()),
+      totalDuration: Duration(milliseconds: (850 * sf).round()),
     );
   }
 
@@ -421,14 +421,14 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: fromH,
         toW: _flySmallCardW * 1.5,
         toH: _flySmallCardH * 1.5,
-        duration: Duration(milliseconds: (300 * sf).round()),
+        duration: Duration(milliseconds: (500 * sf).round()),
         flash: true,
       ),
     );
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (400 * sf).round()),
+      totalDuration: Duration(milliseconds: (700 * sf).round()),
     );
   }
 
@@ -461,7 +461,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: _flySmallCardH * 1.5,
         toW: _flyMeldCardW,
         toH: _flyMeldCardH,
-        duration: Duration(milliseconds: (300 * sf).round()),
+        duration: Duration(milliseconds: (500 * sf).round()),
       ),
     );
 
@@ -492,15 +492,15 @@ class _ReplayScreenState extends State<ReplayScreen>
           fromH: fromH,
           toW: _flyMeldCardW,
           toH: _flyMeldCardH,
-          duration: Duration(milliseconds: (300 * sf).round()),
-          delay: Duration(milliseconds: (i * 50 * sf).round()),
+          duration: Duration(milliseconds: (500 * sf).round()),
+          delay: Duration(milliseconds: (i * 80 * sf).round()),
         ),
       );
     }
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (500 * sf).round()),
+      totalDuration: Duration(milliseconds: (800 * sf).round()),
     );
   }
 
@@ -526,15 +526,15 @@ class _ReplayScreenState extends State<ReplayScreen>
           fromH: fromH,
           toW: _flyMeldCardW,
           toH: _flyMeldCardH,
-          duration: Duration(milliseconds: (300 * sf).round()),
-          delay: Duration(milliseconds: (i * 50 * sf).round()),
+          duration: Duration(milliseconds: (500 * sf).round()),
+          delay: Duration(milliseconds: (i * 80 * sf).round()),
         ),
       );
     }
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (500 * sf).round()),
+      totalDuration: Duration(milliseconds: (800 * sf).round()),
     );
   }
 
@@ -562,14 +562,14 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: fromH,
         toW: _flyHandCardW * 0.8,
         toH: _flyHandCardH * 0.8,
-        duration: Duration(milliseconds: (400 * sf).round()),
+        duration: Duration(milliseconds: (600 * sf).round()),
         flash: true,
       ),
     );
 
     _runAnimation(
       action,
-      totalDuration: Duration(milliseconds: (600 * sf).round()),
+      totalDuration: Duration(milliseconds: (900 * sf).round()),
     );
   }
 
@@ -615,7 +615,7 @@ class _ReplayScreenState extends State<ReplayScreen>
   }
 
   void _scheduleNext() {
-    final delay = (300 / _speed).round();
+    final delay = (600 / _speed).round();
     _timer = Timer(Duration(milliseconds: delay), () {
       if (mounted && _isPlaying && !_isPaused) _playNextAction();
     });
