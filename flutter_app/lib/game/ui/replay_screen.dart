@@ -60,51 +60,6 @@ class _HuBadgeInfo {
   _HuBadgeInfo({required this.text, required this.isPrimary});
 }
 
-/// 飞分动画状态
-class _FlyingScore {
-  final int scoreChange;
-  final bool isGain;
-  double x, y;
-  final double fromX, fromY;
-  final double toX, toY;
-  final double duration;
-  double elapsed;
-  bool arrived;
-  double arriveElapsed;
-  static const double arriveDuration = 1.2;
-
-  _FlyingScore({
-    required this.scoreChange,
-    required this.isGain,
-    required this.fromX,
-    required this.fromY,
-    required this.toX,
-    required this.toY,
-    this.duration = 1.5,
-  })  : x = fromX,
-        y = fromY,
-        elapsed = 0,
-        arrived = false,
-        arriveElapsed = 0;
-
-  bool update(double dt) {
-    if (arrived) {
-      arriveElapsed += dt;
-      return arriveElapsed >= arriveDuration;
-    }
-    elapsed += dt;
-    final t = (elapsed / duration).clamp(0.0, 1.0);
-    // easeInOutCubic
-    final eased = t < 0.5 ? 4 * t * t * t : 1 - math.pow(-2 * t + 2, 3) / 2;
-    x = fromX + (toX - fromX) * eased;
-    y = fromY + (toY - fromY) * eased;
-    if (t >= 1.0) {
-      arrived = true;
-    }
-    return false;
-  }
-}
-
 class _ReplayScreenState extends State<ReplayScreen>
     with TickerProviderStateMixin {
   List<List<Card>> _hands = <List<Card>>[];
@@ -115,8 +70,6 @@ class _ReplayScreenState extends State<ReplayScreen>
   bool _isPlaying = false;
   bool _isPaused = false;
   double _speed = 1.0;
-  int _deckCount = 0;
-  Card? _lastPlayedCard;
   Timer? _timer;
   String _statusText = '';
   int _viewPlayerIndex = 1; // 主视角玩家，默认人类玩家
@@ -132,11 +85,11 @@ class _ReplayScreenState extends State<ReplayScreen>
   // 摸牌标记（最后摸的牌ID，用于主视角显示"摸"字）
   int _moCardId = -1;
 
+  // 牌堆剩余张数（小牌堆显示）
+  int _deckCount = 0;
+
   // 回放结束后的结果面板
   bool _showResult = false;
-  bool _scoreAnimPlayed = false;
-  final List<_FlyingScore> _flyingScores = [];
-  Timer? _scoreAnimTimer;
 
   // 牌局页面设计尺寸
   static const double designWidth = 1280.0;
@@ -184,14 +137,14 @@ class _ReplayScreenState extends State<ReplayScreen>
     _hands = <List<Card>>[<Card>[], <Card>[], <Card>[]];
     _discards = <List<Card>>[<Card>[], <Card>[], <Card>[]];
     _melds = <List<Meld>>[<Meld>[], <Meld>[], <Meld>[]];
-    int totalDealt = 0;
+    int dealtCount = 0;
     for (int i = 0; i < widget.replay.initialHands.length; i++) {
       _hands[i] = GameRecorder.deserializeHand(widget.replay.initialHands[i]);
-      totalDealt += _hands[i].length;
       _sortHand(i);
+      dealtCount += _hands[i].length;
     }
-    _deckCount = 96 - totalDealt;
-    _lastPlayedCard = null;
+    // 总牌数96张，减去已发到各玩家手牌的张数
+    _deckCount = 96 - dealtCount;
   }
 
   void _startReplay() {
@@ -202,9 +155,6 @@ class _ReplayScreenState extends State<ReplayScreen>
     _isPlaying = true;
     _isPaused = false;
     _showResult = false;
-    _scoreAnimPlayed = false;
-    _flyingScores.clear();
-    _scoreAnimTimer?.cancel();
     _playNextAction();
   }
 
@@ -224,14 +174,11 @@ class _ReplayScreenState extends State<ReplayScreen>
   void _stopReplay() {
     _timer?.cancel();
     _animTimer?.cancel();
-    _scoreAnimTimer?.cancel();
     _flyingCards.clear();
-    _flyingScores.clear();
     _animInProgress = false;
     _isPlaying = false;
     _isPaused = false;
     _showResult = false;
-    _scoreAnimPlayed = false;
     _initHands();
     _currentActionIndex = -1;
     setState(() {
@@ -248,10 +195,6 @@ class _ReplayScreenState extends State<ReplayScreen>
         _showResult = true;
         _statusText = '回放结束';
       });
-      if (!_scoreAnimPlayed) {
-        _scoreAnimPlayed = true;
-        _triggerScoreAnimation();
-      }
       return;
     }
     _currentActionIndex++;
@@ -346,6 +289,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         // piao, liuju等无动画
         _applyAction(action);
         _animInProgress = false;
+        setState(() {});
         _scheduleNext();
         break;
     }
@@ -360,7 +304,11 @@ class _ReplayScreenState extends State<ReplayScreen>
     final cardW = isMain ? _flyHandCardW : _flyMeldCardW;
     final cardH = isMain ? _flyHandCardH : _flyMeldCardH;
 
+<<<<<<< Updated upstream
     // 阶段1: 牌堆 → 中央 (0.35s)
+=======
+    // 阶段1: 牌堆 → 中央 (0.3s)
+>>>>>>> Stashed changes
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -373,10 +321,17 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: 160,
         toH: 40,
+<<<<<<< Updated upstream
         duration: Duration(milliseconds: (350 * sf).round()),
       ),
     );
     // 阶段2: 中央 → 手牌 (0.5s, 延迟0.35s)
+=======
+        duration: Duration(milliseconds: (300 * sf).round()),
+      ),
+    );
+    // 阶段2: 中央 → 手牌 (0.4s, 延迟0.3s)
+>>>>>>> Stashed changes
     _flyingCards.add(
       _FlyCard(
         card: card,
@@ -389,15 +344,24 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: 40,
         toW: cardW,
         toH: cardH,
+<<<<<<< Updated upstream
         duration: Duration(milliseconds: (500 * sf).round()),
         delay: Duration(milliseconds: (350 * sf).round()),
+=======
+        duration: Duration(milliseconds: (400 * sf).round()),
+        delay: Duration(milliseconds: (300 * sf).round()),
+>>>>>>> Stashed changes
       ),
     );
 
     if (isMain) _moCardId = card.id;
     _runAnimation(
       action,
+<<<<<<< Updated upstream
       totalDuration: Duration(milliseconds: (850 * sf).round()),
+=======
+      totalDuration: Duration(milliseconds: (700 * sf).round()),
+>>>>>>> Stashed changes
     );
   }
 
@@ -421,14 +385,22 @@ class _ReplayScreenState extends State<ReplayScreen>
         fromH: fromH,
         toW: _flySmallCardW * 1.5,
         toH: _flySmallCardH * 1.5,
+<<<<<<< Updated upstream
         duration: Duration(milliseconds: (500 * sf).round()),
+=======
+        duration: Duration(milliseconds: (400 * sf).round()),
+>>>>>>> Stashed changes
         flash: true,
       ),
     );
 
     _runAnimation(
       action,
+<<<<<<< Updated upstream
       totalDuration: Duration(milliseconds: (700 * sf).round()),
+=======
+      totalDuration: Duration(milliseconds: (600 * sf).round()),
+>>>>>>> Stashed changes
     );
   }
 
@@ -604,6 +576,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         _flyingCards.clear();
         _applyAction(action);
         _animInProgress = false;
+        setState(() {});
         _scheduleNext();
       }
     }
@@ -655,13 +628,12 @@ class _ReplayScreenState extends State<ReplayScreen>
         final card = _deserializeCard(action.data['card']);
         _hands[pi].add(card);
         _sortHand(pi);
-        _deckCount--;
+        if (_deckCount > 0) _deckCount--;
         break;
       case 'discard':
         final card = _deserializeCard(action.data['card']);
         _hands[pi].removeWhere((Card c) => c.id == card.id);
         _discards[pi].add(card);
-        _lastPlayedCard = card;
         break;
       case 'chi':
         final fromCard = _deserializeCard(action.data['fromCard']);
@@ -678,7 +650,6 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: chiCards.any((Card c) => c.isJing),
           ),
         );
-        _lastPlayedCard = null;
         break;
       case 'peng':
         final card = _deserializeCard(action.data['card']);
@@ -706,7 +677,6 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
         );
-        _lastPlayedCard = null;
         break;
       case 'zhao':
         final card = _deserializeCard(action.data['card']);
@@ -734,8 +704,6 @@ class _ReplayScreenState extends State<ReplayScreen>
         _melds[pi].add(
           Meld(cards: zhaoCards, type: MeldType.zhao, isJing: card.isJing),
         );
-        _deckCount--;
-        _lastPlayedCard = null;
         break;
       case 'zhao_from_hand':
         final cards = _deserializeCardList(action.data['cards']);
@@ -749,13 +717,14 @@ class _ReplayScreenState extends State<ReplayScreen>
             isJing: cards.any((Card c) => c.isJing),
           ),
         );
-        _deckCount--;
         break;
       case 'hu':
       case 'zimo':
         final card = _deserializeCard(action.data['card']);
         _hands[pi].add(card);
         _sortHand(pi);
+        // 自摸从牌堆摸牌，点炮从弃牌摸牌
+        if (action.type == 'zimo' && _deckCount > 0) _deckCount--;
         break;
     }
   }
@@ -778,7 +747,6 @@ class _ReplayScreenState extends State<ReplayScreen>
   void dispose() {
     _timer?.cancel();
     _animTimer?.cancel();
-    _scoreAnimTimer?.cancel();
     _animController?.dispose();
     super.dispose();
   }
@@ -789,10 +757,9 @@ class _ReplayScreenState extends State<ReplayScreen>
     return size.width / designWidth;
   }
 
-  /// 计算底部主视角手牌的高度（设计坐标）
-  double _calcHandGroupH() {
-    final positions = _positionMap;
-    final hand = _hands[positions[2]];
+  /// 计算底部主视角手牌顶部Y坐标（设计坐标）
+  /// 手牌底部在设计坐标 designHeight + 80（因为 bottom: -80）
+  double _mainHandTopY(List<Card> hand) {
     final groups = <int, List<Card>>{};
     for (final card in hand) {
       groups.putIfAbsent(card.sentence, () => []).add(card);
@@ -805,132 +772,9 @@ class _ReplayScreenState extends State<ReplayScreen>
       }
       if (charGroups.length > maxStack) maxStack = charGroups.length;
     }
-    if (maxStack == 0) return 0;
-    return (maxStack - 1) * handStackVisible + handCardH;
-  }
-
-  /// 获取头像分数目标位置（设计坐标）
-  Offset _getAvatarScorePosition(int playerIndex) {
-    final positions = _positionMap;
-    final leftIdx = positions[0];
-    final bottomIdx = positions[2];
-    final rightIdx = positions[1];
-    if (playerIndex == leftIdx) {
-      return Offset(aiAvatarLeft + 260 - 60, aiAvatarTop + 14 + 24 + 4);
-    } else if (playerIndex == bottomIdx) {
-      return Offset(
-        myAvatarLeft + 260 - 60,
-        designHeight - myAvatarBottom - 14 - 24 - 4 - 20,
-      );
-    } else {
-      return Offset(designWidth - 9.6 - 260 + 20, aiAvatarTop + 14 + 24 + 4);
-    }
-  }
-
-  /// 触发飞分动画
-  void _triggerScoreAnimation() {
-    final resultData = widget.replay.resultData;
-    if (resultData == null) return;
-
-    final winnerIndex = resultData['winnerIndex'] as int? ?? -1;
-    final scoreChanges = resultData['scoreChanges'] as Map<String, dynamic>?;
-    if (winnerIndex < 0 || scoreChanges == null) return;
-
-    // 流局不需要飞分
-    final isLiuju = widget.replay.resultType == 'liuju';
-    if (isLiuju) return;
-
-    // 计算面板位置（设计坐标）
-    // 面板使用 bottom: (handGroupH - 60) * scale 定位
-    // 面板顶部Y = designHeight - (handGroupH - 60) - panelH
-    final panelH = 280.0;
-    final handGroupH = _calcHandGroupH();
-    final panelTopY = designHeight - (handGroupH - 60) - panelH;
-    // 面板中心X
-    final cx = designWidth / 2;
-    // 赢家分数Y位置（面板内偏上）
-    final winnerScoreY = panelTopY + 130;
-    // 输家分数Y位置
-    final losersY = panelTopY + 190;
-
-    // 计算输家位置
-    final losers = <int>[];
-    for (int i = 0; i < 3; i++) {
-      if (i == winnerIndex) continue;
-      final s = scoreChanges[i] as int? ?? 0;
-      if (s != 0) losers.add(i);
-    }
-
-    final loserGap = 16.0;
-    final loserPadH = 16.0;
-    final loserFontSize = 14.0;
-    final loserScoreFontSize = 20.0;
-
-    final loserWidths = <double>[];
-    double totalLoserW = 0;
-    for (final li in losers) {
-      // 估算输家宽度
-      final nameLen = widget.replay.playerNames[li].length;
-      final w = (nameLen * loserFontSize * 0.7 + loserScoreFontSize * 2.5)
-          .clamp(60.0, 120.0) +
-          loserPadH * 2;
-      loserWidths.add(w);
-      totalLoserW += w;
-    }
-    totalLoserW += (losers.isNotEmpty ? losers.length - 1 : 0) * loserGap;
-
-    var loserX = cx - totalLoserW / 2;
-
-    // 创建飞分动画
-    for (int i = 0; i < 3; i++) {
-      final s = scoreChanges[i] as int? ?? 0;
-      if (s == 0) continue;
-
-      double fromX, fromY;
-      if (i == winnerIndex) {
-        fromX = cx;
-        fromY = winnerScoreY;
-      } else {
-        final loserIdx = losers.indexOf(i);
-        if (loserIdx >= 0) {
-          final lw = loserWidths[loserIdx];
-          fromX = loserX + lw / 2;
-          fromY = losersY;
-          loserX += lw + loserGap;
-        } else {
-          continue;
-        }
-      }
-
-      final targetPos = _getAvatarScorePosition(i);
-      _flyingScores.add(
-        _FlyingScore(
-          scoreChange: s,
-          isGain: i == winnerIndex,
-          fromX: fromX,
-          fromY: fromY,
-          toX: targetPos.dx,
-          toY: targetPos.dy,
-          duration: 1.5,
-        ),
-      );
-    }
-
-    if (_flyingScores.isEmpty) return;
-
-    // 启动动画定时器
-    _scoreAnimTimer?.cancel();
-    _scoreAnimTimer = Timer.periodic(
-      const Duration(milliseconds: 16),
-      (_) {
-        final dt = 0.016;
-        _flyingScores.removeWhere((fs) => fs.update(dt));
-        setState(() {});
-        if (_flyingScores.isEmpty) {
-          _scoreAnimTimer?.cancel();
-        }
-      },
-    );
+    if (maxStack == 0) return designHeight;
+    final groupH = (maxStack - 1) * handStackVisible + handCardH;
+    return designHeight + 80 - groupH;
   }
 
   /// 根据主视角获取位置映射
@@ -1041,20 +885,16 @@ class _ReplayScreenState extends State<ReplayScreen>
               child: _buildRightMeldsAndDiscards(positions[1]),
             ),
           ),
-          // 牌堆 + 最近出的牌
-          if (_deckCount > 0) _buildDeck(scale),
-          if (_lastPlayedCard != null && !_showResult)
-            _buildLastPlayedCard(scale),
+          // 小牌堆指示器（顶部居中，与正常游戏一致）
+          if (_deckCount > 0) _buildDeckIndicator(scale),
           // 飞牌动画Overlay层
           if (_flyingCards.isNotEmpty) _buildFlyingCardOverlay(scale),
           // 结果面板（胡牌/流局）
           if (_showResult)
-            _buildResultOverlay(scale),
+            _buildResultOverlay(scale, _mainHandTopY(_hands[positions[2]])),
           // 胡牌徽章（赢家/点炮者头像旁边）
           if (_showResult && widget.replay.resultType == 'hu')
             ..._buildHuBadges(scale, positions),
-          // 飞分动画
-          if (_flyingScores.isNotEmpty) _buildFlyingScoreOverlay(scale),
           // 控制栏
           _buildControls(),
         ],
@@ -1077,7 +917,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final handCount = _hands[playerIndex].length;
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 260),
+      constraints: const BoxConstraints(minWidth: 250),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.5),
@@ -1885,59 +1725,6 @@ class _ReplayScreenState extends State<ReplayScreen>
     );
   }
 
-  /// 构建飞分动画Overlay层
-  Widget _buildFlyingScoreOverlay(double scale) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: _flyingScores.map((fs) {
-            final text = fs.isGain ? '+${fs.scoreChange}' : '-${fs.scoreChange}';
-            final color =
-                fs.isGain ? const Color(0xFFffd700) : const Color(0xFFff6b6b);
-
-            double alpha = 1.0;
-            double fontSize = 36.0;
-            if (fs.arrived) {
-              fontSize = 20.0;
-              final at = fs.arriveElapsed / _FlyingScore.arriveDuration;
-              if (at > 0.7) {
-                alpha = 1.0 - (at - 0.7) / 0.3;
-              }
-            }
-
-            return Positioned(
-              left: fs.x * scale - 30,
-              top: fs.y * scale - 20,
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: fontSize * scale,
-                  fontWeight: FontWeight.bold,
-                  color: color.withOpacity(alpha.clamp(0.0, 1.0)),
-                  shadows: [
-                    Shadow(
-                      color: color.withOpacity(0.6 * alpha.clamp(0.0, 1.0)),
-                      blurRadius: 12 * scale,
-                    ),
-                    Shadow(
-                      color: color.withOpacity(0.3 * alpha.clamp(0.0, 1.0)),
-                      blurRadius: 24 * scale,
-                    ),
-                    Shadow(
-                      color: const Color(0x88000000),
-                      blurRadius: 4 * scale,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   /// 构建胡牌徽章列表（赢家/点炮者头像旁边）
   List<Widget> _buildHuBadges(double scale, List<int> positions) {
     final resultData = widget.replay.resultData;
@@ -2023,18 +1810,18 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     if (playerIndex == positions[0]) {
       // 左上玩家：徽章在头像右侧
-      left = (aiAvatarLeft + 260 + badgeGapFromAvatar) * scale;
+      left = (aiAvatarLeft + 250 + badgeGapFromAvatar) * scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = false;
     } else if (playerIndex == positions[2]) {
       // 底部玩家：徽章在头像右侧
-      left = (myAvatarLeft + 260 + badgeGapFromAvatar) * scale;
+      left = (myAvatarLeft + 250 + badgeGapFromAvatar) * scale;
       top = (designHeight - myAvatarBottom - 108) * scale;
       isRight = false;
     } else {
       // 右上玩家：徽章在头像左侧
       left =
-          (designWidth - aiAvatarLeft - 260 - badgeGapFromAvatar - totalW) *
+          (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
           scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = true;
@@ -2131,128 +1918,8 @@ class _ReplayScreenState extends State<ReplayScreen>
     );
   }
 
-  /// 牌堆尺寸 - 与GameBoard一致
-  static const double deckCardW = 160.0;
-  static const double deckCardH = 40.0;
-  static const double deckScale = 0.5;
-
-  /// 构建牌堆（与GameBoard._renderDeck一致）
-  Widget _buildDeck(double scale) {
-    final displayCount = _getDeckLayerCount(_deckCount);
-    final deckW = deckCardW * deckScale;
-    final deckH = deckCardH * deckScale;
-    final deckX = (designWidth - deckW) / 2;
-    final deckY = 9.6;
-
-    return Positioned(
-      left: deckX * scale,
-      top: deckY * scale,
-      child: Transform.scale(
-        scale: scale,
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: deckW + (displayCount - 1) * 4 * deckScale,
-          height: deckH + (displayCount - 1) * 1 * deckScale,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              for (int i = 0; i < displayCount; i++)
-                Positioned(
-                  left: i * 4 * deckScale,
-                  top: i * 1 * deckScale,
-                  child: Opacity(
-                    opacity: 0.4 + (i / displayCount) * 0.6,
-                    child: Image.asset(
-                      'assets/html/images/v/back.png',
-                      width: deckW,
-                      height: deckH,
-                      fit: BoxFit.fill,
-                    ),
-                  ),
-                ),
-              // 牌堆数字
-              Positioned.fill(
-                child: Center(
-                  child: Text(
-                    '$_deckCount',
-                    style: TextStyle(
-                      color: const Color(0xFFFFFFFF),
-                      fontSize: 48 * deckScale,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                          color: const Color(0xFFffd700),
-                          blurRadius: 24 * deckScale,
-                        ),
-                        Shadow(
-                          color: const Color(0xFFffd700),
-                          blurRadius: 12 * deckScale,
-                        ),
-                        Shadow(
-                          color: const Color(0xF0000000),
-                          blurRadius: 6 * deckScale,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  int _getDeckLayerCount(int count) {
-    if (count >= 60) return 10;
-    if (count >= 50) return 8;
-    if (count >= 40) return 7;
-    if (count >= 30) return 6;
-    if (count >= 20) return 5;
-    if (count >= 10) return 4;
-    if (count >= 5) return 3;
-    if (count > 0) return 2;
-    return 0;
-  }
-
-  /// 构建最近出的牌（横牌，在牌堆下方，与GameBoard._renderPlayedCards一致）
-  Widget _buildLastPlayedCard(double scale) {
-    final card = _lastPlayedCard!;
-    final pinyin = AtlasLoader.charToPinyin[card.character];
-    final cardW = deckCardW; // 160
-    final cardH = deckCardH; // 40
-    final cardX = (designWidth - cardW) / 2;
-    final cardY = 55.0;
-
-    return Positioned(
-      left: cardX * scale,
-      top: cardY * scale,
-      child: Transform.scale(
-        scale: scale,
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: cardW,
-          height: cardH,
-          child: pinyin != null
-              ? Image.asset(
-                  'assets/html/images/v/$pinyin.png',
-                  width: cardW,
-                  height: cardH,
-                  fit: BoxFit.fill,
-                )
-              : Container(
-                  width: cardW,
-                  height: cardH,
-                  color: Colors.white,
-                ),
-        ),
-      ),
-    );
-  }
-
   /// 构建回放结束后的结果面板（胡牌/流局）
-  Widget _buildResultOverlay(double scale) {
+  Widget _buildResultOverlay(double scale, double mainHandTopY) {
     final resultType = widget.replay.resultType;
     final resultData = widget.replay.resultData;
     final isLiuju = resultType == 'liuju';
@@ -2267,12 +1934,12 @@ class _ReplayScreenState extends State<ReplayScreen>
     final int dianpaoIndex = resultData?['dianpaoIndex'] as int? ?? -1;
     final int huCount = resultData?['huCount'] as int? ?? 0;
     final int multiplier = resultData?['multiplier'] as int? ?? 1;
-    final Map<String, dynamic>? scoreChanges =
-        resultData?['scoreChanges'] as Map<String, dynamic>?;
+    final Map? scoreChanges = resultData?['scoreChanges'] as Map?;
 
     // 胡型颜色
     Color huTypeColor = _getHuTypeColor(huType);
 
+<<<<<<< Updated upstream
     final panelW = 640.0;
     final panelH = isLiuju ? 100.0 : 220.0;
 
@@ -2290,6 +1957,21 @@ class _ReplayScreenState extends State<ReplayScreen>
       child: Transform.scale(
         scale: scale,
         alignment: Alignment.bottomCenter,
+=======
+    // 定位在底部手牌上方（与正常游戏一致），避免与AI手牌区域重叠
+    final panelW = 600.0;
+    final panelH = isLiuju ? 120.0 : 280.0;
+    final panelLeft = (designWidth - panelW) / 2;
+    final panelBottomY = mainHandTopY - 10;
+    final panelTop = panelBottomY - panelH;
+
+    return Positioned(
+      left: panelLeft * scale,
+      top: panelTop * scale,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topCenter,
+>>>>>>> Stashed changes
         child: SizedBox(
           width: panelW,
           height: panelH,
@@ -2313,7 +1995,11 @@ class _ReplayScreenState extends State<ReplayScreen>
                 Text(
                   isLiuju ? '流局' : '$winnerName 胡牌!',
                   style: TextStyle(
+<<<<<<< Updated upstream
                     fontSize: 22,
+=======
+                    fontSize: 28,
+>>>>>>> Stashed changes
                     color: const Color(0xFFffd700),
                     fontWeight: FontWeight.bold,
                     shadows: [
@@ -2328,10 +2014,17 @@ class _ReplayScreenState extends State<ReplayScreen>
                   const SizedBox(height: 8),
                   const Text(
                     '牌堆已空，本局结束',
+<<<<<<< Updated upstream
                     style: TextStyle(fontSize: 16, color: Colors.white70),
                   ),
                 ] else ...[
                   const SizedBox(height: 12),
+=======
+                    style: TextStyle(fontSize: 18, color: Colors.white70),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 16),
+>>>>>>> Stashed changes
                   // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
                   Wrap(
                     spacing: 8,
@@ -2360,7 +2053,11 @@ class _ReplayScreenState extends State<ReplayScreen>
                       ),
                     ],
                   ),
+<<<<<<< Updated upstream
                   const SizedBox(height: 14),
+=======
+                  const SizedBox(height: 20),
+>>>>>>> Stashed changes
                   // 玩家分数变化
                   if (scoreChanges != null)
                     ..._buildScoreChanges(
@@ -2400,7 +2097,7 @@ class _ReplayScreenState extends State<ReplayScreen>
 
   /// 构建分数变化行
   List<Widget> _buildScoreChanges(
-    Map<String, dynamic> scoreChanges,
+    Map scoreChanges,
     int winnerIndex,
     int dianpaoIndex,
     String method,
@@ -2408,7 +2105,9 @@ class _ReplayScreenState extends State<ReplayScreen>
     final widgets = <Widget>[];
     for (int i = 0; i < widget.replay.playerNames.length; i++) {
       final name = widget.replay.playerNames[i];
-      final change = scoreChanges[i] as int? ?? 0;
+      // 兼容 int 键（内存访问）和 String 键（JSON 反序列化）
+      final dynamic raw = scoreChanges[i] ?? scoreChanges[i.toString()];
+      final change = (raw is int) ? raw : (int.tryParse('$raw') ?? 0);
       final isWinner = i == winnerIndex;
       final isDianpao = i == dianpaoIndex && method == '点炮';
       final label = isWinner
@@ -2502,6 +2201,104 @@ class _ReplayScreenState extends State<ReplayScreen>
       default:
         return const Color(0xFF4ecdc4);
     }
+  }
+
+  /// 构建小牌堆指示器（顶部居中，与正常游戏一致）
+  /// 参考game_board.dart的_renderDeck和_renderDeckIndicator
+  Widget _buildDeckIndicator(double scale) {
+    // 与GameBoard一致：deckCardW=160, deckCardH=40, scale=0.5（发牌完成后）
+    const deckCardW = 160.0;
+    const deckCardH = 40.0;
+    const deckScale = 0.5;
+    final displayW = deckCardW * deckScale; // 80
+    final displayH = deckCardH * deckScale; // 20
+    // 牌堆位置：designWidth/2 居中，y=9.6
+    final deckX = designWidth / 2 - displayW / 2;
+    const deckY = 9.6;
+
+    // 根据剩余张数决定显示层数（与GameBoard._getDeckLayerCount一致）
+    int layerCount;
+    if (_deckCount >= 60) {
+      layerCount = 10;
+    } else if (_deckCount >= 50) {
+      layerCount = 8;
+    } else if (_deckCount >= 40) {
+      layerCount = 7;
+    } else if (_deckCount >= 30) {
+      layerCount = 6;
+    } else if (_deckCount >= 20) {
+      layerCount = 5;
+    } else if (_deckCount >= 10) {
+      layerCount = 4;
+    } else if (_deckCount >= 5) {
+      layerCount = 3;
+    } else {
+      layerCount = 2;
+    }
+
+    return Positioned(
+      left: deckX * scale,
+      top: deckY * scale,
+      child: Transform.scale(
+        scale: scale,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: displayW + (layerCount - 1) * 4 * deckScale,
+          height: displayH + (layerCount - 1) * 1 * deckScale,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 牌堆层叠（每层偏移4px*deckScale, 1px*deckScale）
+              for (int i = 0; i < layerCount; i++)
+                Positioned(
+                  left: i * 4 * deckScale,
+                  top: i * 1 * deckScale,
+                  child: Opacity(
+                    opacity: 0.4 + (i / layerCount) * 0.6,
+                    child: Image.asset(
+                      'assets/html/images/back.png',
+                      width: displayW,
+                      height: displayH,
+                      fit: BoxFit.fill,
+                    ),
+                  ),
+                ),
+              // 牌堆数字（居中显示）
+              Positioned(
+                left: 0,
+                top: 0,
+                width: displayW + (layerCount - 1) * 4 * deckScale,
+                height: displayH + (layerCount - 1) * 1 * deckScale,
+                child: Center(
+                  child: Text(
+                    '$_deckCount',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24 * deckScale,
+                      fontWeight: FontWeight.w900,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFFffd700),
+                          blurRadius: 12 * deckScale,
+                        ),
+                        Shadow(
+                          color: const Color(0xFFffd700),
+                          blurRadius: 6 * deckScale,
+                        ),
+                        Shadow(
+                          color: Colors.black.withOpacity(0.95),
+                          blurRadius: 3 * deckScale,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildControls() {

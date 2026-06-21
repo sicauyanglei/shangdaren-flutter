@@ -419,7 +419,8 @@ class GameController {
         _checkMyActionsAfterDraw(skipZimoCheck: true);
         onStateChanged?.call();
         startCountdown();
-      } else if (_getTotalCardCount(state.players[1]) >= 20) {
+      } else if (_getTotalCardCount(state.players[1]) >=
+          _getTargetCardCount(state.players[1])) {
         state.isMyTurn = true;
         state.isDrawing = false;
         _checkMyActionsAfterDraw(skipZimoCheck: true);
@@ -515,7 +516,7 @@ class GameController {
       return;
     }
 
-    if (_getTotalCardCount(player) >= 20) {
+    if (_getTotalCardCount(player) >= _getTargetCardCount(player)) {
       _aiContinueAfterDraw(player, skipZimoCheck: true);
       return;
     }
@@ -1938,12 +1939,17 @@ class GameController {
     _pendingMeldAction = () {
       final discarder = state.players[discardPlayerId];
       discarder.discards.remove(card);
+      // card从弃牌堆移到melds，publicCardCount净变化为0（-1+1）
       _addToPublicCount(card.character, -1);
 
       player.melds.add(
         Meld(cards: pengCards, type: MeldType.kan, isJing: card.isJing),
       );
       HuCalculator.updateMeldHuCache(player);
+      // melds中的3张牌都需要计入publicCardCount
+      // card：从弃牌堆移到melds，需要+1补回上面的-1
+      // matching[0]/[1]：从手牌移到melds，需要+1
+      _addToPublicCount(card.character, 1);
       _addToPublicCount(matching[0].character, 1);
       _addToPublicCount(matching[1].character, 1);
       player.hand.remove(matching[0]);
@@ -2025,6 +2031,8 @@ class GameController {
     _pendingMeldAction = () {
       final discarder = state.players[discardPlayerId];
       discarder.discards.remove(card);
+      // card从弃牌堆移到melds，publicCardCount净变化为0（-1+1）
+      // 这里只做-1移除弃牌堆计数，melds中的card计数在下面统一添加
       _addToPublicCount(card.character, -1);
 
       player.melds.add(
@@ -2035,6 +2043,10 @@ class GameController {
         ),
       );
       HuCalculator.updateMeldHuCache(player);
+      // melds中的3张牌都需要计入publicCardCount
+      // card：从弃牌堆移到melds，需要+1补回上面的-1
+      // chiCards[0]/[1]：从手牌移到melds，需要+1
+      _addToPublicCount(card.character, 1);
       _addToPublicCount(chiCards[0].character, 1);
       _addToPublicCount(chiCards[1].character, 1);
       player.hand.remove(chiCards[0]);
@@ -2100,7 +2112,7 @@ class GameController {
   }
 
   bool _canZhaoAfterDraw(Player player) {
-    if (_getTotalCardCount(player) < 20) return false;
+    if (_getTotalCardCount(player) < _getTargetCardCount(player)) return false;
     return _getZhaoCandidates(player).isNotEmpty;
   }
 
@@ -2113,11 +2125,29 @@ class GameController {
   }
 
   int _getTotalCardCount(Player player) {
-    return player.hand.length + player.melds.length * 3;
+    // 正确计算melds中的实际牌数（招是4张牌，不是3张）
+    int meldCards = 0;
+    for (final meld in player.melds) {
+      meldCards += meld.cards.length;
+    }
+    return player.hand.length + meldCards;
+  }
+
+  /// 计算玩家出牌前的目标总牌数（手牌+组合牌）
+  /// 基础20张，每个招+1张（招是4张牌但占1个句位）
+  int _getTargetCardCount(Player player) {
+    int zhaoCount = 0;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.zhao) zhaoCount++;
+    }
+    return 20 + zhaoCount;
   }
 
   bool _canHuWith(Player player, Card card) {
-    if (_getTotalCardCount(player) >= 20) return false;
+    // 胡别人出的牌：此时总牌数=目标-1（出牌后未摸牌状态）
+    if (_getTotalCardCount(player) != _getTargetCardCount(player) - 1) {
+      return false;
+    }
     // 单钓听限制：不能胡单钓的这张字
     if (player.tingType == TingType.singleWait) {
       final singleCard = player.tingCards.isNotEmpty
@@ -2132,7 +2162,10 @@ class GameController {
   }
 
   bool _canPengWith(Player player, Card card) {
-    if (_getTotalCardCount(player) >= 20) return false;
+    // 碰别人出的牌：此时总牌数=目标-1（出牌后未摸牌状态）
+    if (_getTotalCardCount(player) >= _getTargetCardCount(player)) {
+      return false;
+    }
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -2140,7 +2173,10 @@ class GameController {
   }
 
   bool _canZhaoWith(Player player, Card card) {
-    if (_getTotalCardCount(player) != 19) return false;
+    // 招别人出的牌：此时总牌数=目标-1（出牌后未摸牌状态）
+    if (_getTotalCardCount(player) != _getTargetCardCount(player) - 1) {
+      return false;
+    }
     final count = player.hand
         .where((c) => c.character == card.character)
         .length;
@@ -2153,7 +2189,9 @@ class GameController {
     Card card,
     int discardPlayerId,
   ) {
-    if (_getTotalCardCount(player) >= 20) return false;
+    if (_getTotalCardCount(player) >= _getTargetCardCount(player)) {
+      return false;
+    }
     final isNextPlayer = playerIndex == (discardPlayerId + 1) % 3;
     if (!isNextPlayer) return false;
     return _findChiCards(player, card) != null;
