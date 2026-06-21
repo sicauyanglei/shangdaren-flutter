@@ -2273,103 +2273,105 @@ class _ReplayScreenState extends State<ReplayScreen>
     // 胡型颜色
     Color huTypeColor = _getHuTypeColor(huType);
 
-    final panelW = 600.0;
-    final panelH = isLiuju ? 120.0 : 280.0;
+    final panelW = 640.0;
+    final panelH = isLiuju ? 100.0 : 220.0;
 
     // 计算手牌高度（设计坐标）
     final handGroupH = _calcHandGroupH();
     // 手牌定位: bottom: -80*scale, 视觉高度: handGroupH*scale
     // 手牌顶部距Stack底部 = (handGroupH - 80) * scale
-    // 面板底部在手牌顶部上方20px(设计坐标)
-    // 面板底部距Stack底部 = (handGroupH - 80 + 20) * scale = (handGroupH - 60) * scale
-    final panelBottom = (handGroupH - 60) * scale;
+    // 面板底部在手牌顶部上方10px(设计坐标，与game_board一致)
+    // 面板底部距Stack底部 = (handGroupH - 80 + 10) * scale = (handGroupH - 70) * scale
+    final panelBottom = (handGroupH - 70) * scale;
 
     return Positioned(
       left: (designWidth - panelW) / 2 * scale,
       bottom: panelBottom,
-      width: panelW * scale,
-      height: panelH * scale,
       child: Transform.scale(
         scale: scale,
         alignment: Alignment.bottomCenter,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-          decoration: BoxDecoration(
-            color: const Color(0xF01a472a),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFffd700), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFffd700).withOpacity(0.3),
-                blurRadius: 20,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 标题
-              Text(
-                isLiuju ? '流局' : '$winnerName 胡牌!',
-                style: TextStyle(
-                  fontSize: 28,
-                  color: const Color(0xFFffd700),
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(
-                      color: const Color(0xFFffd700).withOpacity(0.5),
-                      blurRadius: 10,
-                    ),
-                  ],
+        child: SizedBox(
+          width: panelW,
+          height: panelH,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xF01a472a),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFffd700), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFffd700).withOpacity(0.3),
+                  blurRadius: 20,
                 ),
-              ),
-              if (isLiuju) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  '牌堆已空，本局结束',
-                  style: TextStyle(fontSize: 18, color: Colors.white70),
-                ),
-              ] else ...[
-                const SizedBox(height: 16),
-                // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _buildResultTag(
-                      method,
-                      Colors.white,
-                      Colors.white.withOpacity(0.1),
-                    ),
-                    _buildResultTag(
-                      huType,
-                      huTypeColor,
-                      huTypeColor.withOpacity(0.2),
-                    ),
-                    _buildResultTag(
-                      '$huCount胡',
-                      const Color(0xFFffd700),
-                      const Color(0x33ffd700),
-                    ),
-                    _buildResultTag(
-                      '$multiplier倍',
-                      const Color(0xFFff6b6b),
-                      const Color(0x33ff6b6b),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // 玩家分数变化
-                if (scoreChanges != null)
-                  ..._buildScoreChanges(
-                    scoreChanges,
-                    winnerIndex,
-                    dianpaoIndex,
-                    method,
-                  ),
               ],
-            ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 标题
+                Text(
+                  isLiuju ? '流局' : '$winnerName 胡牌!',
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: const Color(0xFFffd700),
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFFffd700).withOpacity(0.5),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+                if (isLiuju) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    '牌堆已空，本局结束',
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  // 胡牌信息行：方法 + 胡型 + 胡数 + 倍数
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _buildResultTag(
+                        method,
+                        Colors.white,
+                        Colors.white.withOpacity(0.1),
+                      ),
+                      _buildResultTag(
+                        huType,
+                        huTypeColor,
+                        huTypeColor.withOpacity(0.2),
+                      ),
+                      _buildResultTag(
+                        '$huCount胡',
+                        const Color(0xFFffd700),
+                        const Color(0x33ffd700),
+                      ),
+                      _buildResultTag(
+                        '$multiplier倍',
+                        const Color(0xFFff6b6b),
+                        const Color(0x33ff6b6b),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // 玩家分数变化
+                  if (scoreChanges != null)
+                    ..._buildScoreChanges(
+                      scoreChanges,
+                      winnerIndex,
+                      dianpaoIndex,
+                      method,
+                    ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
