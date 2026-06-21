@@ -1437,6 +1437,9 @@ class AIStrategyHard extends AIStrategy {
 
     double score = potential;
 
+    // 提前计算出牌后胡数，用于后续胡数相关判断
+    final huAfter = _evaluateHuScore(testPlayer);
+
     // 门结构评分补充（按 men-structure-score.md 规则）
     // 计算出牌后所有门的结构总分变化，作为细粒度门级评估
     final menScoreAfter = _evaluateAllMenStructure(
@@ -1464,6 +1467,8 @@ class AIStrategyHard extends AIStrategy {
       heiYuanPotential,
       hongYuanPotential,
       kuHuPotential,
+      huBefore,
+      huAfter,
     );
     score += cardGroupTypeScore * 0.5;
 
@@ -1487,7 +1492,21 @@ class AIStrategyHard extends AIStrategy {
     if (cardToDiscard.isJing) {
       // 黑元路线下，精字(上/福)是门1/8牌，需要优先打出清理，不惩罚
       if (heiYuanPotential <= 0) {
-        score -= 80;
+        // 胡数足够(>=11)且出牌后仍>=11时，精字惩罚大幅降低
+        // 因为胡数已够，精字的胡数价值降低，进张效率更重要
+        if (huBefore >= 11 && huAfter >= 11) {
+          // 检查是否为孤张型（该门在手牌中只有这1张牌）
+          final sameGroupInHand = player.hand
+              .where((c) => c.sentence == cardToDiscard.sentence)
+              .length;
+          if (sameGroupInHand == 1) {
+            score -= 10; // 孤张型精字，进张少，轻微惩罚
+          } else {
+            score -= 40; // 非孤张型，中等惩罚
+          }
+        } else {
+          score -= 80;
+        }
       } else {
         // 黑元路线下主动奖励出精字（门1/8牌）
         score += 150;
@@ -1495,7 +1514,18 @@ class AIStrategyHard extends AIStrategy {
     } else if (_isYin(cardToDiscard)) {
       // 黑元路线下，银字(大/人/禄/寿)也是门1/8牌，不惩罚
       if (heiYuanPotential <= 0) {
-        score -= 20;
+        if (huBefore >= 11 && huAfter >= 11) {
+          final sameGroupInHand = player.hand
+              .where((c) => c.sentence == cardToDiscard.sentence)
+              .length;
+          if (sameGroupInHand == 1) {
+            score -= 5; // 孤张型银字，进张少，轻微惩罚
+          } else {
+            score -= 10; // 非孤张型，轻微惩罚
+          }
+        } else {
+          score -= 20;
+        }
       } else {
         // 黑元路线下主动奖励出银字（门1/8牌）
         score += 150;
@@ -2002,7 +2032,6 @@ class AIStrategyHard extends AIStrategy {
 
     // 胡数评估：听牌胡型条件要求总胡数>=11（特殊胡牌类型除外）
     // 出牌导致胡数下降时惩罚，破坏胡数资格时重罚
-    final huAfter = _evaluateHuScore(testPlayer);
     final huLoss = huBefore - huAfter;
     // 黑元路线下，打出门1/8牌(精字/银字)会损失胡数，但这是清理门1/8的必要代价
     // 黑元是特殊胡牌类型，不受11胡限制，所以不惩罚门1/8牌的胡数损失
@@ -2015,9 +2044,29 @@ class AIStrategyHard extends AIStrategy {
       // 胡数不足11时，每损失1胡的代价更大
       score -= huLoss * 50;
     } else if (huLoss > 0 && !skipHuLossPenalty) {
-      // 胡数够了(>=11)时，损失精靠/精对等高胡数牌型仍需重罚
-      // 精靠4胡、金对8胡等破坏代价大，权重提高到40
-      score -= huLoss * 40;
+      // 胡数够了(>=11)时，如果出牌后仍>=11，降低胡数损失惩罚
+      // 特别是门1/8孤张，进张效率比保留胡数更重要
+      if (huAfter >= 11) {
+        if (isDiscardGroup18) {
+          // 门1/8牌：胡数损失惩罚大幅降低，因为进张效率更重要
+          final sameGroupInHand = player.hand
+              .where((c) => c.sentence == cardToDiscard.sentence)
+              .length;
+          if (sameGroupInHand == 1) {
+            // 孤张型：进张最少，惩罚最低
+            score -= huLoss * 8;
+          } else {
+            // 非孤张型：中等惩罚
+            score -= huLoss * 20;
+          }
+        } else {
+          // 门2-7牌：胡数损失仍需惩罚，但比原来轻
+          score -= huLoss * 25;
+        }
+      } else {
+        // 出牌后胡数<11，保持重罚
+        score -= huLoss * 40;
+      }
     }
     // 十对、黑元、红元、枯胡路线是特殊胡牌类型，不受胡数>=11限制
     if (huBefore >= 11 &&
@@ -2028,6 +2077,30 @@ class AIStrategyHard extends AIStrategy {
         kuHuPotential <= 0) {
       // 出牌破坏了胡牌的胡数资格，重罚
       score -= 600;
+    }
+
+    // 胡数足够(>=11)且出牌后仍>=11时，进张效率加分
+    // 进张少的孤张优先出（因为保留它进张收益低，不如保留进张多的牌）
+    if (huBefore >= 11 &&
+        huAfter >= 11 &&
+        shiDuiPotential <= 0 &&
+        heiYuanPotential <= 0 &&
+        hongYuanPotential <= 0 &&
+        kuHuPotential <= 0) {
+      final discardGroupForJinZhang = cardToDiscard.sentence;
+      final sameGroupInHand = player.hand
+          .where((c) => c.sentence == discardGroupForJinZhang)
+          .length;
+      if (sameGroupInHand == 1) {
+        // 孤张型：计算进张数（该字剩余张数，只能进对）
+        final rem = _remainingCount(cardToDiscard.character, visibleCount);
+        // 进张越少，越应该出掉（保留收益低）
+        if (rem <= 1) {
+          score += 60; // 进张极少，强烈建议出
+        } else if (rem <= 2) {
+          score += 30; // 进张较少，建议出
+        }
+      }
     }
 
     if (isLate) {
@@ -3797,6 +3870,8 @@ class AIStrategyHard extends AIStrategy {
     double heiYuanPotential,
     double hongYuanPotential,
     double kuHuPotential,
+    int huBefore,
+    int huAfter,
   ) {
     final sentence = cardToDiscard.sentence;
     final hand = player.hand;
@@ -3945,9 +4020,22 @@ class AIStrategyHard extends AIStrategy {
 
     // 10. 精字保护（门1/8的精字上/福）
     if (cardToDiscard.isJing) {
-      // 精字提供高胡数，除非黑元路线，否则重罚
+      // 精字提供高胡数，除非黑元路线，否则惩罚
       if (heiYuanPotential <= 0) {
-        cardSelectionBonus -= 100;
+        // 胡数足够(>=11)且出牌后仍>=11时，精字惩罚大幅降低
+        // 因为胡数已够，精字的胡数价值降低，进张效率更重要
+        if (huBefore >= 11 && huAfter >= 11) {
+          final sameGroupInHand = player.hand
+              .where((c) => c.sentence == cardToDiscard.sentence)
+              .length;
+          if (sameGroupInHand == 1) {
+            cardSelectionBonus -= 15; // 孤张型精字，轻微惩罚
+          } else {
+            cardSelectionBonus -= 50; // 非孤张型，中等惩罚
+          }
+        } else {
+          cardSelectionBonus -= 100;
+        }
       }
     }
 
