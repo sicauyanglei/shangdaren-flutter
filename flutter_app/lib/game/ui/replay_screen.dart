@@ -60,6 +60,51 @@ class _HuBadgeInfo {
   _HuBadgeInfo({required this.text, required this.isPrimary});
 }
 
+/// 飞分动画状态
+class _FlyingScore {
+  final int scoreChange;
+  final bool isGain;
+  double x, y;
+  final double fromX, fromY;
+  final double toX, toY;
+  final double duration;
+  double elapsed;
+  bool arrived;
+  double arriveElapsed;
+  static const double arriveDuration = 1.2;
+
+  _FlyingScore({
+    required this.scoreChange,
+    required this.isGain,
+    required this.fromX,
+    required this.fromY,
+    required this.toX,
+    required this.toY,
+    this.duration = 1.5,
+  })  : x = fromX,
+        y = fromY,
+        elapsed = 0,
+        arrived = false,
+        arriveElapsed = 0;
+
+  bool update(double dt) {
+    if (arrived) {
+      arriveElapsed += dt;
+      return arriveElapsed >= arriveDuration;
+    }
+    elapsed += dt;
+    final t = (elapsed / duration).clamp(0.0, 1.0);
+    // easeInOutCubic
+    final eased = t < 0.5 ? 4 * t * t * t : 1 - math.pow(-2 * t + 2, 3) / 2;
+    x = fromX + (toX - fromX) * eased;
+    y = fromY + (toY - fromY) * eased;
+    if (t >= 1.0) {
+      arrived = true;
+    }
+    return false;
+  }
+}
+
 class _ReplayScreenState extends State<ReplayScreen>
     with TickerProviderStateMixin {
   List<List<Card>> _hands = <List<Card>>[];
@@ -89,6 +134,9 @@ class _ReplayScreenState extends State<ReplayScreen>
 
   // 回放结束后的结果面板
   bool _showResult = false;
+  bool _scoreAnimPlayed = false;
+  final List<_FlyingScore> _flyingScores = [];
+  Timer? _scoreAnimTimer;
 
   // 牌局页面设计尺寸
   static const double designWidth = 1280.0;
@@ -154,6 +202,9 @@ class _ReplayScreenState extends State<ReplayScreen>
     _isPlaying = true;
     _isPaused = false;
     _showResult = false;
+    _scoreAnimPlayed = false;
+    _flyingScores.clear();
+    _scoreAnimTimer?.cancel();
     _playNextAction();
   }
 
@@ -173,11 +224,14 @@ class _ReplayScreenState extends State<ReplayScreen>
   void _stopReplay() {
     _timer?.cancel();
     _animTimer?.cancel();
+    _scoreAnimTimer?.cancel();
     _flyingCards.clear();
+    _flyingScores.clear();
     _animInProgress = false;
     _isPlaying = false;
     _isPaused = false;
     _showResult = false;
+    _scoreAnimPlayed = false;
     _initHands();
     _currentActionIndex = -1;
     setState(() {
@@ -194,6 +248,10 @@ class _ReplayScreenState extends State<ReplayScreen>
         _showResult = true;
         _statusText = '回放结束';
       });
+      if (!_scoreAnimPlayed) {
+        _scoreAnimPlayed = true;
+        _triggerScoreAnimation();
+      }
       return;
     }
     _currentActionIndex++;
@@ -720,6 +778,7 @@ class _ReplayScreenState extends State<ReplayScreen>
   void dispose() {
     _timer?.cancel();
     _animTimer?.cancel();
+    _scoreAnimTimer?.cancel();
     _animController?.dispose();
     super.dispose();
   }
@@ -748,6 +807,130 @@ class _ReplayScreenState extends State<ReplayScreen>
     }
     if (maxStack == 0) return 0;
     return (maxStack - 1) * handStackVisible + handCardH;
+  }
+
+  /// 获取头像分数目标位置（设计坐标）
+  Offset _getAvatarScorePosition(int playerIndex) {
+    final positions = _positionMap;
+    final leftIdx = positions[0];
+    final bottomIdx = positions[2];
+    final rightIdx = positions[1];
+    if (playerIndex == leftIdx) {
+      return Offset(aiAvatarLeft + 250 - 60, aiAvatarTop + 14 + 24 + 4);
+    } else if (playerIndex == bottomIdx) {
+      return Offset(
+        myAvatarLeft + 250 - 60,
+        designHeight - myAvatarBottom - 14 - 24 - 4 - 20,
+      );
+    } else {
+      return Offset(designWidth - 9.6 - 250 + 20, aiAvatarTop + 14 + 24 + 4);
+    }
+  }
+
+  /// 触发飞分动画
+  void _triggerScoreAnimation() {
+    final resultData = widget.replay.resultData;
+    if (resultData == null) return;
+
+    final winnerIndex = resultData['winnerIndex'] as int? ?? -1;
+    final scoreChanges = resultData['scoreChanges'] as Map<String, dynamic>?;
+    if (winnerIndex < 0 || scoreChanges == null) return;
+
+    // 流局不需要飞分
+    final isLiuju = widget.replay.resultType == 'liuju';
+    if (isLiuju) return;
+
+    // 计算面板位置（设计坐标）
+    // 面板使用 bottom: (handGroupH - 60) * scale 定位
+    // 面板顶部Y = designHeight - (handGroupH - 60) - panelH
+    final panelH = 280.0;
+    final handGroupH = _calcHandGroupH();
+    final panelTopY = designHeight - (handGroupH - 60) - panelH;
+    // 面板中心X
+    final cx = designWidth / 2;
+    // 赢家分数Y位置（面板内偏上）
+    final winnerScoreY = panelTopY + 130;
+    // 输家分数Y位置
+    final losersY = panelTopY + 190;
+
+    // 计算输家位置
+    final losers = <int>[];
+    for (int i = 0; i < 3; i++) {
+      if (i == winnerIndex) continue;
+      final s = scoreChanges[i] as int? ?? 0;
+      if (s != 0) losers.add(i);
+    }
+
+    final loserGap = 16.0;
+    final loserPadH = 16.0;
+    final loserFontSize = 14.0;
+    final loserScoreFontSize = 20.0;
+
+    final loserWidths = <double>[];
+    double totalLoserW = 0;
+    for (final li in losers) {
+      // 估算输家宽度
+      final nameLen = widget.replay.playerNames[li].length;
+      final w = (nameLen * loserFontSize * 0.7 + loserScoreFontSize * 2.5)
+          .clamp(60.0, 120.0) +
+          loserPadH * 2;
+      loserWidths.add(w);
+      totalLoserW += w;
+    }
+    totalLoserW += (losers.isNotEmpty ? losers.length - 1 : 0) * loserGap;
+
+    var loserX = cx - totalLoserW / 2;
+
+    // 创建飞分动画
+    for (int i = 0; i < 3; i++) {
+      final s = scoreChanges[i] as int? ?? 0;
+      if (s == 0) continue;
+
+      double fromX, fromY;
+      if (i == winnerIndex) {
+        fromX = cx;
+        fromY = winnerScoreY;
+      } else {
+        final loserIdx = losers.indexOf(i);
+        if (loserIdx >= 0) {
+          final lw = loserWidths[loserIdx];
+          fromX = loserX + lw / 2;
+          fromY = losersY;
+          loserX += lw + loserGap;
+        } else {
+          continue;
+        }
+      }
+
+      final targetPos = _getAvatarScorePosition(i);
+      _flyingScores.add(
+        _FlyingScore(
+          scoreChange: s,
+          isGain: i == winnerIndex,
+          fromX: fromX,
+          fromY: fromY,
+          toX: targetPos.dx,
+          toY: targetPos.dy,
+          duration: 1.5,
+        ),
+      );
+    }
+
+    if (_flyingScores.isEmpty) return;
+
+    // 启动动画定时器
+    _scoreAnimTimer?.cancel();
+    _scoreAnimTimer = Timer.periodic(
+      const Duration(milliseconds: 16),
+      (_) {
+        final dt = 0.016;
+        _flyingScores.removeWhere((fs) => fs.update(dt));
+        setState(() {});
+        if (_flyingScores.isEmpty) {
+          _scoreAnimTimer?.cancel();
+        }
+      },
+    );
   }
 
   /// 根据主视角获取位置映射
@@ -870,6 +1053,8 @@ class _ReplayScreenState extends State<ReplayScreen>
           // 胡牌徽章（赢家/点炮者头像旁边）
           if (_showResult && widget.replay.resultType == 'hu')
             ..._buildHuBadges(scale, positions),
+          // 飞分动画
+          if (_flyingScores.isNotEmpty) _buildFlyingScoreOverlay(scale),
           // 控制栏
           _buildControls(),
         ],
@@ -1692,6 +1877,59 @@ class _ReplayScreenState extends State<ReplayScreen>
                           ),
                         ),
                       ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  /// 构建飞分动画Overlay层
+  Widget _buildFlyingScoreOverlay(double scale) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: _flyingScores.map((fs) {
+            final text = fs.isGain ? '+${fs.scoreChange}' : '-${fs.scoreChange}';
+            final color =
+                fs.isGain ? const Color(0xFFffd700) : const Color(0xFFff6b6b);
+
+            double alpha = 1.0;
+            double fontSize = 36.0;
+            if (fs.arrived) {
+              fontSize = 20.0;
+              final at = fs.arriveElapsed / _FlyingScore.arriveDuration;
+              if (at > 0.7) {
+                alpha = 1.0 - (at - 0.7) / 0.3;
+              }
+            }
+
+            return Positioned(
+              left: fs.x * scale - 30,
+              top: fs.y * scale - 20,
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: fontSize * scale,
+                  fontWeight: FontWeight.bold,
+                  color: color.withOpacity(alpha.clamp(0.0, 1.0)),
+                  shadows: [
+                    Shadow(
+                      color: color.withOpacity(0.6 * alpha.clamp(0.0, 1.0)),
+                      blurRadius: 12 * scale,
+                    ),
+                    Shadow(
+                      color: color.withOpacity(0.3 * alpha.clamp(0.0, 1.0)),
+                      blurRadius: 24 * scale,
+                    ),
+                    Shadow(
+                      color: const Color(0x88000000),
+                      blurRadius: 4 * scale,
+                    ),
+                  ],
+                ),
               ),
             );
           }).toList(),
