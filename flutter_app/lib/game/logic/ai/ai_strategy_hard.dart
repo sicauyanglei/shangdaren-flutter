@@ -4245,29 +4245,30 @@ class AIStrategyHard extends AIStrategy {
 
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
+        // 黑元核心是组句速度：6句+1靠，优先形成完整句
         if (chCnt == 3) {
-          // 坎（3张同字）- 优先清理
+          // 坎（3张同字）- 优先清理（坎离成句远，黑元不要坎）
           bonus += 1500;
+        } else if (hasAllThree && chCnt == 2) {
+          // 普句多一张：出一张即形成完整句，黑元组句速度核心，高分鼓励
+          bonus += 400;
+          if (isJingMen) bonus += 300; // 门1/8更优先
         } else if (chCnt == 2) {
-          // 对子
+          // 对子（非普句多一张场景）
           final otherChars = groupChars.where((c) => c != ch).toList();
           int otherRem = 0;
           for (final oc in otherChars) {
             otherRem += _remainingCount(oc, visibleCount);
           }
           if (otherRem <= 2) {
-            bonus += 500; // 死对子
+            bonus += 500; // 死对子（无法成句，优先清理）
           } else {
-            bonus += 250; // 活对子
+            bonus += 250; // 活对子（有成句潜力，但仍鼓励拆）
           }
         } else if (chCnt == 1) {
           // 孤张
           bonus += 200;
           if (isJingMen) bonus += 100; // 门1/8孤张更优先
-        } else if (hasAllThree && chCnt == 2) {
-          // 普句多一张
-          bonus += 120;
-          if (isJingMen) bonus += 300; // 门1/8更优先
         } else if (presentChars.length == 2 && chCnt == 1) {
           // 普靠
           bonus += 50;
