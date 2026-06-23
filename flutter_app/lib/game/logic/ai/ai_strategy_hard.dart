@@ -9,6 +9,23 @@ import '../ting_checker.dart';
 import '../hu_calculator.dart';
 import '../../core/game_logger.dart';
 
+/// 胡牌路线类型（men-structure-score.md 规则三）
+enum _RouteType {
+  normal, // 普通胡
+  heiYuan, // 黑元
+  shiDui, // 十对
+  hongYuan, // 红元
+  kuHu, // 枯胡
+}
+
+/// 游戏阶段（men-structure-score.md 规则二）
+enum _GamePhase {
+  early, // 序盘 >60张
+  mid, // 中盘 30-60张
+  late, // 终盘 <30张
+  flow, // 流局期 <10张
+}
+
 class AIStrategyHard extends AIStrategy {
   static const List<List<String>> _groupChars = [
     ['上', '大', '人'],
@@ -73,6 +90,74 @@ class AIStrategyHard extends AIStrategy {
   // 当前决策玩家的十对路线是否启用
   bool _currentShiDuiEnabled = false;
 
+  // ==================== 路线相关评分体系（men-structure-score.md） ====================
+
+  /// 路线权重
+  static final Map<_RouteType, double> _routeWeight = {
+    _RouteType.normal: 1.0,
+    _RouteType.heiYuan: 1.3,
+    _RouteType.shiDui: 1.5,
+    _RouteType.hongYuan: 1.3,
+    _RouteType.kuHu: 1.2,
+  };
+
+  /// 门2-7组件基础分（路线相关）[招, 坎, 句, 对, 半靠, 孤张]
+  static final Map<_RouteType, List<int>> _men27ComponentScore = {
+    _RouteType.normal: [100, 60, 50, 20, 10, 0],
+    _RouteType.heiYuan: [10, 15, 60, 8, 30, 2],
+    _RouteType.shiDui: [100, 55, 15, 50, 20, 10],
+    _RouteType.hongYuan: [10, 10, 40, 10, 20, 0],
+    _RouteType.kuHu: [5, 90, 10, 40, 5, 0],
+  };
+
+  /// 门1/8精字组件基础分（路线相关）[精招, 精坎, 金对, 精句, 精靠, 精单]
+  static final Map<_RouteType, List<int>> _men18JingComponentScore = {
+    _RouteType.normal: [200, 150, 100, 90, 50, 40],
+    _RouteType.heiYuan: [5, 5, 5, 5, 5, 5],
+    _RouteType.shiDui: [100, 55, 50, 15, 20, 10],
+    _RouteType.hongYuan: [50, 80, 70, 90, 60, 50],
+    _RouteType.kuHu: [5, 120, 50, 10, 5, 5],
+  };
+
+  /// 门1/8银字组件基础分（路线相关）[银对, 银靠, 银单]
+  static final Map<_RouteType, List<int>> _men18YinComponentScore = {
+    _RouteType.normal: [20, 10, 0],
+    _RouteType.heiYuan: [5, 5, 5],
+    _RouteType.shiDui: [50, 20, 10],
+    _RouteType.hongYuan: [20, 30, 10],
+    _RouteType.kuHu: [40, 5, 0],
+  };
+
+  /// 组件索引：门2-7
+  static const int _idxZhao = 0; // 招
+  static const int _idxKan = 1; // 坎
+  static const int _idxJu = 2; // 句
+  static const int _idxDui = 3; // 对
+  static const int _idxKao = 4; // 半靠
+  static const int _idxGu = 5; // 孤张
+
+  /// 组件索引：门1/8精字
+  static const int _idxJingZhao = 0; // 精招
+  static const int _idxJingKan = 1; // 精坎
+  static const int _idxJinDui = 2; // 金对
+  static const int _idxJingJu = 3; // 精句
+  static const int _idxJingKao = 4; // 精靠
+  static const int _idxJingDan = 5; // 精单
+
+  /// 组件索引：门1/8银字
+  static const int _idxYinDui = 0; // 银对
+  static const int _idxYinKao = 1; // 银靠
+  static const int _idxYinDan = 2; // 银单
+
+  /// 当前决策的主路线（缓存）
+  _RouteType? _currentRoute;
+
+  /// 路线切换冷却期（剩余回合数）
+  int _routeSwitchCooldown = 0;
+
+  /// 上次路线切换时的discards.length
+  int? _lastSwitchDiscardLen;
+
   String _tingCacheKey(Player player) {
     return _handCacheKey(player.hand, player.melds);
   }
@@ -91,10 +176,12 @@ class AIStrategyHard extends AIStrategy {
   }
 
   void _initCache(Player player, GameState state) {
-    // 检测新局开始，重置十对资格
+    // 检测新局开始，重置十对资格和路线切换冷却
     if (_lastRoundNumber != state.roundNumber) {
       _shiDuiEligible.clear();
       _lastRoundNumber = state.roundNumber;
+      _routeSwitchCooldown = 0;
+      _lastSwitchDiscardLen = null;
     }
 
     _distanceCache.clear();
@@ -105,6 +192,940 @@ class AIStrategyHard extends AIStrategy {
     _cachedCharCount = _buildCharCount(player.hand);
     _cacheOwnerId = player.id;
     _currentShiDuiEnabled = _isShiDuiEligible(player);
+    _currentRoute = _determineMainRoute(player, state);
+  }
+
+  /// 判定主路线（按路线判定优先级 + 动态切换）
+  _RouteType _determineMainRoute(Player player, GameState state) {
+    final totalHu = _evaluateHuScore(player);
+
+    // 计算各路线潜力值
+    final routePotentials = _calculateAllRoutePotentials(player, totalHu);
+
+    // 找到潜力值最高的路线
+    _RouteType bestRoute = _RouteType.normal;
+    double bestPotential = routePotentials[_RouteType.normal]!;
+
+    for (final route in _RouteType.values) {
+      if (route == _RouteType.normal) continue;
+      final potential = routePotentials[route]!;
+      if (potential > bestPotential) {
+        bestPotential = potential;
+        bestRoute = route;
+      }
+    }
+
+    // 动态路线切换逻辑（规则六）
+    final currentRoute = _currentRoute ?? _RouteType.normal;
+    if (bestRoute != currentRoute) {
+      final currentPotential = routePotentials[currentRoute]!;
+      // 切换条件：新路线潜力值 > 当前路线潜力值 × 1.3
+      if (bestPotential > currentPotential * 1.3) {
+        // 冷却期检查：3回合内不再切换
+        if (_routeSwitchCooldown > 0) {
+          // 冷却期内不切换，维持当前路线
+          return currentRoute;
+        }
+        // 执行切换
+        _routeSwitchCooldown = 3;
+        _lastSwitchDiscardLen = player.discards.length;
+        return bestRoute;
+      }
+    }
+
+    // 冷却期递减（每回合-1）
+    if (_routeSwitchCooldown > 0 && _lastSwitchDiscardLen != null) {
+      if (player.discards.length > _lastSwitchDiscardLen!) {
+        _routeSwitchCooldown--;
+        _lastSwitchDiscardLen = player.discards.length;
+      }
+    }
+
+    return bestRoute;
+  }
+
+  /// 计算所有路线的潜力值（规则6.2）
+  /// 纳入手牌、组合牌、牌面已知张数动态评估
+  /// 潜力值 = 路线权重 × (当前进度/目标进度) × 100 + 进张概率加成 - 阻塞惩罚
+  Map<_RouteType, double> _calculateAllRoutePotentials(
+    Player player,
+    double totalHu,
+  ) {
+    final potentials = <_RouteType, double>{};
+    final visibleCount = _cachedVisibleCount ?? {};
+    final totalUnknown = _cachedTotalUnknown ?? 1;
+    if (totalUnknown <= 0) {
+      // 未知牌为0，所有路线潜力归零
+      for (final r in _RouteType.values) {
+        potentials[r] = 0.0;
+      }
+      return potentials;
+    }
+
+    // ============ 普通胡潜力值 ============
+    potentials[_RouteType.normal] = _calcNormalRoutePotential(
+      player,
+      totalHu,
+      visibleCount,
+      totalUnknown,
+    );
+
+    // ============ 十对潜力值 ============
+    potentials[_RouteType.shiDui] = _calcShiDuiRoutePotential(
+      player,
+      visibleCount,
+      totalUnknown,
+    );
+
+    // ============ 黑元潜力值 ============
+    potentials[_RouteType.heiYuan] = _calcHeiYuanRoutePotential(
+      player,
+      visibleCount,
+      totalUnknown,
+    );
+
+    // ============ 红元潜力值 ============
+    potentials[_RouteType.hongYuan] = _calcHongYuanRoutePotential(
+      player,
+      visibleCount,
+      totalUnknown,
+    );
+
+    // ============ 枯胡潜力值 ============
+    potentials[_RouteType.kuHu] = _calcKuHuRoutePotential(
+      player,
+      visibleCount,
+      totalUnknown,
+    );
+
+    return potentials;
+  }
+
+  /// 普通胡路线潜力值
+  /// 进度=当前胡数/11，进张概率加成考虑对子→坎、半靠→句、孤张→对/靠
+  double _calcNormalRoutePotential(
+    Player player,
+    double totalHu,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final hand = List<Card>.from(player.hand);
+    final aSet = <Meld>[];
+    final cSet = <Meld>[];
+    final dSet = <Meld>[];
+    HuCalculator.extractJu(hand, aSet);
+    HuCalculator.extractKan(hand, cSet);
+    HuCalculator.extractDuiAndKao(hand, dSet);
+    // hand剩余为E集（孤张）
+
+    double probBonus = 0;
+    int deadCardCount = 0;
+
+    // D集：对子→坎(+3胡)、半靠→句(+6胡附加)
+    for (final meld in dSet) {
+      if (meld.type == MeldType.dui) {
+        final ch = meld.cards.first.character;
+        final rem = _remainingCount(ch, visibleCount);
+        if (rem > 0) {
+          probBonus += (rem / totalUnknown) * 20;
+        } else {
+          deadCardCount++; // 死对子，无法成坎
+        }
+      } else if (meld.type == MeldType.kao) {
+        final chars = meld.cards.map((c) => c.character).toList();
+        final missing = _findMissingCharForSentence(chars);
+        if (missing != null) {
+          final rem = _remainingCount(missing, visibleCount);
+          if (rem > 0) {
+            probBonus += (rem / totalUnknown) * 25; // 半靠成句潜力更高
+          } else {
+            deadCardCount++; // 死半靠
+          }
+        }
+      }
+    }
+
+    // E集：孤张→对/靠/句
+    for (final card in hand) {
+      final rem = _remainingCount(card.character, visibleCount);
+      if (rem <= 0) {
+        deadCardCount++;
+        continue;
+      }
+      // 孤张成对概率
+      probBonus += (rem / totalUnknown) * 5;
+      // 同门其他字成靠潜力
+      final sameSentenceChars = _groupChars[card.sentence - 1]
+          .where((c) => c != card.character)
+          .toList();
+      for (final other in sameSentenceChars) {
+        final otherRem = _remainingCount(other, visibleCount);
+        if (otherRem > 0 && hand.any((c) => c.character == other)) {
+          // 同门已有其他字，孤张+其他字可成靠
+          probBonus += (otherRem / totalUnknown) * 8;
+          break;
+        }
+      }
+    }
+
+    // C集：坎→招(+6胡)
+    for (final meld in cSet) {
+      final ch = meld.cards.first.character;
+      final rem = _remainingCount(ch, visibleCount);
+      if (rem > 0) {
+        probBonus += (rem / totalUnknown) * 15;
+      }
+    }
+
+    // 死牌惩罚：每个死牌降低路线潜力
+    final deadPenalty = deadCardCount * 8.0;
+
+    final progress = (totalHu / 11).clamp(0.0, 1.0);
+    // 胡牌类型倍数层级加分：卡胡(11)倍数1 > 普通胡(12-21)倍数0
+    // 台卡(22)倍数2 > 台胡(23-32)倍数1，重台卡(33)倍数7 > 重台胡(34+)倍数6
+    // 概率相同时优先朝着倍数高的胡牌类型操作
+    final multBonus = _huTypeMultiplierBonus(totalHu, totalHu);
+    return 1.0 * progress * 100 + probBonus - deadPenalty + multBonus * 0.3;
+  }
+
+  /// 十对路线潜力值
+  /// 进度=对数/9，进张概率加成考虑孤张→对、对→(无升级，十对不需要坎)
+  double _calcShiDuiRoutePotential(
+    Player player,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    if (!_currentShiDuiEnabled) return -1.0;
+
+    final pairs = _countHandPairsUnified(player.hand);
+    if (pairs < 6) return -1.0;
+
+    // 统计孤张（手牌中数量为1的字）
+    final byChar = <String, int>{};
+    for (final c in player.hand) {
+      byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+    }
+    final singles = byChar.entries.where((e) => e.value == 1).toList();
+
+    double probBonus = 0;
+    int deadSingleCount = 0;
+
+    // 孤张成对概率
+    for (final entry in singles) {
+      final rem = _remainingCount(entry.key, visibleCount);
+      if (rem > 0) {
+        probBonus += (rem / totalUnknown) * 30; // 十对路线孤张成对价值高
+      } else {
+        deadSingleCount++; // 死孤张，无法成对
+      }
+    }
+
+    // 对子不升级（十对不需要坎），但需保护对子不被拆
+    // 对子中字剩余0张时，对子本身仍有效（十对目标就是对子）
+    // 无需额外惩罚
+
+    // 死孤张惩罚：十对路线下死孤张意味着无法凑成9对
+    final deadPenalty = deadSingleCount * 15.0;
+
+    final progress = pairs / 9;
+    return 1.5 * progress * 100 + probBonus - deadPenalty;
+  }
+
+  /// 黑元路线潜力值
+  /// 进度=(句数+半靠数)/7，进张概率加成考虑半靠→句、孤张→半靠
+  /// 阻塞惩罚：门1/8牌剩余多则难清理
+  double _calcHeiYuanRoutePotential(
+    Player player,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final basePotential = _evaluateHeiYuanPotential(player);
+    if (basePotential <= 0) return -1.0;
+
+    // 统计句数和半靠数
+    final hand = List<Card>.from(player.hand);
+    final aSet = <Meld>[];
+    HuCalculator.extractJu(hand, aSet);
+    int sentenceCount = aSet.length;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.ju) sentenceCount++;
+    }
+
+    // 半靠数（手牌剩余中同门2种字各1张）
+    final bySentence = <int, Set<String>>{};
+    for (final c in hand) {
+      bySentence.putIfAbsent(c.sentence, () => <String>{});
+      bySentence[c.sentence]!.add(c.character);
+    }
+    int halfKaoCount = 0;
+    final halfKaoMissing = <String>[]; // 半靠缺失的字
+    for (final entry in bySentence.entries) {
+      if (entry.value.length == 2) {
+        halfKaoCount++;
+        final missing = _findMissingCharForSentence(entry.value.toList());
+        if (missing != null) halfKaoMissing.add(missing);
+      }
+    }
+
+    // 进张概率加成：半靠→句
+    double probBonus = 0;
+    for (final missing in halfKaoMissing) {
+      final rem = _remainingCount(missing, visibleCount);
+      if (rem > 0) {
+        probBonus += (rem / totalUnknown) * 35; // 黑元核心：半靠成句
+      }
+    }
+
+    // 孤张→半靠潜力（同门已有1字，再摸1字成半靠）
+    for (final entry in bySentence.entries) {
+      if (entry.value.length == 1) {
+        final sentence = entry.key;
+        final otherChars = _groupChars[sentence - 1]
+            .where((c) => !entry.value.contains(c))
+            .toList();
+        for (final other in otherChars) {
+          final rem = _remainingCount(other, visibleCount);
+          if (rem > 0) {
+            probBonus += (rem / totalUnknown) * 12;
+          }
+        }
+      }
+    }
+
+    // 阻塞惩罚：门1/8牌剩余张数（越多越难清理）
+    int men18Count = 0;
+    int men18DeadCount = 0; // 门1/8牌中剩余0张的字数（无法通过摸牌清理，只能等出）
+    for (final c in player.hand) {
+      if (c.sentence == 1 || c.sentence == 8) {
+        men18Count++;
+        final rem = _remainingCount(c.character, visibleCount);
+        if (rem <= 0) men18DeadCount++;
+      }
+    }
+    final men18Penalty = men18Count * 5.0 + men18DeadCount * 10.0;
+
+    final progress = (sentenceCount + halfKaoCount) / 7;
+    return 1.3 * progress * 100 +
+        basePotential * 0.3 +
+        probBonus -
+        men18Penalty;
+  }
+
+  /// 红元路线潜力值
+  /// 进度=门1/8精句数/2，进张概率加成考虑精靠→精句、上/福获取概率
+  double _calcHongYuanRoutePotential(
+    Player player,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final basePotential = _evaluateHongYuanPotential(player);
+    if (basePotential <= 0) return -1.0;
+
+    // 统计门1/8精句数
+    int jingJuCount = 0;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.ju && meld.isJing) jingJuCount++;
+    }
+    final hand = List<Card>.from(player.hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(hand, handASet);
+    for (final meld in handASet) {
+      if (meld.isJing) jingJuCount++;
+    }
+
+    // 上/福总数
+    final allCards = [...player.hand, ...player.melds.expand((m) => m.cards)];
+    final shangCount = allCards.where((c) => c.character == '上').length;
+    final fuCount = allCards.where((c) => c.character == '福').length;
+    final shangFuCount = shangCount + fuCount;
+
+    double probBonus = 0;
+    double blockPenalty = 0;
+
+    // 上/福进张概率（需要3-6张，当前<3时需要更多）
+    if (shangFuCount < 3) {
+      final shangRem = _remainingCount('上', visibleCount);
+      final fuRem = _remainingCount('福', visibleCount);
+      if (shangRem > 0) probBonus += (shangRem / totalUnknown) * 30;
+      if (fuRem > 0) probBonus += (fuRem / totalUnknown) * 30;
+    }
+
+    // 上/福超过6张则红元无望（阻塞）
+    if (shangFuCount > 6) {
+      blockPenalty = 200; // 严重阻塞
+    }
+
+    // 门1/8精靠→精句潜力
+    final handRemaining = List<Card>.from(player.hand);
+    final bySentence18 = <int, Set<String>>{};
+    for (final c in handRemaining) {
+      if (c.sentence == 1 || c.sentence == 8) {
+        bySentence18.putIfAbsent(c.sentence, () => <String>{});
+        bySentence18[c.sentence]!.add(c.character);
+      }
+    }
+    for (final entry in bySentence18.entries) {
+      if (entry.value.length == 2) {
+        // 精靠，缺1字成精句
+        final missing = _findMissingCharForSentence(entry.value.toList());
+        if (missing != null) {
+          final rem = _remainingCount(missing, visibleCount);
+          if (rem > 0) {
+            probBonus += (rem / totalUnknown) * 40; // 精靠成精句价值高
+          } else {
+            blockPenalty += 30; // 死精靠
+          }
+        }
+      }
+    }
+
+    final progress = jingJuCount / 2;
+    return 1.3 * progress * 100 +
+        basePotential * 0.3 +
+        probBonus -
+        blockPenalty;
+  }
+
+  /// 枯胡路线潜力值
+  /// 进度=坎数/6，进张概率加成考虑对子→坎
+  /// 阻塞惩罚：手牌有单张（枯胡不允许单张）
+  double _calcKuHuRoutePotential(
+    Player player,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final basePotential = _evaluateKuHuPotential(player);
+    if (basePotential <= 0) return -1.0;
+
+    // 统计坎数和对数
+    int kanCount = 0;
+    for (final meld in player.melds) {
+      if (meld.type == MeldType.kan) kanCount++;
+      if (meld.type == MeldType.zhao) kanCount++;
+    }
+    final byChar = <String, int>{};
+    for (final c in player.hand) {
+      byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+    }
+    for (final cnt in byChar.values) {
+      if (cnt >= 3) kanCount++;
+    }
+
+    double probBonus = 0;
+    double blockPenalty = 0;
+
+    // 对子→坎潜力
+    for (final entry in byChar.entries) {
+      if (entry.value == 2) {
+        final rem = _remainingCount(entry.key, visibleCount);
+        if (rem > 0) {
+          probBonus += (rem / totalUnknown) * 35; // 枯胡核心：对子成坎
+        } else {
+          blockPenalty += 25; // 死对子，无法成坎
+        }
+      }
+    }
+
+    // 枯胡不允许4张同字（招），检查阻塞
+    for (final entry in byChar.entries) {
+      if (entry.value >= 4) {
+        blockPenalty += 100; // 有招则枯胡无望
+      }
+    }
+
+    final progress = kanCount / 6;
+    return 1.2 * progress * 100 +
+        basePotential * 0.3 +
+        probBonus -
+        blockPenalty;
+  }
+
+  /// 获取路线权重
+  double _getRouteWeight(_RouteType route) {
+    return _routeWeight[route] ?? 1.0;
+  }
+
+  /// 操作路线进度加分（规则二十四）
+  /// 吃(黑元)+50, 碰(枯胡)+50, 碰(普通胡)+30, 招(普通胡)+40
+  double _routeOperationBonus(String operation, _RouteType route) {
+    switch (operation) {
+      case 'chi':
+        // 吃牌形成句，黑元路线+50（黑元需6句，吃1句=进度+1/6）
+        if (route == _RouteType.heiYuan) return 50.0;
+        // 红元路线吃门1/8句+30
+        if (route == _RouteType.hongYuan) return 30.0;
+        return 0.0;
+      case 'peng':
+        // 碰牌形成坎，枯胡路线+50（枯胡需6坎，碰1坎=进度+1/6）
+        if (route == _RouteType.kuHu) return 50.0;
+        // 普通胡路线碰坎+3胡，+30
+        if (route == _RouteType.normal) return 30.0;
+        return 0.0;
+      case 'zhao':
+        // 招牌形成招，普通胡路线+40（招+6胡）
+        if (route == _RouteType.normal) return 40.0;
+        return 0.0;
+      default:
+        return 0.0;
+    }
+  }
+
+  /// 胡牌类型倍数（点炮倍数）
+  /// 11胡=卡胡(1), 12-21=普通胡(0), 22=台卡(2), 23-32=台胡(1), 33=重台卡(7), 34+=重台胡(6)
+  /// "卡"版本倍数高于"胡"版本，应优先瞄准"卡"阈值
+  int _huTypeDianpaoMultiplier(double huCount) {
+    final hu = huCount.toInt();
+    if (hu < 11) return -1; // 不足胡
+    if (hu == 11) return 1; // 卡胡
+    if (hu >= 12 && hu <= 21) return 0; // 普通胡
+    if (hu == 22) return 2; // 台卡
+    if (hu >= 23 && hu <= 32) return 1; // 台胡
+    if (hu == 33) return 7; // 重台卡
+    if (hu >= 34) return 6; // 重台胡
+    return -1;
+  }
+
+  /// 胡牌类型倍数（自摸倍数）
+  int _huTypeZimoMultiplier(double huCount) {
+    final hu = huCount.toInt();
+    if (hu < 11) return -1;
+    if (hu == 11) return 2; // 卡胡
+    if (hu >= 12 && hu <= 21) return 1; // 普通胡
+    if (hu == 22) return 3; // 台卡
+    if (hu >= 23 && hu <= 32) return 2; // 台胡
+    if (hu == 33) return 8; // 重台卡
+    if (hu >= 34) return 7; // 重台胡
+    return -1;
+  }
+
+  /// 胡牌类型倍数层级加分
+  /// 当出牌后胡数落在"卡"阈值(11/22/33)时给予加分，
+  /// 当出牌后胡数从"卡"阈值跳到"胡"范围时给予惩罚
+  /// 概率相同时，优先朝着倍数高的胡牌类型操作
+  double _huTypeMultiplierBonus(double huBefore, double huAfter) {
+    final multBefore = _huTypeDianpaoMultiplier(huBefore);
+    final multAfter = _huTypeDianpaoMultiplier(huAfter);
+
+    // 不足胡的情况不适用
+    if (multBefore < 0 || multAfter < 0) return 0;
+
+    // 倍数提升：加分（如从普通胡0→卡胡1，或从台胡1→台卡2）
+    if (multAfter > multBefore) {
+      return (multAfter - multBefore) * 100.0;
+    }
+
+    // 倍数下降：惩罚（如从卡胡1→普通胡0，或从台卡2→台胡1）
+    if (multAfter < multBefore) {
+      return (multAfter - multBefore) * 150.0; // 惩罚更重，避免降级
+    }
+
+    // 倍数相同：检查是否接近下一个"卡"阈值
+    // 越接近下一个"卡"阈值，加分越高（鼓励向高倍数门槛推进）
+    final huAfterInt = huAfter.toInt();
+    double thresholdBonus = 0;
+    if (huAfterInt >= 12 && huAfterInt <= 21) {
+      // 在普通胡范围(12-21)，越接近22(台卡)加分越高
+      thresholdBonus = (huAfterInt - 11) * 5.0;
+    } else if (huAfterInt >= 23 && huAfterInt <= 32) {
+      // 在台胡范围(23-32)，越接近33(重台卡)加分越高
+      thresholdBonus = (huAfterInt - 22) * 8.0;
+    }
+
+    return thresholdBonus;
+  }
+
+  /// 获取门2-7组件基础分（路线相关）
+  int _getMen27Score(_RouteType route, int componentIdx) {
+    return _men27ComponentScore[route]![componentIdx];
+  }
+
+  /// 获取门1/8精字组件基础分（路线相关）
+  int _getMen18JingScore(_RouteType route, int componentIdx) {
+    return _men18JingComponentScore[route]![componentIdx];
+  }
+
+  /// 获取门1/8银字组件基础分（路线相关）
+  int _getMen18YinScore(_RouteType route, int componentIdx) {
+    return _men18YinComponentScore[route]![componentIdx];
+  }
+
+  /// 统一的对子计数方法（消除3个重复函数）
+  /// 十对路线：3张算1对+1单，4张算2对
+  /// 普通路线：3张算1对，4张算2对
+  int _countHandPairsUnified(List<Card> hand) {
+    final byChar = <String, int>{};
+    for (final card in hand) {
+      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
+    }
+    int pairs = 0;
+    for (final count in byChar.values) {
+      if (count == 2) pairs++;
+      if (count == 3) pairs++; // 三张可拆成1对+1单
+      if (count == 4) pairs += 2;
+    }
+    return pairs;
+  }
+
+  // ==================== 核心计算模块（men-structure-score.md 第四部分） ====================
+
+  /// 进张难度系数（规则13.3）
+  /// ≥3张=1.0, 2张=1.2, 1张=1.5, 0张=∞(返回大数)
+  double _drawDifficulty(int remainingCount) {
+    if (remainingCount <= 0) return 999999.0; // 死听
+    if (remainingCount == 1) return 1.5;
+    if (remainingCount == 2) return 1.2;
+    return 1.0; // ≥3张
+  }
+
+  /// 计算听牌距离（带难度系数）
+  /// 距离 = 需要的进张次数 × 进张难度系数
+  double _distanceToTingWithDifficulty(
+    List<Card> hand,
+    List<Meld> melds,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final baseDist = _distanceToTing(hand, melds);
+    if (baseDist == 0) return 0.0; // 已听牌
+
+    // 计算所需进张字的平均难度系数
+    // 简化：用手牌中孤张和半靠的进张难度估算
+    final remaining = List<Card>.from(hand);
+    final aSet = <Meld>[];
+    final bSet = <Meld>[];
+    final cSet = <Meld>[];
+    final dSet = <Meld>[];
+    final eSet = <Card>[];
+    HuCalculator.extractJu(remaining, aSet);
+    HuCalculator.extractZhao(remaining, bSet);
+    HuCalculator.extractKan(remaining, cSet);
+    HuCalculator.extractDuiAndKao(remaining, dSet);
+    eSet.addAll(remaining);
+
+    double totalDifficulty = 0;
+    int pathCount = 0;
+
+    // 对/靠的进张难度
+    for (final meld in dSet) {
+      if (meld.type == MeldType.dui) {
+        final ch = meld.cards.first.character;
+        final rem = _remainingCount(ch, visibleCount);
+        totalDifficulty += _drawDifficulty(rem);
+        pathCount++;
+      } else if (meld.type == MeldType.kao) {
+        final chars = meld.cards.map((c) => c.character).toList();
+        final missing = _findMissingCharForSentence(chars);
+        if (missing != null) {
+          final rem = _remainingCount(missing, visibleCount);
+          totalDifficulty += _drawDifficulty(rem);
+          pathCount++;
+        }
+      }
+    }
+
+    // 孤张的进张难度（需要先成对/靠）
+    for (final card in eSet) {
+      final otherChars = _groupChars[card.sentence - 1]
+          .where((ch) => ch != card.character)
+          .toList();
+      int minRem = 0;
+      for (final oc in otherChars) {
+        final rem = _remainingCount(oc, visibleCount);
+        if (rem > minRem) minRem = rem;
+      }
+      totalDifficulty += _drawDifficulty(minRem);
+      pathCount++;
+    }
+
+    if (pathCount == 0) return baseDist.toDouble();
+    final avgDifficulty = totalDifficulty / pathCount;
+    return baseDist * avgDifficulty;
+  }
+
+  /// 死听检测（规则16）
+  /// 返回: 0=非死听, 1=半死听(剩余1张), 2=死听(剩余0张)
+  int _detectDeadTing(Player player, Map<String, int> visibleCount) {
+    if (!player.isTing) return 0;
+
+    final tingCards = player.tingCards;
+    if (tingCards.isEmpty) return 0;
+
+    int minRem = 999;
+    for (final tc in tingCards) {
+      final rem = _remainingCount(tc.character, visibleCount);
+      if (rem < minRem) minRem = rem;
+    }
+
+    if (minRem == 0) return 2; // 死听
+    if (minRem == 1) return 1; // 半死听
+    return 0; // 非死听
+  }
+
+  /// 死听检测（给定测试玩家）
+  int _detectDeadTingForTest(Player testPlayer, Map<String, int> visibleCount) {
+    final tingResult = _checkTingCached(testPlayer);
+    if (!tingResult.isTing) return 0;
+
+    final tingCards = tingResult.tingCards;
+    if (tingCards.isEmpty) return 0;
+
+    int minRem = 999;
+    for (final tc in tingCards) {
+      final rem = _remainingCount(tc.character, visibleCount);
+      if (rem < minRem) minRem = rem;
+    }
+
+    if (minRem == 0) return 2; // 死听
+    if (minRem == 1) return 1; // 半死听
+    return 0; // 非死听
+  }
+
+  /// 死听惩罚分（规则16.3-16.4）
+  double _deadTingPenalty(int deadTingLevel) {
+    switch (deadTingLevel) {
+      case 2:
+        return -200; // 死听惩罚
+      case 1:
+        return -50; // 半死听惩罚
+      default:
+        return 0;
+    }
+  }
+
+  /// 摸牌期望值（规则14）
+  /// 摸牌期望值 = Σ(每张未知牌的价值 × 该牌概率)
+  double _drawExpectation(
+    List<Card> hand,
+    List<Meld> melds,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    if (totalUnknown <= 0) return 0;
+
+    double totalValue = 0;
+    final route = _currentRoute ?? _RouteType.normal;
+
+    for (final ch in _allChars) {
+      final rem = _remainingCount(ch, visibleCount);
+      if (rem <= 0) continue;
+
+      final prob = rem / totalUnknown;
+      final sentence = _charSentenceMap[ch]!;
+      final isJingMen = sentence == 1 || sentence == 8;
+      final isJingChar = ch == '上' || ch == '福';
+      final isYinChar = ch == '大' || ch == '人' || ch == '禄' || ch == '寿';
+
+      // 模拟摸到该牌后的价值
+      final testHand = List<Card>.from(hand);
+      testHand.add(
+        Card(
+          id: -1,
+          character: ch,
+          sentence: sentence,
+          position: _charPositionMap[ch]!,
+        ),
+      );
+      final testPlayer = Player(
+        id: -1,
+        name: '',
+        type: PlayerType.ai,
+        hand: testHand,
+        melds: melds,
+      );
+
+      // 检查是否能胡牌（自摸）
+      if (HuCalculator.canHu(testHand, melds)) {
+        totalValue += prob * 1000;
+        continue;
+      }
+
+      // 检查是否能听牌
+      final tingResult = TingChecker.checkTing(testPlayer);
+      if (tingResult.isTing) {
+        totalValue += prob * 500;
+        continue;
+      }
+
+      // 计算组件分提升
+      final byChar = <String, int>{};
+      for (final c in hand) {
+        if (c.sentence == sentence) {
+          byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+        }
+      }
+      final curCnt = byChar[ch] ?? 0;
+      double componentValue = 0;
+
+      if (curCnt == 0) {
+        // 0->1: 可能成靠或孤张
+        final presentChars = _groupChars[sentence - 1]
+            .where((c) => (byChar[c] ?? 0) >= 1)
+            .toList();
+        if (presentChars.length == 2) {
+          componentValue = isJingMen
+              ? _getMen18JingScore(route, _idxJingJu).toDouble()
+              : _getMen27Score(route, _idxJu).toDouble();
+        } else if (presentChars.length == 1) {
+          componentValue =
+              isJingMen &&
+                  (presentChars.contains('上') || presentChars.contains('福'))
+              ? _getMen18JingScore(route, _idxJingKao).toDouble()
+              : (isJingMen
+                    ? _getMen18YinScore(route, _idxYinKao).toDouble()
+                    : _getMen27Score(route, _idxKao).toDouble());
+        } else {
+          componentValue = isJingMen
+              ? (isJingChar
+                    ? _getMen18JingScore(route, _idxJingDan).toDouble()
+                    : (isYinChar
+                          ? _getMen18YinScore(route, _idxYinDan).toDouble()
+                          : _getMen27Score(route, _idxGu).toDouble()))
+              : _getMen27Score(route, _idxGu).toDouble();
+        }
+      } else if (curCnt == 1) {
+        // 1->2: 成对
+        componentValue = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJinDui).toDouble()
+            : (isJingMen && isYinChar
+                  ? _getMen18YinScore(route, _idxYinDui).toDouble()
+                  : _getMen27Score(route, _idxDui).toDouble());
+      } else if (curCnt == 2) {
+        // 2->3: 成坎
+        final before = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJinDui).toDouble()
+            : (isJingMen && isYinChar
+                  ? _getMen18YinScore(route, _idxYinDui).toDouble()
+                  : _getMen27Score(route, _idxDui).toDouble());
+        final after = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJingKan).toDouble()
+            : _getMen27Score(route, _idxKan).toDouble();
+        componentValue = after - before;
+      } else if (curCnt == 3) {
+        // 3->4: 成招
+        final before = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJingKan).toDouble()
+            : _getMen27Score(route, _idxKan).toDouble();
+        final after = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJingZhao).toDouble()
+            : _getMen27Score(route, _idxZhao).toDouble();
+        componentValue = after - before;
+      }
+
+      totalValue += prob * componentValue;
+    }
+
+    return totalValue;
+  }
+
+  /// 牌效评估（规则15）
+  /// 单张牌效 = Σ(组合分 × 组合概率)
+  double _cardEfficiency(
+    Card card,
+    List<Card> hand,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    final route = _currentRoute ?? _RouteType.normal;
+    final sentence = card.sentence;
+    final ch = card.character;
+    final isJingMen = sentence == 1 || sentence == 8;
+    final isJingChar = ch == '上' || ch == '福';
+    final isYinChar = ch == '大' || ch == '人' || ch == '禄' || ch == '寿';
+    final groupChars = _groupChars[sentence - 1];
+
+    double efficiency = 0;
+
+    // 统计同门各字张数
+    final byChar = <String, int>{};
+    for (final c in hand) {
+      if (c.sentence == sentence) {
+        byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+      }
+    }
+    final chCnt = byChar[ch] ?? 0;
+
+    // 路径1: 摸同字成对/坎/招
+    final remSelf = _remainingCount(ch, visibleCount);
+    if (remSelf > 0 && totalUnknown > 0) {
+      final prob = remSelf / totalUnknown;
+      if (chCnt == 1) {
+        // 成对
+        final val = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJinDui).toDouble()
+            : (isJingMen && isYinChar
+                  ? _getMen18YinScore(route, _idxYinDui).toDouble()
+                  : _getMen27Score(route, _idxDui).toDouble());
+        efficiency += prob * val;
+      } else if (chCnt == 2) {
+        // 成坎
+        final val = isJingMen && isJingChar
+            ? _getMen18JingScore(route, _idxJingKan).toDouble()
+            : _getMen27Score(route, _idxKan).toDouble();
+        efficiency += prob * (val - _getMen27Score(route, _idxDui).toDouble());
+      }
+    }
+
+    // 路径2: 摸同门其他字成靠/句
+    for (final oc in groupChars) {
+      if (oc == ch) continue;
+      final rem = _remainingCount(oc, visibleCount);
+      if (rem <= 0 || totalUnknown <= 0) continue;
+      final prob = rem / totalUnknown;
+      final ocCnt = byChar[oc] ?? 0;
+
+      // 如果已有2种字，摸第3种成句
+      final presentChars = groupChars
+          .where((c) => (byChar[c] ?? 0) >= 1)
+          .toList();
+      if (presentChars.length == 2 && !presentChars.contains(oc)) {
+        // 成句
+        final val = isJingMen
+            ? _getMen18JingScore(route, _idxJingJu).toDouble()
+            : _getMen27Score(route, _idxJu).toDouble();
+        efficiency += prob * val;
+      } else if (ocCnt == 0 && chCnt >= 1) {
+        // 成靠
+        final val =
+            isJingMen && (ch == '上' || ch == '福' || oc == '上' || oc == '福')
+            ? _getMen18JingScore(route, _idxJingKao).toDouble()
+            : (isJingMen
+                  ? _getMen18YinScore(route, _idxYinKao).toDouble()
+                  : _getMen27Score(route, _idxKao).toDouble());
+        efficiency += prob * val;
+      }
+    }
+
+    return efficiency;
+  }
+
+  /// 胡数附加分（规则11，仅普通胡路线）
+  double _huScoreBonus(double componentHu, int currentHu, _RouteType route) {
+    if (route != _RouteType.normal) return 0;
+    final huWeight = math.max(0, (11 - currentHu) / 11) * 2;
+    return componentHu * huWeight;
+  }
+
+  /// 胡数资格保护（规则16.9）
+  /// 出牌前胡数≥11 且 出牌后胡数<11 且 无特殊胡牌潜力 → 跳过该出牌
+  bool _shouldProtectHuQualify(
+    int huBefore,
+    int huAfter,
+    double shiDuiPotential,
+    double heiYuanPotential,
+    double hongYuanPotential,
+    double kuHuPotential,
+  ) {
+    if (huBefore >= 11 && huAfter < 11) {
+      // 特殊胡牌潜力>0时，不受11胡限制
+      if (shiDuiPotential > 0 ||
+          heiYuanPotential > 0 ||
+          hongYuanPotential > 0 ||
+          kuHuPotential > 0) {
+        return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   /// 检查玩家是否有资格走十对路线
@@ -135,19 +1156,9 @@ class AIStrategyHard extends AIStrategy {
 
   /// 从手牌计算对子数（十对路线专用，不从组合牌算对子）
   /// 十对要求是手牌10对，组合牌不参与十对计算
+  /// 已统一到 _countHandPairsUnified
   int _countPairsFromHandAndMelds(List<Card> hand, List<Meld> melds) {
-    final byChar = <String, int>{};
-    for (final card in hand) {
-      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
-    }
-    int pairs = 0;
-    for (final count in byChar.values) {
-      if (count == 2) pairs++;
-      if (count == 3) pairs++; // 三张可拆成1对+1单
-      if (count == 4) pairs += 2;
-    }
-    // 十对只看手牌，不从组合牌算对子
-    return pairs;
+    return _countHandPairsUnified(hand);
   }
 
   String _handCacheKey(List<Card> hand, List<Meld> melds) {
@@ -177,40 +1188,43 @@ class AIStrategyHard extends AIStrategy {
   }
 
   bool _isLateGame(GameState state) {
-    return state.deck.length < 20;
+    // 规则：终盘<30张
+    return state.deck.length < 30;
   }
 
   bool _isEarlyGame(GameState state) {
-    return state.deck.length > 50;
+    // 规则：序盘>60张
+    return state.deck.length > 60;
+  }
+
+  bool _isMidGame(GameState state) {
+    // 规则：中盘30-60张
+    final deck = state.deck.length;
+    return deck >= 30 && deck <= 60;
+  }
+
+  bool _isFlowPeriod(GameState state) {
+    // 规则：流局期<10张
+    return state.deck.length < 10;
+  }
+
+  _GamePhase _getGamePhase(GameState state) {
+    final deck = state.deck.length;
+    if (deck < 10) return _GamePhase.flow;
+    if (deck < 30) return _GamePhase.late;
+    if (deck <= 60) return _GamePhase.mid;
+    return _GamePhase.early;
   }
 
   int _countHandPairs(List<Card> hand) {
-    final byChar = <String, int>{};
-    for (final card in hand) {
-      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
-    }
-    int pairs = 0;
-    for (final count in byChar.values) {
-      pairs += count ~/ 2;
-    }
-    return pairs;
+    return _countHandPairsUnified(hand);
   }
 
   /// 计算手牌中的对子数（十对路线专用，不从组合牌算对子）
   /// 十对要求是手牌10对，组合牌不参与十对计算
+  /// 已统一到 _countHandPairsUnified
   int _countHandPairsWithMelds(Player player) {
-    final byChar = <String, int>{};
-    for (final card in player.hand) {
-      byChar[card.character] = (byChar[card.character] ?? 0) + 1;
-    }
-    int pairs = 0;
-    for (final count in byChar.values) {
-      if (count == 2) pairs++;
-      if (count == 3) pairs++; // 三张可拆成1对+1单，十对路线中算1对
-      if (count == 4) pairs += 2;
-    }
-    // 十对只看手牌，不从组合牌算对子
-    return pairs;
+    return _countHandPairsUnified(player.hand);
   }
 
   bool _isPartOfKan(Card card, List<Card> hand) {
@@ -712,7 +1726,15 @@ class AIStrategyHard extends AIStrategy {
     );
 
     final tingAfter = _checkTingCached(testPlayer);
-    if (tingAfter.isTing) return 10000;
+    if (tingAfter.isTing) {
+      // 听牌收益考虑胡牌类型倍数：卡胡/台卡/重台卡倍数更高
+      final huAfter = _evaluateHuScore(testPlayer);
+      final zimoMult = _huTypeZimoMultiplier(huAfter);
+      if (zimoMult > 0) {
+        return 10000 + zimoMult * 200;
+      }
+      return 10000;
+    }
 
     final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
     final normalBefore = _distanceToTingNormal(hand, player.melds);
@@ -901,6 +1923,10 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 路线进度加分（规则二十四）
+    final route = _currentRoute ?? _RouteType.normal;
+    benefit += _routeOperationBonus('chi', route);
+
     return benefit;
   }
 
@@ -1002,7 +2028,15 @@ class AIStrategyHard extends AIStrategy {
 
     // 吃牌后听牌，极大收益
     final tingAfter = _checkTingCached(testPlayer);
-    if (tingAfter.isTing) return 10000;
+    if (tingAfter.isTing) {
+      // 听牌收益考虑胡牌类型倍数：卡胡/台卡/重台卡倍数更高
+      final huAfter = _evaluateHuScore(testPlayer);
+      final zimoMult = _huTypeZimoMultiplier(huAfter);
+      if (zimoMult > 0) {
+        return 10000 + zimoMult * 200;
+      }
+      return 10000;
+    }
 
     final distBefore = _distanceToTing(List<Card>.from(hand), player.melds);
 
@@ -1202,6 +2236,10 @@ class AIStrategyHard extends AIStrategy {
         return -1;
       }
     }
+
+    // 路线进度加分（规则二十四）
+    final route = _currentRoute ?? _RouteType.normal;
+    benefit += _routeOperationBonus('chi', route);
 
     return benefit;
   }
@@ -1551,6 +2589,27 @@ class AIStrategyHard extends AIStrategy {
         kuHuPotential,
       );
 
+      // 胡数资格保护（规则16.9）：出牌前胡数≥11 且 出牌后胡数<11 且 无特殊胡牌潜力 → 跳过
+      final huBefore = _evaluateHuScore(player).toInt();
+      final huAfter = _evaluateHuScore(testPlayer).toInt();
+      if (_shouldProtectHuQualify(
+        huBefore,
+        huAfter,
+        shiDuiPotential,
+        heiYuanPotential,
+        hongYuanPotential,
+        kuHuPotential,
+      )) {
+        scored.add(MapEntry(card, -100000));
+        continue;
+      }
+
+      // 死听检测（规则16）：出牌后导致死听/半死听时施加惩罚
+      if (quickDist <= 2) {
+        final deadTingLevel = _detectDeadTingForTest(testPlayer, visibleCount);
+        score += _deadTingPenalty(deadTingLevel);
+      }
+
       if (hand.length > 3) {
         score += _twoStepLookahead(
           player,
@@ -1741,6 +2800,52 @@ class AIStrategyHard extends AIStrategy {
       huAfterInt,
     );
     score += cardGroupTypeScore * 0.5;
+
+    // 路线出牌优先级加分（规则二十）
+    final routeBonus = _routeDiscardPriorityBonus(
+      cardToDiscard,
+      player,
+      huBeforeInt,
+      huAfterInt,
+      visibleCount,
+    );
+    score += routeBonus * 0.3;
+
+    // 胡牌类型倍数层级加分（概率相同时优先朝着倍数高的胡牌类型操作）
+    // 卡胡(11胡,倍数1) > 普通胡(12-21胡,倍数0)
+    // 台卡(22胡,倍数2) > 台胡(23-32胡,倍数1)
+    // 重台卡(33胡,倍数7) > 重台胡(34+胡,倍数6)
+    // 仅普通胡路线适用（特殊路线不受胡数门槛限制）
+    final route = _currentRoute ?? _RouteType.normal;
+    if (route == _RouteType.normal &&
+        shiDuiPotential <= 0 &&
+        heiYuanPotential <= 0 &&
+        hongYuanPotential <= 0 &&
+        kuHuPotential <= 0) {
+      final multBonus = _huTypeMultiplierBonus(huBefore, huAfter);
+      score += multBonus * 0.5;
+    }
+
+    // 流局期防守策略（规则34）
+    if (_isFlowPeriod(state)) {
+      final defenseMult = _flowDefenseMultiplier(state);
+      // 流局期防守权重提升
+      if (_shouldDefendInFlowPeriod(player, state)) {
+        // 放弃进攻，优先出安全牌
+        if (_isSafeCard(cardToDiscard, player, state, visibleCount)) {
+          score += 500 * defenseMult;
+        }
+      }
+      // 流局期危险分加权
+      final danger = _evaluateDanger(
+        player,
+        cardToDiscard,
+        state,
+        isLate,
+        myDist: quickDist,
+      );
+      score -= danger * defenseMult;
+    }
 
     double lookaheadScore = 0;
     if (distToTing <= 4) {
@@ -2017,6 +3122,24 @@ class AIStrategyHard extends AIStrategy {
             // 黑元路线下优先出坎中的牌，清理张数最多的牌
             // 大幅奖励出坎，覆盖potential和lookaheadScore的差距
             score += 1500 + group18Bonus; // 坎优先出，覆盖其他评分项差距
+          } else if (discardCountInGroup >= 2) {
+            // 对子（2张同字）：黑元需要6句+1靠，对子不能作将牌
+            // 检查是否为死对子（同门其他字剩余张数很少，无法成句）
+            final otherChars = _groupChars[discardGroup - 1]
+                .where((ch) => ch != cardToDiscard.character)
+                .toList();
+            int otherRem = 0;
+            for (final ch in otherChars) {
+              otherRem += _remainingCount(ch, visibleCount);
+            }
+            if (otherRem <= 2) {
+              // 死对子：同门其他字剩余很少，无法成句，黑元路线下完全无用
+              // 大幅加分，超过孤张，确保优先出死对子
+              score += 500 + group18Bonus;
+            } else {
+              // 活对子：有成句潜力，但仍优先拆（黑元不要对子作将牌）
+              score += 250 + group18Bonus;
+            }
           } else {
             score += 200 + group18Bonus; // 孤张最优先，门1/8孤张更优先
           }
@@ -2987,6 +4110,253 @@ class AIStrategyHard extends AIStrategy {
     return danger + zhaoDanger;
   }
 
+  // ==================== 防守策略与流局策略（规则21、34） ====================
+
+  /// 防守阈值（规则21.2）
+  double _defenseThreshold(Player player, GameState state) {
+    final phase = _getGamePhase(state);
+    final huScore = _evaluateHuScore(player);
+
+    if (phase == _GamePhase.flow) {
+      return 30; // 流局期：出牌风险 > 30 → 选安全牌
+    }
+    if (player.isTing && huScore >= 15) {
+      return 50; // 已听+胡数高：出牌风险 > 50 → 选安全牌
+    }
+    if (player.isTing) {
+      return 100; // 听牌后：出牌风险 > 100 → 选安全牌
+    }
+    return 200; // 未听牌：出牌风险 > 200 → 选安全牌
+  }
+
+  /// 流局期防守权重（规则34.3）
+  double _flowDefenseMultiplier(GameState state) {
+    final deck = state.deck.length;
+    if (deck < 3) return 2.0; // 接近流局，全力防守
+    if (deck < 5) return 2.0;
+    if (deck < 10) return 1.5; // 流局期，防守权重提升
+    return 1.0;
+  }
+
+  /// 判断是否为安全牌（规则21.1）
+  bool _isSafeCard(
+    Card card,
+    Player player,
+    GameState state,
+    Map<String, int> visibleCount,
+  ) {
+    // 绝对安全牌：所有4张已可见
+    if (_remainingCount(card.character, visibleCount) == 0) {
+      return true;
+    }
+    // 对手已弃出的字 → 风险低
+    for (int i = 0; i < state.players.length; i++) {
+      if (i == player.id) continue;
+      final other = state.players[i];
+      if (other.discards.any((c) => c.character == card.character)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// 流局策略（规则34.2）
+  /// 返回是否应放弃进攻转为防守
+  bool _shouldDefendInFlowPeriod(Player player, GameState state) {
+    if (!_isFlowPeriod(state)) return false;
+
+    // 未听牌→放弃进攻，全力防守
+    if (!player.isTing) return true;
+
+    // 已听牌但死听→拆听换安全牌
+    final deadTingLevel = _detectDeadTing(player, _cachedVisibleCount ?? {});
+    if (deadTingLevel == 2) return true; // 死听
+
+    // 胡数不足→接受流局，减少损失
+    final huScore = _evaluateHuScore(player);
+    if (huScore < 11) {
+      final shiDuiPotential = _evaluateShiDuiPotential(player, state);
+      final heiYuanPotential = _evaluateHeiYuanPotential(player);
+      final hongYuanPotential = _evaluateHongYuanPotential(player);
+      final kuHuPotential = _evaluateKuHuPotential(player);
+      if (shiDuiPotential <= 0 &&
+          heiYuanPotential <= 0 &&
+          hongYuanPotential <= 0 &&
+          kuHuPotential <= 0) {
+        return true; // 胡数不足且无特殊路线
+      }
+    }
+
+    return false;
+  }
+
+  /// 路线出牌优先级加分（规则二十）
+  double _routeDiscardPriorityBonus(
+    Card card,
+    Player player,
+    int huBefore,
+    int huAfter,
+    Map<String, int> visibleCount,
+  ) {
+    final route = _currentRoute ?? _RouteType.normal;
+    final ch = card.character;
+    final sentence = card.sentence;
+    final isJingMen = sentence == 1 || sentence == 8;
+    final isJingChar = ch == '上' || ch == '福';
+    final isYinChar = ch == '大' || ch == '人' || ch == '禄' || ch == '寿';
+
+    // 统计同门各字张数
+    final byChar = <String, int>{};
+    for (final c in player.hand) {
+      if (c.sentence == sentence) {
+        byChar[c.character] = (byChar[c.character] ?? 0) + 1;
+      }
+    }
+    final chCnt = byChar[ch] ?? 0;
+    final groupChars = _groupChars[sentence - 1];
+    final presentChars = groupChars
+        .where((c) => (byChar[c] ?? 0) >= 1)
+        .toList();
+    final hasAllThree = presentChars.length == 3;
+
+    double bonus = 0;
+
+    switch (route) {
+      case _RouteType.shiDui:
+        // 十对路线出牌优先级（规则20.1）
+        if (chCnt == 1) {
+          // 孤张
+          bonus += 250;
+        } else if (hasAllThree && chCnt == 2) {
+          // 普句多一张
+          bonus += 100;
+        } else if (chCnt == 1 && presentChars.length >= 2) {
+          // 对子+独立单张（出单张）
+          bonus += 150;
+        } else if (chCnt == 2 &&
+            presentChars.any((c) => (byChar[c] ?? 0) == 1)) {
+          // 对子+独立单张（出对子）- 绝不出对子
+          bonus -= 100;
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 普靠（出一张）
+          bonus += 80;
+        }
+        break;
+
+      case _RouteType.heiYuan:
+        // 黑元路线出牌优先级（规则20.2）
+        if (chCnt == 3) {
+          // 坎（3张同字）- 优先清理
+          bonus += 1500;
+        } else if (chCnt == 2) {
+          // 对子
+          final otherChars = groupChars.where((c) => c != ch).toList();
+          int otherRem = 0;
+          for (final oc in otherChars) {
+            otherRem += _remainingCount(oc, visibleCount);
+          }
+          if (otherRem <= 2) {
+            bonus += 500; // 死对子
+          } else {
+            bonus += 250; // 活对子
+          }
+        } else if (chCnt == 1) {
+          // 孤张
+          bonus += 200;
+          if (isJingMen) bonus += 100; // 门1/8孤张更优先
+        } else if (hasAllThree && chCnt == 2) {
+          // 普句多一张
+          bonus += 120;
+          if (isJingMen) bonus += 300; // 门1/8更优先
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 普靠
+          bonus += 50;
+          if (isJingMen) bonus += 300; // 门1/8更优先
+        }
+        // 门1/8额外加分
+        if (isJingMen) bonus += 300;
+        break;
+
+      case _RouteType.hongYuan:
+        // 红元路线出牌优先级（规则20.3）
+        if (chCnt == 1 && !isJingMen) {
+          // 非组1/8孤张
+          bonus += 200;
+        } else if (chCnt == 1 && isJingMen) {
+          // 组1/8孤张
+          bonus += 100;
+        } else if (hasAllThree && chCnt == 2 && !isJingMen) {
+          // 非组1/8句多一张
+          bonus += 120;
+        } else if (hasAllThree && chCnt == 2 && isJingMen) {
+          // 组1/8句多一张
+          bonus += 60;
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 对子+靠（出靠单张）
+          bonus += 60;
+        }
+        break;
+
+      case _RouteType.kuHu:
+        // 枯胡路线出牌优先级（规则20.4）
+        if (chCnt == 1) {
+          // 单张
+          bonus += 200;
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 普靠（出一张）
+          bonus += 80;
+        } else if (hasAllThree && chCnt == 2) {
+          // 句中单张
+          bonus += 120;
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 对子+靠（出靠单张）
+          bonus += 100;
+        } else if (chCnt == 2 &&
+            presentChars.any((c) => (byChar[c] ?? 0) == 1)) {
+          // 对子（出对子）- 绝不出对子
+          bonus -= 150;
+        }
+        break;
+
+      case _RouteType.normal:
+        // 普通胡路线出牌优先级（规则20.5）
+        if (chCnt == 1) {
+          // 普单（孤张）
+          bonus += 200;
+        } else if (chCnt >= 3 && presentChars.length == 2) {
+          // 坎/招+靠（出靠单张）
+          bonus += 200;
+        } else if (hasAllThree && chCnt == 2) {
+          // 普句多一张
+          bonus += 120;
+        } else if (chCnt == 2) {
+          // 对子
+          final rem = _remainingCount(ch, visibleCount);
+          if (rem == 0) {
+            bonus += 80; // 死对子
+          } else if (rem == 1) {
+            bonus += 40; // 对子（剩余1张）
+          } else {
+            bonus += 20; // 对子（剩余≥2张）
+          }
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 普靠
+          if (huBefore < 11) {
+            bonus += 120; // 胡数不足优先拆
+          } else {
+            bonus += 40; // 胡数足够保留
+          }
+        }
+        // 金对惩罚
+        if (isJingMen && isJingChar && chCnt == 2) {
+          bonus -= 300; // 金对8胡，拆掉损失巨大
+        }
+        break;
+    }
+
+    return bonus;
+  }
+
   (double potential, int distance) _evaluateHandPotentialAndDistance(
     List<Card> hand,
     List<Meld> melds,
@@ -3500,8 +4870,10 @@ class AIStrategyHard extends AIStrategy {
     List<Card> hand,
     List<Meld> melds,
     Map<String, int> visibleCount,
-    int totalUnknown,
-  ) {
+    int totalUnknown, {
+    _RouteType? route,
+  }) {
+    final rt = route ?? _currentRoute ?? _RouteType.normal;
     // 筛选该门的手牌和组合牌
     final menHand = hand.where((c) => c.sentence == sentence).toList();
     final menMelds = melds
@@ -3519,30 +4891,36 @@ class AIStrategyHard extends AIStrategy {
 
     double score = 0;
 
-    // 1. 组合牌分（已完成的句/坎/招）
+    // 1. 组合牌分（已完成的句/坎/招）- 路线相关
     for (final meld in menMelds) {
       switch (meld.type) {
         case MeldType.zhao:
-          score += meld.isJing ? 200 : 100; // 精招200 / 普招100
+          score += meld.isJing
+              ? _getMen18JingScore(rt, _idxJingZhao)
+              : _getMen27Score(rt, _idxZhao);
           break;
         case MeldType.kan:
-          score += meld.isJing ? 150 : 50; // 精坎150 / 普坎(组合)50
+          score += meld.isJing
+              ? _getMen18JingScore(rt, _idxJingKan)
+              : _getMen27Score(rt, _idxKan);
           break;
         case MeldType.ju:
-          score += meld.isJing ? 90 : 50; // 精句90 / 普句50
+          score += meld.isJing
+              ? _getMen18JingScore(rt, _idxJingJu)
+              : _getMen27Score(rt, _idxJu);
           break;
         default:
           break;
       }
     }
 
-    // 2. 手牌结构分（最优拆解）
-    // 按张数分布计算，考虑招/坎/句/对/靠/单
-
+    // 2. 手牌结构分（最优拆解）- 路线相关
     // 2.1 招（4张同字）
     for (final ch in groupChars) {
       if ((byChar[ch] ?? 0) >= 4) {
-        score += isJingMen && (ch == '上' || ch == '福') ? 200 : 100;
+        score += isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJingZhao)
+            : _getMen27Score(rt, _idxZhao);
       }
     }
 
@@ -3550,34 +4928,36 @@ class AIStrategyHard extends AIStrategy {
     for (final ch in groupChars) {
       final cnt = byChar[ch] ?? 0;
       if (cnt >= 3 && cnt < 4) {
-        score += isJingMen && (ch == '上' || ch == '福') ? 150 : 60;
+        score += isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJingKan)
+            : _getMen27Score(rt, _idxKan);
       }
     }
 
     // 2.3 句（3字各1张）
     final hasAllThree = groupChars.every((ch) => (byChar[ch] ?? 0) >= 1);
     if (hasAllThree) {
-      score += isJingMen ? 90 : 50;
+      score += isJingMen
+          ? _getMen18JingScore(rt, _idxJingJu)
+          : _getMen27Score(rt, _idxJu);
     }
 
-    // 2.4 对（2张同字，非金对）
+    // 2.4 对（2张同字）
     for (final ch in groupChars) {
       final cnt = byChar[ch] ?? 0;
       if (cnt == 2) {
         if (isJingMen && (ch == '上' || ch == '福')) {
-          score += 100; // 金对
+          score += _getMen18JingScore(rt, _idxJinDui); // 金对
         } else if (isJingMen &&
             (ch == '大' || ch == '人' || ch == '禄' || ch == '寿')) {
-          score += 20; // 银对
+          score += _getMen18YinScore(rt, _idxYinDui); // 银对
         } else {
-          score += 20; // 普对
+          score += _getMen27Score(rt, _idxDui); // 普对
         }
       }
     }
 
     // 2.5 靠（2字各1张，非完整句）
-    // 只有当3字不齐全且没有对子时才评估靠
-    // 有对子时，其他单张是独立单张而非靠的一部分
     if (!hasAllThree) {
       final presentChars = groupChars
           .where((ch) => (byChar[ch] ?? 0) >= 1)
@@ -3591,19 +4971,27 @@ class AIStrategyHard extends AIStrategy {
               isJingMen &&
               (presentChars.contains('上') || presentChars.contains('福'));
           if (isJingKao) {
-            score += 50; // 精靠
+            score += _getMen18JingScore(rt, _idxJingKao); // 精靠
           } else if (isJingMen &&
               (presentChars.contains('大') ||
                   presentChars.contains('人') ||
                   presentChars.contains('禄') ||
                   presentChars.contains('寿'))) {
-            score += 10; // 银靠
+            score += _getMen18YinScore(rt, _idxYinKao); // 银靠
           } else {
-            score += 10; // 普靠
+            score += _getMen27Score(rt, _idxKao); // 普靠
           }
-          // 进张期望分
+          // 进张期望分（剩余张数附加分）
           if (rem > 0 && totalUnknown > 0) {
-            score += (rem / totalUnknown) * 50;
+            final afterScore = isJingMen
+                ? _getMen18JingScore(rt, _idxJingJu)
+                : _getMen27Score(rt, _idxJu);
+            final beforeScore = isJingKao
+                ? _getMen18JingScore(rt, _idxJingKao)
+                : (isJingMen
+                      ? _getMen18YinScore(rt, _idxYinKao)
+                      : _getMen27Score(rt, _idxKao));
+            score += (rem / totalUnknown) * (afterScore - beforeScore);
           }
         }
       }
@@ -3613,25 +5001,21 @@ class AIStrategyHard extends AIStrategy {
     for (final ch in groupChars) {
       final cnt = byChar[ch] ?? 0;
       if (cnt == 1) {
-        // 检查是否在靠或句中已计算
         final presentChars = groupChars
             .where((c) => (byChar[c] ?? 0) >= 1)
             .toList();
         final hasPairInPresent = presentChars.any((c) => (byChar[c] ?? 0) >= 2);
-        // 已在靠中计算：2种字各1张且无对子（纯靠）
-        // 已在句中计算：3种字齐全
-        // 对子旁边的单张不算靠，需要评估为独立单张
         final isInKao = presentChars.length == 2 && !hasPairInPresent;
         final isInJu = presentChars.length >= 3;
         if (isInKao || isInJu) continue;
 
         if (isJingMen && (ch == '上' || ch == '福')) {
-          score += 40; // 精单
+          score += _getMen18JingScore(rt, _idxJingDan); // 精单
         } else if (isJingMen &&
             (ch == '大' || ch == '人' || ch == '禄' || ch == '寿')) {
-          score += 0; // 银单
+          score += _getMen18YinScore(rt, _idxYinDan); // 银单
         } else {
-          score += 0; // 普单
+          score += _getMen27Score(rt, _idxGu); // 普单
           // 孤张进张概率低，略微减分
           final otherChars = groupChars.where((c) => c != ch).toList();
           int partnerRem = 0;
@@ -3645,8 +5029,7 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 3. 进张期望分（所有可能进张的结构提升）
-    // 模拟摸到每张可能的牌后的结构分提升
+    // 3. 进张期望分（剩余张数附加分）- 路线相关
     for (final ch in groupChars) {
       final rem = _remainingCount(ch, visibleCount);
       if (rem <= 0 || totalUnknown <= 0) continue;
@@ -3654,40 +5037,58 @@ class AIStrategyHard extends AIStrategy {
       final prob = rem / totalUnknown;
       if (prob < 0.01) continue;
 
-      // 模拟摸到该牌后的结构
-      final simByChar = Map<String, int>.from(byChar);
-      simByChar[ch] = (simByChar[ch] ?? 0) + 1;
-
-      // 计算摸牌后的结构分（简化版，只看关键变化）
       double improvement = 0;
+      final curCnt = byChar[ch] ?? 0;
 
       // 摸到后成对（1->2）
-      if ((byChar[ch] ?? 0) == 1) {
-        improvement += isJingMen && (ch == '上' || ch == '福') ? 100 : 20;
+      if (curCnt == 1) {
+        improvement += isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJinDui)
+            : (isJingMen
+                  ? _getMen18YinScore(rt, _idxYinDui)
+                  : _getMen27Score(rt, _idxDui));
       }
       // 摸到后成坎（2->3）
-      else if ((byChar[ch] ?? 0) == 2) {
-        improvement += isJingMen && (ch == '上' || ch == '福') ? 150 : 60;
+      else if (curCnt == 2) {
+        final beforeScore = isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJinDui)
+            : (isJingMen
+                  ? _getMen18YinScore(rt, _idxYinDui)
+                  : _getMen27Score(rt, _idxDui));
+        final afterScore = isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJingKan)
+            : _getMen27Score(rt, _idxKan);
+        improvement += afterScore - beforeScore;
       }
       // 摸到后成招（3->4）
-      else if ((byChar[ch] ?? 0) == 3) {
-        improvement += isJingMen && (ch == '上' || ch == '福') ? 200 : 100;
+      else if (curCnt == 3) {
+        final beforeScore = isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJingKan)
+            : _getMen27Score(rt, _idxKan);
+        final afterScore = isJingMen && (ch == '上' || ch == '福')
+            ? _getMen18JingScore(rt, _idxJingZhao)
+            : _getMen27Score(rt, _idxZhao);
+        improvement += afterScore - beforeScore;
       }
       // 摸到后成句/靠（0->1，且其他字有牌）
-      else if ((byChar[ch] ?? 0) == 0) {
+      else if (curCnt == 0) {
         final presentChars = groupChars
             .where((c) => (byChar[c] ?? 0) >= 1)
             .toList();
         if (presentChars.length == 2) {
           // 成句
-          improvement += isJingMen ? 90 : 50;
+          improvement += isJingMen
+              ? _getMen18JingScore(rt, _idxJingJu)
+              : _getMen27Score(rt, _idxJu);
         } else if (presentChars.length == 1) {
           // 成靠
           improvement +=
               isJingMen &&
                   (presentChars.contains('上') || presentChars.contains('福'))
-              ? 50
-              : 10;
+              ? _getMen18JingScore(rt, _idxJingKao)
+              : (isJingMen
+                    ? _getMen18YinScore(rt, _idxYinKao)
+                    : _getMen27Score(rt, _idxKao));
         }
       }
 
@@ -3697,13 +5098,15 @@ class AIStrategyHard extends AIStrategy {
     return score;
   }
 
-  /// 计算所有门的结构总分
+  /// 计算所有门的结构总分（应用路线权重）
   double _evaluateAllMenStructure(
     List<Card> hand,
     List<Meld> melds,
     Map<String, int> visibleCount,
-    int totalUnknown,
-  ) {
+    int totalUnknown, {
+    _RouteType? route,
+  }) {
+    final rt = route ?? _currentRoute ?? _RouteType.normal;
     double total = 0;
     for (int s = 1; s <= 8; s++) {
       total += _evaluateMenStructure(
@@ -3712,9 +5115,11 @@ class AIStrategyHard extends AIStrategy {
         melds,
         visibleCount,
         totalUnknown,
+        route: rt,
       );
     }
-    return total;
+    // 应用路线权重
+    return total * _getRouteWeight(rt);
   }
 
   String? _findMissingCharForSentence(List<String> existingChars) {
@@ -4334,11 +5739,21 @@ class AIStrategyHard extends AIStrategy {
           cardSelectionBonus -= 200; // 十对路线重罚出对子
         } else if (heiYuanPotential > 0) {
           // 黑元路线下，对子变碰会破坏黑元资格，优先拆对子
-          final rem = _remainingCount(cardToDiscard.character, visibleCount);
-          if (rem == 0) {
-            cardSelectionBonus += 80; // 死对子，优先出
+          // 黑元需要6句+1靠，对子不能作将牌
+          // 检查对子是否为死对子（同门其他字剩余张数很少，无法成句）
+          final otherChars = _groupChars[sentence - 1]
+              .where((ch) => ch != cardToDiscard.character)
+              .toList();
+          int otherRem = 0;
+          for (final ch in otherChars) {
+            otherRem += _remainingCount(ch, visibleCount);
+          }
+          if (otherRem <= 2) {
+            // 死对子：同门其他字剩余很少，无法成句，黑元路线下完全无用
+            cardSelectionBonus += 200; // 大幅加分，优先出死对子
           } else {
-            cardSelectionBonus += 100; // 黑元路线鼓励拆对子
+            // 活对子：有成句潜力，但仍鼓励拆（黑元不要对子）
+            cardSelectionBonus += 100;
           }
         } else {
           // 检查对子是否已降级（剩余0张）
@@ -4496,9 +5911,13 @@ class AIStrategyHard extends AIStrategy {
   @override
   bool shouldChi(Player player, Card card, GameState state) {
     _initCache(player, state);
+    print(
+      'DEBUG shouldChi开始: card=${card.character}, hand=${player.hand.map((c) => c.character).join()}, melds=${player.melds.map((m) => m.cards.map((c) => c.character).join()).join(",")}',
+    );
 
     // 8对以上强制走十对路线，不吃牌
     if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
+      print('DEBUG shouldChi: 拒绝吃牌(8对以上十对路线)');
       return false;
     }
 
@@ -4609,6 +6028,10 @@ class AIStrategyHard extends AIStrategy {
 
     if (bestBenefit < 0) return false;
 
+    print(
+      'DEBUG shouldChi: bestBenefit=$bestBenefit, availableChars=$availableChars',
+    );
+
     // 胡数小于8且不走黑元路线时，吃牌如果破坏普通对子，不吃
     // 例外：吃后听牌（bestBenefit>=10000）时允许吃
     // 例：手牌"丘丘己"胡数<8且非黑元，吃"乙"会破坏丘对，不吃
@@ -4641,12 +6064,24 @@ class AIStrategyHard extends AIStrategy {
     // 理由：坎是完整集（3张同字），拆开损失大；坎对型有进张成坎坎型的潜力
     // 例外1：对中字剩余0张（对已降级为死对子），允许拆坎吃
     // 例外2：吃后听牌（bestBenefit>=10000）时允许吃
-    // 快速判断：组合牌中有坎或招 → 不能走黑元/红元
+    // 注意：必须用实际的黑元/红元潜力判断，而非仅检查组合牌类型
+    // 例：手牌"上大丘乙乙乙..."有门1牌，不能走黑元；门1句不足2组，不能走红元
+    // 此时拆坎吃"己"会破坏乙乙乙坎（3胡→0胡），不应允许
     if (!player.isTing && bestBenefit < 10000) {
-      if (!_canHeiYuanOrHongYuan(player)) {
-        if (_wouldBreakKan(player, card)) {
+      final heiYuanPot = _evaluateHeiYuanPotential(player);
+      final hongYuanPot = _evaluateHongYuanPotential(player);
+      print(
+        'DEBUG shouldChi坎破坏检查: card=${card.character}, isTing=${player.isTing}, bestBenefit=$bestBenefit, heiYuanPot=$heiYuanPot, hongYuanPot=$hongYuanPot',
+      );
+      if (heiYuanPot <= 0 && hongYuanPot <= 0) {
+        final wouldBreakKan = _wouldBreakKan(player, card);
+        print('DEBUG shouldChi坎破坏检查: wouldBreakKan=$wouldBreakKan');
+        if (wouldBreakKan) {
           // 检查对中字是否剩余0张（对已降级）
-          if (!_pairCharRemainZero(player, card, state)) {
+          final pairRemainZero = _pairCharRemainZero(player, card, state);
+          print('DEBUG shouldChi坎破坏检查: pairRemainZero=$pairRemainZero');
+          if (!pairRemainZero) {
+            print('DEBUG shouldChi坎破坏检查: 拒绝吃牌(破坏坎)');
             return false;
           }
         }
@@ -4681,10 +6116,15 @@ class AIStrategyHard extends AIStrategy {
 
     // 截胡策略：其他玩家快听牌时，更积极吃牌加速自己
     if (_hasOpponentNearTing(state, player.id)) {
+      print(
+        'DEBUG shouldChi最终: 截胡策略, bestBenefit=$bestBenefit > -50? ${bestBenefit > -50}',
+      );
       return bestBenefit > -50;
     }
 
-    return bestBenefit > 0;
+    final result = bestBenefit > 0;
+    print('DEBUG shouldChi最终: bestBenefit=$bestBenefit > 0? $result');
+    return result;
   }
 
   /// 检查是否有对手快听牌（距离<=2或已听牌）
@@ -5134,24 +6574,33 @@ class AIStrategyHard extends AIStrategy {
         melds: [...player.melds, newMeld],
       );
 
-      final tingAfter = _checkTingCached(testPlayer);
-
-      if (tingAfter.isTing) return true;
-      if (player.isTing && !tingAfter.isTing) return false;
-
-      // 碰牌后十对路线不可用（melds不为空），碰前距离应使用普通路线距离比较
-      // 避免十对距离(较小)与普通距离(较大)的不公平比较导致不碰
-      final distBefore = _currentShiDuiEnabled && player.melds.isEmpty
-          ? _distanceToTingNormal(List<Card>.from(hand), player.melds)
-          : _distanceToTing(List<Card>.from(hand), player.melds);
+      // 碰后需要出牌，模拟出牌后检查是否听牌
+      // 注意：碰后未出牌时手牌+组合牌=20张，不满足听牌检查条件(<20)
+      // 所以必须模拟出牌后再检查听牌
       final newMelds = [...player.melds, newMeld];
-      final (_, distAfterDiscard) = _findBestDiscardAfterMeld(
+      final (bestHandAfterPeng, distAfterDiscard) = _findBestDiscardAfterMeld(
         testHand,
         newMelds,
         visibleCount:
             _cachedVisibleCount ?? _buildVisibleCharCount(player, state),
         totalUnknown: _cachedTotalUnknown ?? _totalUnknownCards(player, state),
       );
+      final testPlayerAfterDiscard = Player(
+        id: player.id,
+        name: player.name,
+        type: player.type,
+        hand: bestHandAfterPeng,
+        melds: newMelds,
+      );
+      final tingAfterDiscard = _checkTingCached(testPlayerAfterDiscard);
+      if (tingAfterDiscard.isTing) return true;
+      if (player.isTing && !tingAfterDiscard.isTing) return false;
+
+      // 碰牌后十对路线不可用（melds不为空），碰前距离应使用普通路线距离比较
+      // 避免十对距离(较小)与普通距离(较大)的不公平比较导致不碰
+      final distBefore = _currentShiDuiEnabled && player.melds.isEmpty
+          ? _distanceToTingNormal(List<Card>.from(hand), player.melds)
+          : _distanceToTing(List<Card>.from(hand), player.melds);
 
       if (distAfterDiscard > distBefore) return false;
 
@@ -5192,12 +6641,7 @@ class AIStrategyHard extends AIStrategy {
       // 距离和胡数都不变时，比较碰牌前后的进张数
       final vc = _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
       final tu = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
-      final (bestHandAfterPeng, _) = _findBestDiscardAfterMeld(
-        testHand,
-        newMelds,
-        visibleCount: vc,
-        totalUnknown: tu,
-      );
+      // 复用之前_findBestDiscardAfterMeld的结果bestHandAfterPeng
       double entryAfterPeng = 0;
       for (final ch in _allChars) {
         final sentence = _charSentenceMap[ch];
@@ -5216,6 +6660,12 @@ class AIStrategyHard extends AIStrategy {
       }
       // 碰后进张数减少太多时不碰
       if (entryAfterPeng < entryBefore * 0.7) return false;
+
+      // 路线进度加分（规则二十四）：枯胡路线碰坎+50，普通胡路线碰坎+30
+      // 距离和胡数都不变时，路线进度加分作为tiebreaker
+      final route = _currentRoute ?? _RouteType.normal;
+      final routeBonus = _routeOperationBonus('peng', route);
+      if (routeBonus >= 50) return true; // 枯胡路线积极碰坎
 
       // 碰牌增加面子，倾向碰（放宽条件：手牌<=14即可）
       // 截胡策略：对手快听牌时更积极碰
@@ -5314,10 +6764,80 @@ class AIStrategyHard extends AIStrategy {
       final huPeng = _evaluateHuScore(pengPlayer);
       final distPeng = _distanceToTing(pengHand, [...player.melds, pengMeld]);
 
+      // 比较招vs吃：手牌能吃上家的牌时，模拟吃牌后效果
+      // 场景：手牌七七七十土，玩家出七。招七后十土成死靠（七全在招牌），
+      //       吃七后七十土句在组合牌区，手牌结构更优，听牌距离更近
+      final otherChars = _getOtherCharsInGroup(card);
+      final availableChars = otherChars
+          .where((ch) => hand.any((c) => c.character == ch))
+          .toList();
+      if (availableChars.length >= 2) {
+        int bestChiDist = 99;
+        double bestChiHu = 0;
+        for (int i = 0; i < availableChars.length; i++) {
+          for (int j = i + 1; j < availableChars.length; j++) {
+            final consumedChars = [availableChars[i], availableChars[j]];
+            final chiHand = List<Card>.from(hand);
+            for (final ch in consumedChars) {
+              final idx = chiHand.indexWhere((c) => c.character == ch);
+              if (idx >= 0) chiHand.removeAt(idx);
+            }
+            final chiMeld = Meld(
+              cards: [
+                card,
+                ...consumedChars.map(
+                  (ch) => hand.firstWhere((c) => c.character == ch),
+                ),
+              ],
+              type: MeldType.ju,
+              isJing: card.isJing,
+            );
+            final chiMelds = [...player.melds, chiMeld];
+            final vc =
+                _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+            final tu = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+            final (_, chiDist) = _findBestDiscardAfterMeld(
+              chiHand,
+              chiMelds,
+              visibleCount: vc,
+              totalUnknown: tu,
+            );
+            if (chiDist < bestChiDist) {
+              bestChiDist = chiDist;
+              final chiPlayer = Player(
+                id: player.id,
+                name: player.name,
+                type: player.type,
+                hand: chiHand,
+                melds: chiMelds,
+              );
+              HuCalculator.updateMeldHuCache(chiPlayer);
+              bestChiHu = _evaluateHuScore(chiPlayer);
+            }
+          }
+        }
+        // 吃牌距离更短时，不招（吃牌更优）
+        if (bestChiDist < distAfter) return false;
+        // 距离相同时，吃后胡数已满足门槛(>=11)则倾向吃（保留手牌灵活性）
+        // 招牌会把4张同字全部移走，可能破坏手牌结构（如十土成死靠）
+        if (bestChiDist == distAfter &&
+            bestChiHu >= 11 &&
+            huZhao < bestChiHu + 5) {
+          return false;
+        }
+      }
+
       // 招比碰胡数更高或距离更短时，选择招
       if (huZhao >= huPeng && distAfter <= distPeng) return true;
       if (huZhao > huPeng + 4) return true;
       if (distAfter < distPeng) return true;
+
+      // 路线进度加分（规则二十四）：普通胡路线招+40
+      // 距离和胡数都相近时，路线进度加分作为tiebreaker
+      final route = _currentRoute ?? _RouteType.normal;
+      final zhaoRouteBonus = _routeOperationBonus('zhao', route);
+      final pengRouteBonus = _routeOperationBonus('peng', route);
+      if (zhaoRouteBonus > pengRouteBonus && huZhao >= huPeng) return true;
 
       // 招后补摸一张牌可能改善，倾向招
       final visibleCount =
