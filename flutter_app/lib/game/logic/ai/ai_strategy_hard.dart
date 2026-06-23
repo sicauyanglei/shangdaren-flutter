@@ -1183,6 +1183,86 @@ class AIStrategyHard extends AIStrategy {
     return rem > 0 ? rem : 0;
   }
 
+  /// 计算某门当前能成的最大句数（每字至少1张才能成1句）
+  /// byChar: 该门各字张数 {字: 张数}
+  /// chars: 该门的3个字
+  int _calcMaxSentences(Map<String, int> byChar, List<String> chars) {
+    final presentCnt = chars.where((c) => (byChar[c] ?? 0) > 0).length;
+    if (presentCnt < 3) return 0;
+    int maxSentences = chars
+        .map((c) => byChar[c] ?? 0)
+        .reduce((a, b) => a < b ? a : b);
+    return maxSentences > 2 ? 2 : maxSentences;
+  }
+
+  /// 黑元路线下计算某张牌所在门的"成句难度"分数（考虑吃牌因素）
+  /// 难度越高，该牌越应优先打出
+  /// byChar: 该门各字张数（出牌前状态）
+  /// chars: 该门的3个字
+  /// visibleCount: 牌面可见牌统计
+  /// totalUnknown: 未知牌总数
+  double _calcHeiYuanDifficulty(
+    Map<String, int> byChar,
+    List<String> chars,
+    Map<String, int> visibleCount,
+    int totalUnknown,
+  ) {
+    // 1. 当前能成最大句数（不靠吃牌）
+    final maxSentences = _calcMaxSentences(byChar, chars);
+
+    // 2. 考虑吃牌后的成句能力
+    //    枚举吃1张牌的所有可能，找出最大句数增量
+    int bestChiGain = 0;
+    double bestChiProb = 0;
+    for (final ch in chars) {
+      final rem = _remainingCount(ch, visibleCount);
+      if (rem == 0) continue; // 牌面无剩余，无法吃到
+
+      // 模拟吃1张ch后的状态
+      final afterByChar = Map<String, int>.from(byChar);
+      afterByChar[ch] = (afterByChar[ch] ?? 0) + 1;
+      final sentencesAfter = _calcMaxSentences(afterByChar, chars);
+      final gain = sentencesAfter - maxSentences;
+
+      // 选择句数增量最大的吃牌方案
+      // 同增量下选概率高的
+      final prob = rem / totalUnknown;
+      if (gain > bestChiGain ||
+          (gain == bestChiGain && prob > bestChiProb)) {
+        bestChiGain = gain;
+        bestChiProb = prob;
+      }
+    }
+
+    // 3. 有效句数 = 当前句数 + 吃牌增量（概率>10%才认定吃牌增量生效）
+    int effectiveSentences = maxSentences;
+    if (bestChiGain > 0 && bestChiProb > 0.1) {
+      effectiveSentences = maxSentences + bestChiGain;
+    }
+
+    // 4. 成2句所需进张数（基于当前手牌）
+    int neededFor2 = 0;
+    bool insufficient = false;
+    for (final ch in chars) {
+      final have = byChar[ch] ?? 0;
+      final need = 2 - have;
+      if (need > 0) {
+        neededFor2 += need;
+        if (_remainingCount(ch, visibleCount) < need) {
+          insufficient = true;
+        }
+      }
+    }
+
+    // 5. 综合难度分数
+    final difficulty = (2 - effectiveSentences) * 300.0 // 维度1：有效句数
+        + neededFor2 * 100.0 // 维度2：进张缺口
+        + (insufficient ? 500.0 : 0.0) // 维度3：余牌不足硬阻断
+        - bestChiProb * 150.0; // 维度4：吃牌概率高则难度降低
+
+    return difficulty;
+  }
+
   int _totalUnknownCards(Player player, GameState state) {
     return state.totalUnknownCards(player);
   }
@@ -2815,6 +2895,7 @@ class AIStrategyHard extends AIStrategy {
       huBeforeInt,
       huAfterInt,
       visibleCount,
+      totalUnknown,
     );
     score += routeBonus * 0.3;
 
@@ -3158,49 +3239,28 @@ class AIStrategyHard extends AIStrategy {
         }
       } else if (isHeiYuan) {
         // 黑元路线：组6句+1靠，看组句速度
-        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
-        //       牌面余牌不足以满足组句时，也要优先打出
+        // 策略：
+        //   1. 优先出1/8门牌（黑元不要门1/8牌）
+        //   2. 调用"最难成句"算法，优先打出成句难度最高的牌
+        //      （考虑吃牌因素，牌面余牌不足时也要优先打出）
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
-        final group18Bonus = isGroup18 ? 300 : 0;
 
-        // 基于出牌前该门各字张数分析
+        // 维度1：门1/8牌优先清理（黑元核心需求）
+        if (isGroup18) {
+          score += 2000;
+        }
+
+        // 维度2：调用"最难成句"算法计算该门难度
         final groupCharsList = _groupChars[discardGroup - 1];
+        final difficulty = _calcHeiYuanDifficulty(
+          groupCharCount,
+          groupCharsList,
+          visibleCount,
+          totalUnknown,
+        );
+        score += difficulty.round();
 
-        // 计算当前该门能成的最大句数
-        final presentCnt = groupCharsList
-            .where((c) => (groupCharCount[c] ?? 0) > 0)
-            .length;
-        int maxSentences = 0;
-        if (presentCnt == 3) {
-          maxSentences = groupCharsList
-              .map((c) => groupCharCount[c] ?? 0)
-              .reduce((a, b) => a < b ? a : b);
-          if (maxSentences > 2) maxSentences = 2;
-        }
-
-        // 计算成2句所需进张数
-        int neededFor2Sentences = 0;
-        bool insufficientRem = false;
-        for (final gc in groupCharsList) {
-          final have = groupCharCount[gc] ?? 0;
-          final need = 2 - have;
-          if (need > 0) {
-            neededFor2Sentences += need;
-            final rem = _remainingCount(gc, visibleCount);
-            if (rem < need) insufficientRem = true;
-          }
-        }
-
-        // 1. 能组句数少的优先打出（破坏句数潜力）
-        score += (2 - maxSentences) * 300 + group18Bonus;
-
-        // 2. 同句数下，需要进张多的优先打出
-        score += neededFor2Sentences * 100;
-
-        // 3. 牌面余牌不足以满足组句，额外优先打出
-        if (insufficientRem) score += 500;
-
-        // 4. 坎（3张同字）离成句远，优先清理
+        // 维度3：坎（3张同字）离成句远，优先清理
         final isKanCharInGroup =
             groupCharCount[cardToDiscard.character] != null &&
             groupCharCount[cardToDiscard.character]! >= 3;
@@ -4257,6 +4317,7 @@ class AIStrategyHard extends AIStrategy {
     int huBefore,
     int huAfter,
     Map<String, int> visibleCount,
+    int totalUnknown,
   ) {
     final route = _currentRoute ?? _RouteType.normal;
     final ch = card.character;
@@ -4329,51 +4390,27 @@ class AIStrategyHard extends AIStrategy {
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
         // 黑元核心：组6句+1靠，看组句速度
-        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
-        //       牌面余牌不足以满足组句时，也要优先打出
+        // 策略：
+        //   1. 优先出1/8门牌（黑元不要门1/8牌）
+        //   2. 调用"最难成句"算法，优先打出成句难度最高的牌
+        //      （考虑吃牌因素，牌面余牌不足时也要优先打出）
         {
-          // 基于出牌前该门各字张数分析
-          // 计算当前该门能成的最大句数（每字至少1张才能成1句）
-          int maxSentences = 0;
-          final presentCnt = groupChars
-              .where((c) => (byChar[c] ?? 0) > 0)
-              .length;
-          if (presentCnt == 3) {
-            maxSentences = groupChars
-                .map((c) => byChar[c] ?? 0)
-                .reduce((a, b) => a < b ? a : b);
-            if (maxSentences > 2) maxSentences = 2;
+          // 维度1：门1/8牌优先清理（黑元核心需求）
+          if (isJingMen) {
+            bonus += 2000;
           }
 
-          // 计算成2句所需进张数（黑元目标每门尽量2句）
-          int neededFor2Sentences = 0;
-          bool insufficientRem = false;
-          for (final gc in groupChars) {
-            final have = byChar[gc] ?? 0;
-            final need = 2 - have;
-            if (need > 0) {
-              neededFor2Sentences += need;
-              // 检查牌面余牌是否足以满足
-              final rem = _remainingCount(gc, visibleCount);
-              if (rem < need) insufficientRem = true;
-            }
-          }
+          // 维度2：调用"最难成句"算法计算该门难度
+          final difficulty = _calcHeiYuanDifficulty(
+            byChar,
+            groupChars,
+            visibleCount,
+            totalUnknown,
+          );
+          bonus += difficulty;
 
-          // 1. 能组句数少的优先打出（破坏句数潜力）
-          //    能组2句(保留) > 能组1句 > 能组0句(优先打出)
-          bonus += (2 - maxSentences) * 300;
-
-          // 2. 同句数下，需要进张多的优先打出
-          bonus += neededFor2Sentences * 100;
-
-          // 3. 牌面余牌不足以满足组句，额外优先打出
-          if (insufficientRem) bonus += 500;
-
-          // 4. 坎（3张同字）离成句远，优先清理
+          // 维度3：坎（3张同字）离成句远，优先清理
           if (chCnt == 3) bonus += 1500;
-
-          // 5. 门1/8额外加分（黑元需要清理门1/8牌）
-          if (isJingMen) bonus += 300;
         }
         break;
 
