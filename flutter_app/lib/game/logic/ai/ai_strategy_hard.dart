@@ -3145,7 +3145,9 @@ class AIStrategyHard extends AIStrategy {
           }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
-            score += 120 + group18Bonus; // 普句多一张，门1/8更优先
+            // 普句多一张：出一张形成完整句，但破坏该门成2句潜力
+            // 黑元看组句速度，保留多一张才有机会成2句，惩罚出牌
+            score -= 200 + group18Bonus;
           }
         } else if (discardGroupCharSet.length == 2) {
           if (isKanCharInGroup) {
@@ -4245,14 +4247,16 @@ class AIStrategyHard extends AIStrategy {
 
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
-        // 黑元核心是组句速度：6句+1靠，优先形成完整句
+        // 黑元核心是组句速度：6句+1靠，优先保留成句快的门，拆成句慢的门
+        // 成2句所需进张数越少 = 成句越快 = 越应保留
         if (chCnt == 3) {
-          // 坎（3张同字）- 优先清理（坎离成句远，黑元不要坎）
+          // 坎（3张同字）- 坎离成句远，优先清理
           bonus += 1500;
         } else if (hasAllThree && chCnt == 2) {
-          // 普句多一张：出一张即形成完整句，黑元组句速度核心，高分鼓励
-          bonus += 400;
-          if (isJingMen) bonus += 300; // 门1/8更优先
+          // 普句多一张：出一张即形成完整句，但会破坏该门成2句的潜力
+          // 黑元路线下，保留多一张才有机会成2句（组句更快），惩罚出牌
+          bonus -= 200;
+          if (isJingMen) bonus += 300; // 门1/8例外，仍需清理
         } else if (chCnt == 2) {
           // 对子（非普句多一张场景）
           final otherChars = groupChars.where((c) => c != ch).toList();
@@ -5635,8 +5639,11 @@ class AIStrategyHard extends AIStrategy {
 
     // 3.5 形成完整句奖励：出牌后该门形成完整句（句型），给予额外奖励
     // 这鼓励从"句孤张型"等牌型中出多余张，形成完整句
+    // 黑元路线例外：黑元看组句速度，保留多一张才有机会成2句，不奖励形成1句
     double formSentenceBonus = 0;
-    if (typeAfterDiscard == '句型' && currentType != '句型') {
+    if (typeAfterDiscard == '句型' &&
+        currentType != '句型' &&
+        heiYuanPotential <= 0) {
       formSentenceBonus = 100; // 形成完整句的奖励
     }
 
