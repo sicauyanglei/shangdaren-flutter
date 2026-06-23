@@ -3107,37 +3107,31 @@ class AIStrategyHard extends AIStrategy {
         }
       } else if (isHeiYuan) {
         // 黑元路线：组6句+1靠，看组句速度
-        // 策略：优先打出"成同等句数下需要进张最多"的牌
+        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
         //       牌面余牌不足以满足组句时，也要优先打出
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
         final group18Bonus = isGroup18 ? 300 : 0;
 
-        // 模拟出牌后该门各字张数
-        final afterGroupCharCount = Map<String, int>.from(groupCharCount);
-        afterGroupCharCount[cardToDiscard.character] =
-            (afterGroupCharCount[cardToDiscard.character] ?? 0) - 1;
-        if ((afterGroupCharCount[cardToDiscard.character] ?? 0) <= 0) {
-          afterGroupCharCount.remove(cardToDiscard.character);
-        }
-
-        // 计算出牌后该门能成的最大句数
+        // 基于出牌前该门各字张数分析
         final groupCharsList = _groupChars[discardGroup - 1];
+
+        // 计算当前该门能成的最大句数
         final presentCnt = groupCharsList
-            .where((c) => (afterGroupCharCount[c] ?? 0) > 0)
+            .where((c) => (groupCharCount[c] ?? 0) > 0)
             .length;
-        int maxSentencesAfter = 0;
+        int maxSentences = 0;
         if (presentCnt == 3) {
-          maxSentencesAfter = groupCharsList
-              .map((c) => afterGroupCharCount[c] ?? 0)
+          maxSentences = groupCharsList
+              .map((c) => groupCharCount[c] ?? 0)
               .reduce((a, b) => a < b ? a : b);
-          if (maxSentencesAfter > 2) maxSentencesAfter = 2;
+          if (maxSentences > 2) maxSentences = 2;
         }
 
         // 计算成2句所需进张数
         int neededFor2Sentences = 0;
         bool insufficientRem = false;
         for (final gc in groupCharsList) {
-          final have = afterGroupCharCount[gc] ?? 0;
+          final have = groupCharCount[gc] ?? 0;
           final need = 2 - have;
           if (need > 0) {
             neededFor2Sentences += need;
@@ -3147,7 +3141,7 @@ class AIStrategyHard extends AIStrategy {
         }
 
         // 1. 能组句数少的优先打出（破坏句数潜力）
-        score += (2 - maxSentencesAfter) * 300 + group18Bonus;
+        score += (2 - maxSentences) * 300 + group18Bonus;
 
         // 2. 同句数下，需要进张多的优先打出
         score += neededFor2Sentences * 100;
@@ -4244,31 +4238,27 @@ class AIStrategyHard extends AIStrategy {
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
         // 黑元核心：组6句+1靠，看组句速度
-        // 策略：优先打出"成同等句数下需要进张最多"的牌
+        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
         //       牌面余牌不足以满足组句时，也要优先打出
         {
-          // 模拟出牌后该门各字张数
-          final afterByChar = Map<String, int>.from(byChar);
-          afterByChar[ch] = (afterByChar[ch] ?? 0) - 1;
-          if ((afterByChar[ch] ?? 0) <= 0) afterByChar.remove(ch);
-
-          // 计算出牌后该门能成的最大句数（每字至少1张才能成1句）
-          int maxSentencesAfter = 0;
+          // 基于出牌前该门各字张数分析
+          // 计算当前该门能成的最大句数（每字至少1张才能成1句）
+          int maxSentences = 0;
           final presentCnt = groupChars
-              .where((c) => (afterByChar[c] ?? 0) > 0)
+              .where((c) => (byChar[c] ?? 0) > 0)
               .length;
           if (presentCnt == 3) {
-            maxSentencesAfter = groupChars
-                .map((c) => afterByChar[c] ?? 0)
+            maxSentences = groupChars
+                .map((c) => byChar[c] ?? 0)
                 .reduce((a, b) => a < b ? a : b);
-            if (maxSentencesAfter > 2) maxSentencesAfter = 2;
+            if (maxSentences > 2) maxSentences = 2;
           }
 
           // 计算成2句所需进张数（黑元目标每门尽量2句）
           int neededFor2Sentences = 0;
           bool insufficientRem = false;
           for (final gc in groupChars) {
-            final have = afterByChar[gc] ?? 0;
+            final have = byChar[gc] ?? 0;
             final need = 2 - have;
             if (need > 0) {
               neededFor2Sentences += need;
@@ -4280,7 +4270,7 @@ class AIStrategyHard extends AIStrategy {
 
           // 1. 能组句数少的优先打出（破坏句数潜力）
           //    能组2句(保留) > 能组1句 > 能组0句(优先打出)
-          bonus += (2 - maxSentencesAfter) * 300;
+          bonus += (2 - maxSentences) * 300;
 
           // 2. 同句数下，需要进张多的优先打出
           bonus += neededFor2Sentences * 100;
