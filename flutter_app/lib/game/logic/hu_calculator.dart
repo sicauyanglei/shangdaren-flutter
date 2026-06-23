@@ -779,7 +779,7 @@ class HuCalculator {
 
     final totalSpecialSentenceCount =
         shangDaRenSentenceCount + fuLuShouSentenceCount;
-    if (totalSpecialSentenceCount < 2) return 0;
+    if (totalSpecialSentenceCount < 3) return 0;
 
     final remaining = hand.where((c) => !usedIds.contains(c.id)).toList();
     if (remaining.length != 2) return 0;
@@ -792,6 +792,8 @@ class HuCalculator {
         c1.position != c2.position &&
         c1.character != c2.character;
     if (!isHalfKao) return 0;
+    // 其它门(2-7)都是句子：剩余2张半靠必须来自门1/8
+    if (c1.sentence != 1 && c1.sentence != 8) return 0;
 
     final allCards = [...hand, ...melds.expand((m) => m.cards)];
     final shangCount = allCards.where((c) => c.character == '上').length;

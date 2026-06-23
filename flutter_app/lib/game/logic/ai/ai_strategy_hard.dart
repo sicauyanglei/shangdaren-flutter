@@ -1415,8 +1415,8 @@ class AIStrategyHard extends AIStrategy {
   }
 
   /// 评估红元路线潜力：返回>0表示有红元潜力
-  /// 红元条件：无碰无招（或招但effectiveHasZhao=false），组合牌全是句
-  /// 组1/组8句>=2，上/福总数3-6张，6句+1靠结构
+  /// 红元条件：无碰无招，组合牌全是句
+  /// 组1/组8句>=3，其它门都是句子，2张半靠将牌来自门1/8，上/福总数3-6张
   double _evaluateHongYuanPotential(Player player) {
     final hasPeng = player.melds.any((m) => m.type == MeldType.kan);
     final hasZhao = player.melds.any((m) => m.type == MeldType.zhao);
@@ -1478,7 +1478,14 @@ class AIStrategyHard extends AIStrategy {
     if (shangFuCount < 3 || shangFuCount > 6) return -1;
 
     // 红元潜力与特殊句数和上/福数量正相关
-    return 80.0 + totalSpecialSentenceCount * 40.0 + shangFuCount * 15.0;
+    // 门1/8牌数量越多越容易组成3个句
+    final door18CardCount = allCards
+        .where((c) => c.sentence == 1 || c.sentence == 8)
+        .length;
+    return 60.0 +
+        totalSpecialSentenceCount * 50.0 +
+        shangFuCount * 15.0 +
+        door18CardCount * 3.0;
   }
 
   /// 评估枯胡路线潜力：返回>0表示有枯胡潜力
@@ -3085,24 +3092,68 @@ class AIStrategyHard extends AIStrategy {
       final isKuHu = kuHuPotential > 0;
 
       if (isShiDui) {
-        // 十对路线：保留对子，优先出孤张
+        // 十对路线：保对子、招；拆坎(剩余0时)；孤张剩余0优先打出
+        final rem = _remainingCount(cardToDiscard.character, visibleCount);
         if (discardGroupCharSet.length == 1) {
-          score += 250; // 孤张最优先
-        } else if (discardGroupCharSet.length == 3) {
-          if (discardCountInGroup >= 2) {
-            score += 100; // 普句多一张，出多余的对子张
+          // 同字组（孤张/对子/坎/招）
+          if (discardCountInGroup >= 4) {
+            // 招（2对），绝不出
+            score -= 200;
+          } else if (discardCountInGroup >= 3) {
+            // 坎（1对+1多余张）
+            if (rem <= 0) {
+              // 剩余0，无法成招，拆坎变对
+              score += 300;
+            } else {
+              // 有剩余，可成招，保留
+              score -= 100;
+            }
+          } else if (discardCountInGroup >= 2) {
+            // 对子，绝不出
+            score -= 100;
           } else {
-            score -= 50; // 出单张会破坏句，但十对不需要句
+            // 孤张
+            if (rem <= 0) {
+              // 剩余0，死孤张，最优先打出
+              score += 350;
+            } else {
+              // 有剩余，可成对，保留（低优先级打出）
+              score += 100;
+            }
+          }
+        } else if (discardGroupCharSet.length == 3) {
+          // 句型/句孤张型
+          if (discardCountInGroup >= 2) {
+            // 句孤张型，出多余的对子张
+            score += 100;
+          } else {
+            // 句中单张，十对不需要句
+            if (rem <= 0) {
+              score += 300; // 死单张，优先打出
+            } else {
+              score += 150; // 次优打出
+            }
           }
         } else if (discardGroupCharSet.length == 2) {
+          // 半靠/对+靠
           if (hasPairInGroup) {
             if (discardCountInGroup >= 2) {
-              score -= 100; // 十对路线绝不出对子
+              score -= 100; // 绝不出对子
             } else {
-              score += 150; // 出独立单张，保留对子
+              // 出独立单张，保留对子
+              if (rem <= 0) {
+                score += 300; // 死单张
+              } else {
+                score += 150; // 次优
+              }
             }
           } else {
-            score += 80; // 普靠，出一张变孤张
+            // 半靠，出一张变孤张
+            if (rem <= 0) {
+              score += 300; // 死单张
+            } else {
+              score += 150; // 次优
+            }
           }
         }
       } else if (isHeiYuan) {
@@ -3145,7 +3196,9 @@ class AIStrategyHard extends AIStrategy {
           }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
-            score += 120 + group18Bonus; // 普句多一张，门1/8更优先
+            // 句孤张型中出孤张，形成完整句，直接推进黑元6句目标
+            // 黑元核心是组句，应高于对子优先级
+            score += 350 + group18Bonus; // 鼓励组句，门1/8更优先
           }
         } else if (discardGroupCharSet.length == 2) {
           if (isKanCharInGroup) {
@@ -3165,26 +3218,43 @@ class AIStrategyHard extends AIStrategy {
           }
         }
       } else if (isHongYuan) {
-        // 红元路线：组1/组8句优先保留，优先出非组1/8的孤张
+        // 红元路线：门1/8句≥3，其它门都是句子，2张半靠将牌来自门1/8
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
         if (discardGroupCharSet.length == 1) {
-          if (isGroup18) {
-            score += 100; // 组1/8孤张，仍可凑句，次优
+          if (discardCountInGroup >= 3) {
+            // 坎/招（红元不能有坎/碰/招），需要拆解
+            score += 150;
+            if (isGroup18) score += 50;
+          } else if (isGroup18) {
+            score += 150; // 门1/8孤张，可能组句
           } else {
-            score += 200; // 非组1/8孤张，最优先
+            score += 300; // 门2-7孤张，无法组句则无用，优先出
           }
         } else if (discardGroupCharSet.length == 3) {
           if (discardCountInGroup >= 2) {
+            // 句孤张型中出孤张，形成完整句
             if (isGroup18) {
-              score += 60; // 组1/8句多一张，保留句优先
+              score += 250; // 门1/8句，红元核心需求(≥3句)
             } else {
-              score += 120; // 非组1/8句多一张
+              score += 200; // 门2-7句，也需要(其它门都是句子)
             }
           }
         } else if (discardGroupCharSet.length == 2) {
           if (hasPairInGroup) {
             if (discardCountInGroup == 1) {
-              score += 60; // 保留对子，出靠单张
+              // 对子+靠中出靠单张
+              if (isGroup18) {
+                score += 40; // 门1/8半靠，可能是将牌，低优先级
+              } else {
+                score += 80; // 门2-7半靠，组句来源，低优先级
+              }
+            }
+          } else {
+            // 半靠中出1张
+            if (isGroup18) {
+              score += 40; // 门1/8半靠，可能是将牌，低优先级
+            } else {
+              score += 80; // 门2-7半靠，组句来源，低优先级
             }
           }
         }
@@ -4223,33 +4293,61 @@ class AIStrategyHard extends AIStrategy {
 
     switch (route) {
       case _RouteType.shiDui:
-        // 十对路线出牌优先级（规则20.1）
-        if (chCnt == 1) {
-          // 孤张
-          bonus += 250;
-        } else if (hasAllThree && chCnt == 2) {
-          // 普句多一张
-          bonus += 100;
-        } else if (chCnt == 1 && presentChars.length >= 2) {
-          // 对子+独立单张（出单张）
-          bonus += 150;
-        } else if (chCnt == 2 &&
-            presentChars.any((c) => (byChar[c] ?? 0) == 1)) {
-          // 对子+独立单张（出对子）- 绝不出对子
+        // 十对路线出牌优先级
+        // 保对子、招；拆坎(剩余0时)；孤张剩余0优先打出
+        if (chCnt >= 4) {
+          // 招（2对），绝不出
+          bonus -= 200;
+        } else if (chCnt == 3) {
+          // 坎（1对+1多余张）
+          final rem = _remainingCount(ch, visibleCount);
+          if (rem <= 0) {
+            // 剩余0，无法成招，拆坎变对
+            bonus += 300;
+          } else {
+            // 有剩余，可成招，保留
+            bonus -= 100;
+          }
+        } else if (chCnt == 2) {
+          // 对子，绝不出
           bonus -= 100;
-        } else if (presentChars.length == 2 && chCnt == 1) {
-          // 普靠（出一张）
-          bonus += 80;
+        } else if (chCnt == 1) {
+          // 单张
+          final rem = _remainingCount(ch, visibleCount);
+          if (presentChars.length == 1) {
+            // 孤张
+            if (rem <= 0) {
+              // 剩余0，死孤张，最优先打出
+              bonus += 350;
+            } else {
+              // 有剩余，可成对，保留（低优先级打出）
+              bonus += 100;
+            }
+          } else {
+            // 半靠/句中单张（十对不需要句，出单张不影响对子）
+            if (rem <= 0) {
+              // 剩余0，死单张，优先打出
+              bonus += 300;
+            } else {
+              // 有剩余，次优打出
+              bonus += 150;
+            }
+          }
         }
         break;
 
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
         if (chCnt == 3) {
-          // 坎（3张同字）- 优先清理
+          // 坎（3张同字）- 优先清理，破坏黑元资格
           bonus += 1500;
+        } else if (hasAllThree && chCnt == 2) {
+          // 句孤张型中出孤张，形成完整句，直接推进黑元6句目标
+          // 黑元核心是组句，应高于对子优先级
+          bonus += 350;
+          if (isJingMen) bonus += 300; // 门1/8更优先
         } else if (chCnt == 2) {
-          // 对子
+          // 对子（不能碰坎，黑元下无用）
           final otherChars = groupChars.where((c) => c != ch).toList();
           int otherRem = 0;
           for (final oc in otherChars) {
@@ -4260,40 +4358,56 @@ class AIStrategyHard extends AIStrategy {
           } else {
             bonus += 250; // 活对子
           }
+        } else if (presentChars.length == 2 && chCnt == 1) {
+          // 半靠中出1张（半靠是成句来源，低优先级，避免破坏）
+          bonus += 50;
+          if (isJingMen) bonus += 300; // 门1/8更优先
         } else if (chCnt == 1) {
           // 孤张
           bonus += 200;
           if (isJingMen) bonus += 100; // 门1/8孤张更优先
-        } else if (hasAllThree && chCnt == 2) {
-          // 普句多一张
-          bonus += 120;
-          if (isJingMen) bonus += 300; // 门1/8更优先
-        } else if (presentChars.length == 2 && chCnt == 1) {
-          // 普靠
-          bonus += 50;
-          if (isJingMen) bonus += 300; // 门1/8更优先
         }
         // 门1/8额外加分
         if (isJingMen) bonus += 300;
         break;
 
       case _RouteType.hongYuan:
-        // 红元路线出牌优先级（规则20.3）
-        if (chCnt == 1 && !isJingMen) {
-          // 非组1/8孤张
+        // 红元路线出牌优先级
+        // 目标：门1/8句≥3，其它门都是句子，2张半靠将牌来自门1/8
+        if (hasAllThree && chCnt == 2) {
+          // 句孤张型中出孤张，形成完整句
+          if (isJingMen) {
+            bonus += 250; // 门1/8句，红元核心需求(≥3句)
+          } else {
+            bonus += 200; // 门2-7句，也需要(其它门都是句子)
+          }
+        } else if (chCnt >= 4) {
+          // 招（红元不能有招），需要拆解
           bonus += 200;
-        } else if (chCnt == 1 && isJingMen) {
-          // 组1/8孤张
-          bonus += 100;
-        } else if (hasAllThree && chCnt == 2 && !isJingMen) {
-          // 非组1/8句多一张
-          bonus += 120;
-        } else if (hasAllThree && chCnt == 2 && isJingMen) {
-          // 组1/8句多一张
-          bonus += 60;
+        } else if (chCnt == 3) {
+          // 坎（红元不能有坎/碰），需要拆解
+          bonus += 150;
+          if (isJingMen) bonus += 50;
         } else if (presentChars.length == 2 && chCnt == 1) {
-          // 对子+靠（出靠单张）
-          bonus += 60;
+          // 半靠中出1张（保留半靠用于组句或作将牌）
+          if (isJingMen) {
+            bonus += 40; // 门1/8半靠，可能是将牌，低优先级出
+          } else {
+            bonus += 80; // 门2-7半靠，组句来源，低优先级出
+          }
+        } else if (chCnt == 1 && presentChars.length == 1) {
+          // 孤张
+          if (isJingMen) {
+            bonus += 150; // 门1/8孤张，可能组句
+          } else {
+            bonus += 300; // 门2-7孤张，无法组句则无用，优先出
+          }
+        } else if (chCnt == 2 && presentChars.length == 1) {
+          // 纯对子（红元将牌是半靠不是对子，对子价值低）
+          bonus += 50;
+        } else if (chCnt == 2 && presentChars.length >= 2) {
+          // 对子+靠中出对子（避免破坏对子）
+          bonus -= 100;
         }
         break;
 
