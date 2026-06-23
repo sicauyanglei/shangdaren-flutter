@@ -5763,8 +5763,11 @@ class AIStrategyHard extends AIStrategy {
 
     // 3.5 形成完整句奖励：出牌后该门形成完整句（句型），给予额外奖励
     // 这鼓励从"句孤张型"等牌型中出多余张，形成完整句
+    // 黑元路线例外：黑元看组句速度，保留多一张才有机会成2句，不奖励形成1句
     double formSentenceBonus = 0;
-    if (typeAfterDiscard == '句型' && currentType != '句型') {
+    if (typeAfterDiscard == '句型' &&
+        currentType != '句型' &&
+        heiYuanPotential <= 0) {
       formSentenceBonus = 100; // 形成完整句的奖励
     }
 
