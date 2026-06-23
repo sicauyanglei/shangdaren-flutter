@@ -3086,8 +3086,9 @@ class AIStrategyHard extends AIStrategy {
           final rem = _remainingCount(ch, visibleCount);
           if (rem >= 1) {
             // 对的进张：需要第3张变成刻，进张数=rem
-            // 进张概率高的对更有价值
-            score += 30 + rem * 12;
+            // 对→坎增加3胡(普坎)/12胡(精坎)，进张价值高于靠(靠→句增加0胡/4胡)
+            // 评分应高于靠(50+rem*20)，符合card-group-type.md对型(排名32)>半靠型(排名33)
+            score += 55 + rem * 22;
           } else {
             // 没有进张的对价值很低
             score += 3;
@@ -4105,7 +4106,7 @@ class AIStrategyHard extends AIStrategy {
       case '招型':
         return 200; // 精招
       case '句孤张型':
-        return 90; // 精句+精单/银单
+        return 130; // 精句(90)+精单(40)，取最优拆解（孤张为精字时）
       case '对对型':
         return 40; // 银对+银对
       case '坎孤张型':
@@ -4234,7 +4235,7 @@ class AIStrategyHard extends AIStrategy {
     }
 
     // 4. 门间优先级权重
-    final menPriority = _getMenPriorityByRoute(
+    double menPriority = _getMenPriorityByRoute(
       sentence,
       shiDuiPotential,
       heiYuanPotential,
@@ -4242,6 +4243,17 @@ class AIStrategyHard extends AIStrategy {
       kuHuPotential,
       visibleCount,
     );
+
+    // 红元路线下，门1/8的银字(大/人/禄/寿)不保护
+    // 红元需要的是上/福(3-6张)，银字对红元路线没有帮助
+    // 银字无法单独组精句(需要上/福)，保留银字不如优先出掉
+    if (hongYuanPotential > 0 && (sentence == 1 || sentence == 8)) {
+      final isJingChar =
+          cardToDiscard.character == '上' || cardToDiscard.character == '福';
+      if (!isJingChar) {
+        menPriority = 2.0; // 银字不保护，与门2-7同等优先拆
+      }
+    }
 
     // 5. 基础评分：保留排名越低（越应牺牲），越鼓励出牌
     // 排名34(孤张型)→最高正分(鼓励出), 排名1(招招招型)→最高负分(禁止出)
@@ -4625,6 +4637,22 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
+    // 不走黑元/红元路线时，坎对型不拆开吃上家的牌
+    // 理由：坎是完整集（3张同字），拆开损失大；坎对型有进张成坎坎型的潜力
+    // 例外1：对中字剩余0张（对已降级为死对子），允许拆坎吃
+    // 例外2：吃后听牌（bestBenefit>=10000）时允许吃
+    // 快速判断：组合牌中有坎或招 → 不能走黑元/红元
+    if (!player.isTing && bestBenefit < 10000) {
+      if (!_canHeiYuanOrHongYuan(player)) {
+        if (_wouldBreakKan(player, card)) {
+          // 检查对中字是否剩余0张（对已降级）
+          if (!_pairCharRemainZero(player, card, state)) {
+            return false;
+          }
+        }
+      }
+    }
+
     // 吃后听牌（bestBenefit>=10000）时允许吃
     if (player.isTing) return bestBenefit >= 10000;
 
@@ -4726,6 +4754,77 @@ class AIStrategyHard extends AIStrategy {
       if (inJu) continue;
       // 该字恰好2张且非上/福，吃掉1张会破坏对子
       return true;
+    }
+    return false;
+  }
+
+  /// 快速判断是否还能走黑元或红元路线
+  /// 组合牌中有坎或招 → 不能走黑元/红元（黑元要求无碰，红元要求无碰无招）
+  bool _canHeiYuanOrHongYuan(Player player) {
+    for (final m in player.melds) {
+      if (m.type == MeldType.kan || m.type == MeldType.zhao) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// 检查吃牌是否会拆开手牌中的坎（3张同字）
+  /// 坎对型如"丘丘丘乙乙"，吃"丘乙己"会从坎中拆1张丘
+  bool _wouldBreakKan(Player player, Card card) {
+    final hand = player.hand;
+    final otherChars = _getOtherCharsInGroup(card);
+    final availableChars = otherChars
+        .where((ch) => hand.any((c) => c.character == ch))
+        .toList();
+
+    if (availableChars.length < 2) return false;
+
+    // 提取手牌中的句，用于排除参与句的字
+    final handRemaining = List<Card>.from(hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(handRemaining, handASet);
+
+    for (final ch in availableChars) {
+      final chCount = hand.where((c) => c.character == ch).length;
+      if (chCount != 3) continue; // 恰好3张才是坎
+      // 参与句的字不算坎（1张在句中，2张是对子）
+      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
+      if (inJu) continue;
+      // 该字恰好3张且不参与句，吃掉1张会拆坎
+      return true;
+    }
+    return false;
+  }
+
+  /// 检查坎对型中对中字（2张同字）的剩余张数是否为0
+  /// 坎对型 = 坎(3张A) + 对(2张B)，检查B的剩余张数
+  /// 如果对中字剩余0张，对已降级，此时拆坎吃是合理的
+  bool _pairCharRemainZero(Player player, Card card, GameState state) {
+    final hand = player.hand;
+    final otherChars = _getOtherCharsInGroup(card);
+    final availableChars = otherChars
+        .where((ch) => hand.any((c) => c.character == ch))
+        .toList();
+
+    if (availableChars.length < 2) return false;
+
+    final visibleCount = _buildVisibleCharCount(player, state);
+
+    // 提取手牌中的句
+    final handRemaining = List<Card>.from(hand);
+    final handASet = <Meld>[];
+    HuCalculator.extractJu(handRemaining, handASet);
+
+    for (final ch in availableChars) {
+      final chCount = hand.where((c) => c.character == ch).length;
+      if (chCount != 2) continue; // 恰好2张是对子
+      // 参与句的字不算对子
+      final inJu = handASet.any((m) => m.cards.any((c) => c.character == ch));
+      if (inJu) continue;
+      // 检查该对中字剩余张数
+      final rem = _remainingCount(ch, visibleCount);
+      if (rem == 0) return true; // 对中字剩余0张，对已降级
     }
     return false;
   }
@@ -5057,6 +5156,33 @@ class AIStrategyHard extends AIStrategy {
       if (distAfterDiscard > distBefore) return false;
 
       if (distAfterDiscard < distBefore) return true;
+
+      // 距离不变时，门1/8精句潜力保护
+      // 碰银字(大/人/禄/寿)形成普坎(3胡)，但会消耗精句组件
+      // 保留禄禄寿寿+福等摸福组"福禄寿"精句(4胡) > 碰禄普坎(3胡)
+      // 例：手牌"福禄禄寿寿"，碰禄后"福寿寿"无法组精句，不碰
+      if (card.sentence == 1 || card.sentence == 8) {
+        final isJingChar = card.character == '上' || card.character == '福';
+        if (!isJingChar) {
+          // 碰的是银字，检查手牌中是否有精字(上/福)可组精句
+          final jingChar = card.sentence == 1 ? '上' : '福';
+          final hasJing = hand.any((c) => c.character == jingChar);
+          if (hasJing) {
+            // 统计碰牌后该门剩余的不同字数
+            final charsAfterPeng = <String>{};
+            for (final c in testHand) {
+              if (c.sentence == card.sentence) {
+                charsAfterPeng.add(c.character);
+              }
+            }
+            // 碰牌后不足3个不同字，无法组精句
+            // 精句4胡 > 普坎3胡，保留精句潜力不碰
+            if (charsAfterPeng.length < 3) {
+              return false;
+            }
+          }
+        }
+      }
 
       // 距离不变时，比较碰牌前后胡数差值
       final huScoreBefore = _evaluateHuScore(player);

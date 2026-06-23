@@ -26,29 +26,75 @@ class TingChecker {
     }
 
     final basicResult = _checkBasicTing(hand);
-    if (!basicResult.met)
-      return TingResult(isTing: false, tingCards: [], tingType: TingType.none);
-
-    final tingCards = _checkHuTypeTing(hand, melds, basicResult);
-    TingType tingType;
-    switch (basicResult.type) {
-      case _BasicTingType.ninePairs:
-        tingType = TingType.ninePairs;
-        break;
-      case _BasicTingType.singleWait:
-        tingType = TingType.singleWait;
-        break;
-      case _BasicTingType.pairWait:
-        tingType = TingType.pairWait;
-        break;
-      default:
-        tingType = TingType.none;
+    if (basicResult.met) {
+      final tingCards = _checkHuTypeTing(hand, melds, basicResult);
+      TingType tingType;
+      switch (basicResult.type) {
+        case _BasicTingType.ninePairs:
+          tingType = TingType.ninePairs;
+          break;
+        case _BasicTingType.singleWait:
+          tingType = TingType.singleWait;
+          break;
+        case _BasicTingType.pairWait:
+          tingType = TingType.pairWait;
+          break;
+        default:
+          tingType = TingType.none;
+      }
+      return TingResult(
+        isTing: tingCards.isNotEmpty,
+        tingCards: tingCards,
+        tingType: tingType,
+      );
     }
-    return TingResult(
-      isTing: tingCards.isNotEmpty,
-      tingCards: tingCards,
-      tingType: tingType,
-    );
+
+    // Fallback: 基本听牌条件不满足时，遍历所有可能的摸牌判断是否能胡牌
+    // 场景：手牌有多个对子/靠+单牌，摸牌后形成新句/坎改变提取方式，使结构满足胡牌条件
+    // 例如：尔尔八九子福禄禄寿寿(10张) 静态cSet=3,dSet=1不满足听牌条件
+    //   但摸尔→句(福禄寿)+坎(尔尔尔)+靠(禄寿)作将牌→能胡
+    //   摸福→句(福禄寿)×2+对(尔尔)作将牌→能胡
+    final fallbackTingCards = _checkTingFallback(hand, melds);
+    if (fallbackTingCards.isNotEmpty) {
+      return TingResult(
+        isTing: true,
+        tingCards: fallbackTingCards,
+        tingType: TingType.pairWait,
+      );
+    }
+
+    return TingResult(isTing: false, tingCards: [], tingType: TingType.none);
+  }
+
+  /// Fallback听牌检查：遍历所有可能的摸牌，判断摸牌后是否能胡牌
+  /// 用于处理基本听牌条件无法识别但实际听牌的情况
+  static List<Card> _checkTingFallback(List<Card> hand, List<Meld> melds) {
+    final tingCards = <Card>[];
+    const allChars = [
+      '上', '大', '人', '丘', '乙', '己', '化', '三', '千',
+      '七', '十', '土', '尔', '小', '生', '八', '九', '子',
+      '佳', '作', '亡', '福', '禄', '寿',
+    ];
+
+    for (final ch in allChars) {
+      final sentence = _charToSentence(ch);
+      final position = _charToPosition(ch);
+      if (sentence > 0) {
+        final testCard = Card(
+          id: -100,
+          character: ch,
+          sentence: sentence,
+          position: position,
+        );
+        final testHand = List<Card>.from(hand);
+        testHand.add(testCard);
+        if (_canHu(testHand, melds)) {
+          tingCards.add(testCard);
+        }
+      }
+    }
+
+    return tingCards;
   }
 
   static _BasicTingResult _checkBasicTing(List<Card> hand) {
