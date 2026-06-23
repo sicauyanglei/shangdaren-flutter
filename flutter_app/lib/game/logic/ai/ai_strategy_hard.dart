@@ -4327,8 +4327,17 @@ class AIStrategyHard extends AIStrategy {
           // 坎/招+靠（出靠单张）
           bonus += 200;
         } else if (hasAllThree && chCnt == 2) {
-          // 普句多一张
-          bonus += 120;
+          // 句孤张型(2,1,1)或句半靠型(2,2,1)中出有2张的字
+          final total = byChar.values.fold(0, (a, b) => a + b);
+          final countOfPairs = byChar.values.where((v) => v == 2).length;
+          if (total == 4 && countOfPairs == 1) {
+            // 句孤张型中出孤张：1张参与句，1张是孤张，出后形成完整句，损失0
+            // 等同于出孤张，应与普单(孤张)同优先级
+            bonus += 200;
+          } else {
+            // 句半靠型(2,2,1)中出对中1张，损失10
+            bonus += 120;
+          }
         } else if (chCnt == 2) {
           // 对子
           final rem = _remainingCount(ch, visibleCount);
@@ -5727,6 +5736,12 @@ class AIStrategyHard extends AIStrategy {
         !isShiDuiRoute) {
       // 银对（大大/人人/禄禄/寿寿），出对中字保留银靠（大人/禄寿等）有精句潜力
       cardSelectionBonus += 100; // 高于孤张的80，优先出对中字
+    }
+
+    // 句孤张型(2,1,1)中出孤张：有2张的字，1张参与句，1张是孤张
+    // 出1张后形成完整句，损失=0，应与对孤张型中出孤张同等对待
+    if (currentType == '句孤张型' && discardCount == 2 && !isShiDuiRoute) {
+      cardSelectionBonus += 80; // 与对孤张型中出孤张相同
     }
 
     // 对中一张（出对中一张，保留完整集）
