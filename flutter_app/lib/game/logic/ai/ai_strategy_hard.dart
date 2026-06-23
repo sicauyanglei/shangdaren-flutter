@@ -6767,16 +6767,11 @@ class AIStrategyHard extends AIStrategy {
       // 比较招vs吃：手牌能吃上家的牌时，模拟吃牌后效果
       // 场景：手牌七七七十土，玩家出七。招七后十土成死靠（七全在招牌），
       //       吃七后七十土句在组合牌区，手牌结构更优，听牌距离更近
-      // 注意：只有出牌玩家的下家才能吃牌，非下家不比较招vs吃
-      final playerIndex = state.players.indexOf(player);
-      final discardPlayerIndex = state.lastDiscardPlayerIndex;
-      final isNextPlayer = discardPlayerIndex != null &&
-          playerIndex == (discardPlayerIndex + 1) % state.players.length;
       final otherChars = _getOtherCharsInGroup(card);
       final availableChars = otherChars
           .where((ch) => hand.any((c) => c.character == ch))
           .toList();
-      if (isNextPlayer && availableChars.length >= 2) {
+      if (availableChars.length >= 2) {
         int bestChiDist = 99;
         double bestChiHu = 0;
         for (int i = 0; i < availableChars.length; i++) {
