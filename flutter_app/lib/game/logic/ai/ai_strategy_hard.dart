@@ -3157,65 +3157,55 @@ class AIStrategyHard extends AIStrategy {
           }
         }
       } else if (isHeiYuan) {
-        // 黑元路线：无碰无招，优先拆对子(对子变碰会破坏黑元)
-        // 黑元目标是清理所有门1/8牌，门1/8牌额外加分
-        // 黑元讲究哪一门成句快，招坎很难全部成句，要优先拆
+        // 黑元路线：组6句+1靠，看组句速度
+        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
+        //       牌面余牌不足以满足组句时，也要优先打出
         final isGroup18 = discardGroup == 1 || discardGroup == 8;
-        final group18Bonus = isGroup18 ? 300 : 0; // 门1/8牌额外加分，优先清理
-        // 检查是否是坎（3张同字）：坎离成句远，优先出掉清理
+        final group18Bonus = isGroup18 ? 300 : 0;
+
+        // 基于出牌前该门各字张数分析
+        final groupCharsList = _groupChars[discardGroup - 1];
+
+        // 计算当前该门能成的最大句数
+        final presentCnt = groupCharsList
+            .where((c) => (groupCharCount[c] ?? 0) > 0)
+            .length;
+        int maxSentences = 0;
+        if (presentCnt == 3) {
+          maxSentences = groupCharsList
+              .map((c) => groupCharCount[c] ?? 0)
+              .reduce((a, b) => a < b ? a : b);
+          if (maxSentences > 2) maxSentences = 2;
+        }
+
+        // 计算成2句所需进张数
+        int neededFor2Sentences = 0;
+        bool insufficientRem = false;
+        for (final gc in groupCharsList) {
+          final have = groupCharCount[gc] ?? 0;
+          final need = 2 - have;
+          if (need > 0) {
+            neededFor2Sentences += need;
+            final rem = _remainingCount(gc, visibleCount);
+            if (rem < need) insufficientRem = true;
+          }
+        }
+
+        // 1. 能组句数少的优先打出（破坏句数潜力）
+        score += (2 - maxSentences) * 300 + group18Bonus;
+
+        // 2. 同句数下，需要进张多的优先打出
+        score += neededFor2Sentences * 100;
+
+        // 3. 牌面余牌不足以满足组句，额外优先打出
+        if (insufficientRem) score += 500;
+
+        // 4. 坎（3张同字）离成句远，优先清理
         final isKanCharInGroup =
             groupCharCount[cardToDiscard.character] != null &&
             groupCharCount[cardToDiscard.character]! >= 3;
-        if (discardGroupCharSet.length == 1) {
-          // 检查是否是坎（3张同字）：坎离成句远，黑元路线下优先拆
-          if (isKanCharInGroup) {
-            // 坎（3张同字）：坎需要同门其他字才能成句，离成句远
-            // 黑元路线下优先出坎中的牌，清理张数最多的牌
-            // 大幅奖励出坎，覆盖potential和lookaheadScore的差距
-            score += 1500 + group18Bonus; // 坎优先出，覆盖其他评分项差距
-          } else if (discardCountInGroup >= 2) {
-            // 对子（2张同字）：黑元需要6句+1靠，对子不能作将牌
-            // 检查是否为死对子（同门其他字剩余张数很少，无法成句）
-            final otherChars = _groupChars[discardGroup - 1]
-                .where((ch) => ch != cardToDiscard.character)
-                .toList();
-            int otherRem = 0;
-            for (final ch in otherChars) {
-              otherRem += _remainingCount(ch, visibleCount);
-            }
-            if (otherRem <= 2) {
-              // 死对子：同门其他字剩余很少，无法成句，黑元路线下完全无用
-              // 大幅加分，超过孤张，确保优先出死对子
-              score += 500 + group18Bonus;
-            } else {
-              // 活对子：有成句潜力，但仍优先拆（黑元不要对子作将牌）
-              score += 250 + group18Bonus;
-            }
-          } else {
-            score += 200 + group18Bonus; // 孤张最优先，门1/8孤张更优先
-          }
-        } else if (discardGroupCharSet.length == 3) {
-          if (discardCountInGroup >= 2) {
-            // 句孤张型中出孤张，形成完整句，直接推进黑元6句目标
-            // 黑元核心是组句，应高于对子优先级
-            score += 350 + group18Bonus; // 鼓励组句，门1/8更优先
-          }
-        } else if (discardGroupCharSet.length == 2) {
-          if (isKanCharInGroup) {
-            // 坎（3张同字）+靠：坎需要同门其他字才能成句，离成句远
-            // 黑元路线下优先出坎中的牌，清理张数最多的牌
-            // 坎离成句远（需要补缺的字），出坎后distToTing可能变远，但清理坎是黑元路线的核心策略
-            // 大幅奖励出坎，覆盖potential和lookaheadScore的差距
-            score += 1500 + group18Bonus; // 坎优先出，覆盖其他评分项差距
-          } else if (hasPairInGroup) {
-            if (discardCountInGroup >= 2) {
-              score += 100 + group18Bonus; // 优先拆对子，门1/8更优先
-            } else {
-              score += 30 + group18Bonus; // 保留对子次之，门1/8更优先
-            }
-          } else {
-            score += 50 + group18Bonus; // 普靠，门1/8更优先
-          }
+        if (isKanCharInGroup) {
+          score += 1500;
         }
       } else if (isHongYuan) {
         // 红元路线：门1/8句≥3，其它门都是句子，2张半靠将牌来自门1/8
@@ -4338,37 +4328,53 @@ class AIStrategyHard extends AIStrategy {
 
       case _RouteType.heiYuan:
         // 黑元路线出牌优先级（规则20.2）
-        if (chCnt == 3) {
-          // 坎（3张同字）- 优先清理，破坏黑元资格
-          bonus += 1500;
-        } else if (hasAllThree && chCnt == 2) {
-          // 句孤张型中出孤张，形成完整句，直接推进黑元6句目标
-          // 黑元核心是组句，应高于对子优先级
-          bonus += 350;
-          if (isJingMen) bonus += 300; // 门1/8更优先
-        } else if (chCnt == 2) {
-          // 对子（不能碰坎，黑元下无用）
-          final otherChars = groupChars.where((c) => c != ch).toList();
-          int otherRem = 0;
-          for (final oc in otherChars) {
-            otherRem += _remainingCount(oc, visibleCount);
+        // 黑元核心：组6句+1靠，看组句速度
+        // 策略：优先打出"当前手牌成同等句数下需要进张最多"的牌
+        //       牌面余牌不足以满足组句时，也要优先打出
+        {
+          // 基于出牌前该门各字张数分析
+          // 计算当前该门能成的最大句数（每字至少1张才能成1句）
+          int maxSentences = 0;
+          final presentCnt = groupChars
+              .where((c) => (byChar[c] ?? 0) > 0)
+              .length;
+          if (presentCnt == 3) {
+            maxSentences = groupChars
+                .map((c) => byChar[c] ?? 0)
+                .reduce((a, b) => a < b ? a : b);
+            if (maxSentences > 2) maxSentences = 2;
           }
-          if (otherRem <= 2) {
-            bonus += 500; // 死对子
-          } else {
-            bonus += 250; // 活对子
+
+          // 计算成2句所需进张数（黑元目标每门尽量2句）
+          int neededFor2Sentences = 0;
+          bool insufficientRem = false;
+          for (final gc in groupChars) {
+            final have = byChar[gc] ?? 0;
+            final need = 2 - have;
+            if (need > 0) {
+              neededFor2Sentences += need;
+              // 检查牌面余牌是否足以满足
+              final rem = _remainingCount(gc, visibleCount);
+              if (rem < need) insufficientRem = true;
+            }
           }
-        } else if (presentChars.length == 2 && chCnt == 1) {
-          // 半靠中出1张（半靠是成句来源，低优先级，避免破坏）
-          bonus += 50;
-          if (isJingMen) bonus += 300; // 门1/8更优先
-        } else if (chCnt == 1) {
-          // 孤张
-          bonus += 200;
-          if (isJingMen) bonus += 100; // 门1/8孤张更优先
+
+          // 1. 能组句数少的优先打出（破坏句数潜力）
+          //    能组2句(保留) > 能组1句 > 能组0句(优先打出)
+          bonus += (2 - maxSentences) * 300;
+
+          // 2. 同句数下，需要进张多的优先打出
+          bonus += neededFor2Sentences * 100;
+
+          // 3. 牌面余牌不足以满足组句，额外优先打出
+          if (insufficientRem) bonus += 500;
+
+          // 4. 坎（3张同字）离成句远，优先清理
+          if (chCnt == 3) bonus += 1500;
+
+          // 5. 门1/8额外加分（黑元需要清理门1/8牌）
+          if (isJingMen) bonus += 300;
         }
-        // 门1/8额外加分
-        if (isJingMen) bonus += 300;
         break;
 
       case _RouteType.hongYuan:
