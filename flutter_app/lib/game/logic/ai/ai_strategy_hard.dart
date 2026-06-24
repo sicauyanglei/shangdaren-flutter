@@ -1428,7 +1428,8 @@ class AIStrategyHard extends AIStrategy {
     // 黑元给4-5番，普通胡不足11胡给0番，所以胡数<11时应优先黑元
     // 返回较低潜力值，引导AI优先清理门1/8牌
     if (group18Count <= 3) {
-      final totalHu = _evaluateHuScore(player);
+      // 黑元评估时，2-7门手牌中的坎算0胡（黑元需要句不需要坎，坎会被拆开组句）
+      final totalHu = _evaluateHuScoreForHeiYuan(player);
       if (totalHu <= 10) {
         // 放弃黑元条件：门1/8胡数>=8，说明门1/8价值大，不应为黑元清理
         // 主动进入黑元的条件：group18Count<=3 且 group18Hu<8
@@ -1710,6 +1711,54 @@ class AIStrategyHard extends AIStrategy {
     final result = HuCalculator.calculateTotalHu(player) * 1.0;
     _huScoreCache[key] = result;
     return result;
+  }
+
+  /// 黑元评估专用胡数计算：2-7门手牌中的坎算0胡
+  /// 黑元需要6句+1靠，坎会被拆开组句，所以坎的胡数不应计入
+  double _evaluateHuScoreForHeiYuan(Player player) {
+    // 组合牌胡数正常计算（已暴露的坎/招不影响黑元）
+    int meldHu = 0;
+    if (player.melds.isNotEmpty && player.meldHuCount == 0) {
+      meldHu = HuCalculator.updateMeldHuCache(player);
+    } else {
+      meldHu = player.meldHuCount;
+    }
+
+    // 手牌胡数：2-7门的坎算0胡
+    final remaining = List<Card>.from(player.hand);
+    final aSet = <Meld>[];
+    final bSet = <Meld>[];
+    final cSet = <Meld>[];
+    final dSet = <Meld>[];
+
+    HuCalculator.extractJu(remaining, aSet);
+    HuCalculator.extractZhao(remaining, bSet);
+    HuCalculator.extractKan(remaining, cSet);
+    HuCalculator.extractDuiAndKao(remaining, dSet);
+
+    int handHu = 0;
+    for (final m in aSet) {
+      handHu += m.getHuCount(isHand: true);
+    }
+    for (final m in bSet) {
+      handHu += m.getHuCount(isHand: true);
+    }
+    // 2-7门的坎算0胡，门1/8的坎正常计算
+    for (final m in cSet) {
+      if (m.cards.first.sentence >= 2 && m.cards.first.sentence <= 7) {
+        // 2-7门坎：0胡（黑元路线坎会被拆开组句）
+      } else {
+        handHu += m.getHuCount(isHand: true);
+      }
+    }
+    for (final m in dSet) {
+      handHu += m.getHuCount(isHand: true);
+    }
+    for (final c in remaining) {
+      handHu += (c.character == '上' || c.character == '福') ? 4 : 0;
+    }
+
+    return (meldHu + handHu) * 1.0;
   }
 
   (List<Card> bestHand, int bestDist) _findBestDiscardAfterMeld(
