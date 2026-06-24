@@ -5974,6 +5974,11 @@ class AIStrategyHard extends AIStrategy {
             // 缺字剩余少，孤张进张慢，优先出
             cardSelectionBonus += 80;
           }
+        } else if (currentType == '对孤张型' && heiYuanPotential > 0) {
+          // 黑元路线下，对孤张型中出孤张会保留对子
+          // 但黑元不需要坎（对成坎无意义），保留对不如保留半靠
+          // 降低出孤张的加分，使出对中字（保留半靠）更优先
+          cardSelectionBonus += 20;
         } else {
           cardSelectionBonus += 80;
         }
@@ -6035,9 +6040,16 @@ class AIStrategyHard extends AIStrategy {
           for (final ch in otherChars) {
             otherRem += _remainingCount(ch, visibleCount);
           }
+          // 检查出对中字后是否形成半靠（对孤张型中出对中字，保留孤张+对中剩余1张=半靠）
+          // 黑元路线下半靠有成句潜力，远优于保留对子
+          final formsKaoAfterDiscard = currentType == '对孤张型' &&
+              otherChars.any((ch) => (byChar[ch] ?? 0) >= 1);
           if (otherRem <= 2) {
             // 死对子：同门其他字剩余很少，无法成句，黑元路线下完全无用
             cardSelectionBonus += 200; // 大幅加分，优先出死对子
+          } else if (formsKaoAfterDiscard) {
+            // 出对中字后形成半靠（有成句潜力），黑元路线下最优出法
+            cardSelectionBonus += 150;
           } else {
             // 活对子：有成句潜力，但仍鼓励拆（黑元不要对子）
             cardSelectionBonus += 100;
