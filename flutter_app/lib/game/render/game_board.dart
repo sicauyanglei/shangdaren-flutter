@@ -1412,39 +1412,6 @@ class GameBoard extends Component {
       }
     }
 
-    // 自摸时在卡牌中央显示"自摸"标签
-    if (isZimoDisplay) {
-      final bgPaint = Paint()..color = const Color(0xCC000000);
-      final bgW = hCardW * 0.7;
-      final bgH = hCardH * 0.5;
-      final bgX = (hCardW - bgW) / 2;
-      final bgY = (hCardH - bgH) / 2;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(bgX, bgY, bgW, bgH),
-          const Radius.circular(4),
-        ),
-        bgPaint,
-      );
-      final tp = TextPainter(
-        text: TextSpan(
-          text: '自摸',
-          style: TextStyle(
-            fontSize: 20.0,
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFFffd700),
-            shadows: [Shadow(color: const Color(0xFF000000), blurRadius: 4)],
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      tp.layout();
-      tp.paint(
-        canvas,
-        Offset(hCardW / 2 - tp.width / 2, hCardH / 2 - tp.height / 2),
-      );
-    }
-
     canvas.restore();
   }
 
