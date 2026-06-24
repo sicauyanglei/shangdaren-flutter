@@ -1352,12 +1352,10 @@ class GameBoard extends Component {
   }
 
   void _renderPlayedCards(Canvas canvas) {
-    // 自摸时使用huZimoCard，点炮时不渲染中央卡牌（已在弃牌区）
     final isZimoDisplay =
         showHuDisplay && huMethod == '自摸' && huZimoCard != null;
     if (!isZimoDisplay && lastPlayedCard == null) return;
     if (!dealingComplete) return;
-    if (showHuDisplay && huMethod == '点炮') return;
 
     final displayCard = isZimoDisplay ? huZimoCard! : lastPlayedCard!;
     double px, py;
@@ -1450,14 +1448,16 @@ class GameBoard extends Component {
   void _renderSmallCards(Canvas canvas) {
     if (_atlasImage == null || _atlasLoader == null) return;
 
-    final smallLists = [
-      _player0Melds,
-      _player1Melds,
-      _player2Melds,
-      _player0Discards,
-      _player1Discards,
-      _player2Discards,
-    ];
+    final smallLists = showHuDisplay
+        ? [_player0Melds, _player1Melds, _player2Melds]
+        : [
+            _player0Melds,
+            _player1Melds,
+            _player2Melds,
+            _player0Discards,
+            _player1Discards,
+            _player2Discards,
+          ];
 
     for (final list in smallLists) {
       final meldGroups = <List<CardRender>>[];
