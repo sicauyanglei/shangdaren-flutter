@@ -1931,10 +1931,12 @@ export function aiDecidePeng(
         // 否则保留灵活性，不碰
         return false;
       }
+      // 无同组伙伴时，该字的对子无法参与成句，碰掉变坎更优
+      return true;
     }
 
     // 碰牌增加面子，更倾向碰
-    return testHand.length <= 10;
+    return true;
   }
 
   // sameCharCount == 1: 只有一张同字牌
