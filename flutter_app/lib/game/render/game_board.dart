@@ -1114,7 +1114,9 @@ class GameBoard extends Component {
     _renderBackground(canvas);
     _renderDeck(canvas);
     _renderDeckIndicator(canvas);
-    _renderPlayedCards(canvas);
+    if (!(showHuResult || showHuDisplay)) {
+      _renderPlayedCards(canvas);
+    }
     _renderSmallCards(canvas);
     _renderAIHandCards(canvas);
     _renderHandCards(canvas);
@@ -1122,6 +1124,7 @@ class GameBoard extends Component {
     _renderDragCard(canvas);
     if (showHuResult || showHuDisplay) {
       _renderHuResult(canvas);
+      _renderPlayedCards(canvas);
     }
   }
 
