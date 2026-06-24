@@ -701,7 +701,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final positions = _positionMap;
     _flyingScores.clear();
 
-    // 胡牌面板中心位置（设计坐标）- 面板在panelTop=100，宽度440，居中
+    // 胡牌面板中心位置（设计坐标）- 面板宽度360，居中
     // 分数行大约在面板中部偏下
     final panelCenterX = designWidth / 2;
     final panelScoreY = 180.0;
@@ -2196,8 +2196,8 @@ class _ReplayScreenState extends State<ReplayScreen>
     // 胡型颜色
     Color huTypeColor = _getHuTypeColor(huType);
 
-    // 面板定位在屏幕上半部分，确保不遮挡主视角手牌区域
-    final panelW = 440.0;
+    // 面板定位在屏幕上半部分，确保不遮挡非主视角玩家手牌区域
+    final panelW = 360.0;
     final panelTop = 100.0;
 
     // 倍数显示：0倍不显示，1倍显示为0.5倍
@@ -2206,8 +2206,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         : (multiplier == 1 ? '0.5倍' : '$multiplier倍');
 
     return Positioned(
-      left: 0,
-      right: 0,
+      left: (designWidth / 2 - panelW / 2) * scale,
       top: panelTop * scale,
       child: Transform.scale(
         scale: scale,
