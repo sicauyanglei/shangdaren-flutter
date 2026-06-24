@@ -939,7 +939,7 @@ class _ReplayScreenState extends State<ReplayScreen>
   }
 
   /// 计算底部主视角手牌顶部Y坐标（设计坐标）
-  /// 手牌底部在设计坐标 designHeight + 80（因为 bottom: -80）
+  /// 手牌底部在设计坐标 designHeight + 120（因为 bottom: -120）
   double _mainHandTopY(List<Card> hand) {
     final groups = <int, List<Card>>{};
     for (final card in hand) {
@@ -955,7 +955,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     }
     if (maxStack == 0) return designHeight;
     final groupH = (maxStack - 1) * handStackVisible + handCardH;
-    return designHeight + 80 - groupH;
+    return designHeight + 120 - groupH;
   }
 
   /// 根据主视角获取位置映射
@@ -1015,11 +1015,11 @@ class _ReplayScreenState extends State<ReplayScreen>
               child: _buildBottomMeldsAndDiscards(positions[2]),
             ),
           ),
-          // 底部 - 手牌（水平居中，与正常牌局一致，底部超出屏幕80px）
+          // 底部 - 手牌（水平居中，与正常牌局一致，底部超出屏幕120px）
           Positioned(
             left: 0,
             right: 0,
-            bottom: -80 * scale,
+            bottom: -120 * scale,
             child: Transform.scale(
               scale: scale,
               alignment: Alignment.bottomCenter,
@@ -2206,7 +2206,7 @@ class _ReplayScreenState extends State<ReplayScreen>
         : (multiplier == 1 ? '0.5倍' : '$multiplier倍');
 
     return Positioned(
-      left: (designWidth / 2 - panelW / 2) * scale,
+      left: (designWidth / 2) * scale - panelW / 2,
       top: panelTop * scale,
       child: Transform.scale(
         scale: scale,
