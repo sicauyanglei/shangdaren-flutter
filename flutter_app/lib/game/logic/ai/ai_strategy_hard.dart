@@ -1227,8 +1227,7 @@ class AIStrategyHard extends AIStrategy {
       // 选择句数增量最大的吃牌方案
       // 同增量下选概率高的
       final prob = rem / totalUnknown;
-      if (gain > bestChiGain ||
-          (gain == bestChiGain && prob > bestChiProb)) {
+      if (gain > bestChiGain || (gain == bestChiGain && prob > bestChiProb)) {
         bestChiGain = gain;
         bestChiProb = prob;
       }
@@ -1255,10 +1254,16 @@ class AIStrategyHard extends AIStrategy {
     }
 
     // 5. 综合难度分数
-    final difficulty = (2 - effectiveSentences) * 300.0 // 维度1：有效句数
-        + neededFor2 * 100.0 // 维度2：进张缺口
-        + (insufficient ? 500.0 : 0.0) // 维度3：余牌不足硬阻断
-        - bestChiProb * 150.0; // 维度4：吃牌概率高则难度降低
+    final difficulty =
+        (2 - effectiveSentences) *
+            300.0 // 维度1：有效句数
+            +
+        neededFor2 *
+            100.0 // 维度2：进张缺口
+            +
+        (insufficient ? 500.0 : 0.0) // 维度3：余牌不足硬阻断
+        -
+        bestChiProb * 150.0; // 维度4：吃牌概率高则难度降低
 
     return difficulty;
   }
@@ -4476,42 +4481,127 @@ class AIStrategyHard extends AIStrategy {
         break;
 
       case _RouteType.normal:
-        // 普通胡路线出牌优先级（规则20.5）
-        if (chCnt == 1) {
-          // 普单（孤张）
-          bonus += 200;
-        } else if (chCnt >= 3 && presentChars.length == 2) {
-          // 坎/招+靠（出靠单张）
-          bonus += 200;
+        // 普通胡路线出牌优先级
+        if (chCnt >= 4) {
+          // 招，绝不出
+          bonus -= 200;
+        } else if (chCnt == 3) {
+          if (presentChars.length >= 2) {
+            // 坎+靠/坎+句（出坎中一张，清理结构）
+            bonus += 200;
+          }
+          // 纯坎: bonus = 0 (保留3胡)
         } else if (hasAllThree && chCnt == 2) {
           // 句孤张型(2,1,1)或句半靠型(2,2,1)中出有2张的字
           final total = byChar.values.fold(0, (a, b) => a + b);
           final countOfPairs = byChar.values.where((v) => v == 2).length;
           if (total == 4 && countOfPairs == 1) {
-            // 句孤张型中出孤张：1张参与句，1张是孤张，出后形成完整句，损失0
-            // 等同于出孤张，应与普单(孤张)同优先级
+            // 句孤张型中出孤张：形成完整句，损失0
             bonus += 200;
           } else {
-            // 句半靠型(2,2,1)中出对中1张，损失10
+            // 句半靠型中出对中1张
             bonus += 120;
           }
-        } else if (chCnt == 2) {
-          // 对子
-          final rem = _remainingCount(ch, visibleCount);
-          if (rem == 0) {
-            bonus += 80; // 死对子
-          } else if (rem == 1) {
-            bonus += 40; // 对子（剩余1张）
+        } else if (presentChars.length == 2 && chCnt == 2) {
+          // 对+靠/坎+对中出对子
+          if (huBefore >= 11) {
+            // ≥11胡：检查成句难度
+            final missingChars = groupChars
+                .where((c) => (byChar[c] ?? 0) == 0)
+                .toList();
+            final otherPresentChars = presentChars
+                .where((c) => c != ch)
+                .toList();
+            // 检查在场的另一个字是否被坎锁定（≥3张）
+            final otherLockedInKan = otherPresentChars.any(
+              (c) => (byChar[c] ?? 0) >= 3,
+            );
+            if (missingChars.isNotEmpty) {
+              final missingRem = _remainingCount(
+                missingChars.first,
+                visibleCount,
+              );
+              if (missingRem == 0 || otherLockedInKan) {
+                // 缺字0剩余或另一字被坎锁定，对子无法成句，优先拆
+                bonus += 120;
+              } else if (missingRem == 1) {
+                // 缺字仅剩1张，成句概率低
+                bonus += 60;
+              } else {
+                // 缺字剩余多，保留对子
+                bonus -= 50;
+              }
+            } else {
+              bonus -= 50;
+            }
           } else {
-            bonus += 20; // 对子（剩余≥2张）
+            bonus -= 50;
           }
         } else if (presentChars.length == 2 && chCnt == 1) {
-          // 普靠
-          if (huBefore < 11) {
-            bonus += 120; // 胡数不足优先拆
+          // 半靠或对孤张型中出单张
+          final otherChars = presentChars.where((c) => c != ch).toList();
+          final isDuiGuzhang = otherChars.any((c) => (byChar[c] ?? 0) >= 2);
+          if (isDuiGuzhang && huBefore >= 11) {
+            // 对孤张型 + ≥11胡：检查快进张潜力
+            // 缺字 = 门中3字中不在场的字
+            final missingChars = groupChars
+                .where((c) => (byChar[c] ?? 0) == 0)
+                .toList();
+            int missingRem = 0;
+            for (final mc in missingChars) {
+              missingRem += _remainingCount(mc, visibleCount);
+            }
+            if (missingRem >= 2) {
+              // 缺字剩余多，1张成句，保留孤张（快进张路径）
+              bonus += 80;
+            } else {
+              // 缺字剩余少，孤张进张慢，优先出
+              bonus += 200;
+            }
+          } else if (isDuiGuzhang) {
+            // 对孤张型 + <11胡，优先出孤张
+            bonus += 200;
           } else {
-            bonus += 40; // 胡数足够保留
+            // 半靠型
+            if (huBefore < 11) {
+              bonus += 120; // 胡数不足优先拆
+            } else {
+              bonus += 40; // 胡数足够保留
+            }
           }
+        } else if (chCnt == 2 && presentChars.length == 1) {
+          // 纯对子
+          if (huBefore >= 11) {
+            // ≥11胡：检查成句难度（需要另外2字）
+            final otherChars = groupChars.where((c) => c != ch).toList();
+            int minRem = 999;
+            for (final oc in otherChars) {
+              final rem = _remainingCount(oc, visibleCount);
+              if (rem < minRem) minRem = rem;
+            }
+            if (minRem == 0) {
+              // 缺字有0剩余，对子无法成句，优先拆
+              bonus += 120;
+            } else if (minRem == 1) {
+              // 缺字仅剩1张，成句概率低
+              bonus += 60;
+            } else {
+              // 缺字剩余多，保留对子
+              bonus += 20;
+            }
+          } else {
+            final rem = _remainingCount(ch, visibleCount);
+            if (rem == 0) {
+              bonus += 80; // 死对子
+            } else if (rem == 1) {
+              bonus += 40; // 对子（剩余1张）
+            } else {
+              bonus += 20; // 对子（剩余≥2张）
+            }
+          }
+        } else if (chCnt == 1 && presentChars.length == 1) {
+          // 纯孤张
+          bonus += 200;
         }
         // 金对惩罚
         if (isJingMen && isJingChar && chCnt == 2) {
@@ -5863,8 +5953,30 @@ class AIStrategyHard extends AIStrategy {
         // 纯孤张型
         cardSelectionBonus += 100;
       } else if (currentType.contains('孤张')) {
-        // 牌型中的孤张，优先出
-        cardSelectionBonus += 80;
+        // 牌型中的孤张
+        if (currentType == '对孤张型' &&
+            huBefore >= 11 &&
+            !isShiDuiRoute &&
+            heiYuanPotential <= 0) {
+          // 对孤张型 + ≥11胡：检查快进张潜力
+          // 缺字 = 门中3字中不在场的字
+          final missingChars = _groupChars[sentence - 1]
+              .where((ch) => (byChar[ch] ?? 0) == 0)
+              .toList();
+          int missingRem = 0;
+          for (final mc in missingChars) {
+            missingRem += _remainingCount(mc, visibleCount);
+          }
+          if (missingRem >= 2) {
+            // 缺字剩余多，1张成句，保留孤张（快进张路径）
+            cardSelectionBonus += 20; // 降低加分，不鼓励出
+          } else {
+            // 缺字剩余少，孤张进张慢，优先出
+            cardSelectionBonus += 80;
+          }
+        } else {
+          cardSelectionBonus += 80;
+        }
       } else if (currentType.contains('半靠')) {
         // 半靠中的字，出一张损失=0
         // 黑元路线下，半靠是6句+1靠中的"靠"，需要保护
@@ -5935,9 +6047,36 @@ class AIStrategyHard extends AIStrategy {
           final rem = _remainingCount(cardToDiscard.character, visibleCount);
           if (rem == 0) {
             cardSelectionBonus += 80; // 死对子，优先出
+          } else if (huBefore >= 11) {
+            // ≥11胡：检查对子成句难度
+            final otherPresentChars = _groupChars[sentence - 1]
+                .where((ch) => ch != cardToDiscard.character)
+                .where((ch) => (byChar[ch] ?? 0) > 0)
+                .toList();
+            final missingChars = _groupChars[sentence - 1]
+                .where((ch) => (byChar[ch] ?? 0) == 0)
+                .toList();
+            // 检查另一在场字是否被坎锁定（≥3张）
+            final otherLockedInKan = otherPresentChars.any(
+              (ch) => (byChar[ch] ?? 0) >= 3,
+            );
+            int missingRem = 0;
+            for (final mc in missingChars) {
+              missingRem += _remainingCount(mc, visibleCount);
+            }
+            if (otherLockedInKan || missingRem == 0) {
+              // 另一字被坎锁定或缺字0剩余，对子无法成句，优先拆
+              cardSelectionBonus += 80;
+            } else if (missingRem == 1) {
+              // 缺字仅剩1张，成句概率低
+              cardSelectionBonus += 50;
+            } else {
+              // 缺字剩余多，保留对子
+              cardSelectionBonus += 30;
+            }
           } else {
-            // 活对子，胡数动态调整：<11胡保留对子(惩罚大)，≥11胡优先拆对子(奖励)
-            cardSelectionBonus += huBefore < 11 ? -30 : 30;
+            // <11胡：保留对子
+            cardSelectionBonus -= 30;
           }
         }
       }
