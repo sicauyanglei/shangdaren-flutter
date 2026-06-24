@@ -1740,6 +1740,13 @@ export function aiDecideChi(
     return false;
   }
 
+  // 手牌中已有出牌的同字（自己持有该字）：由于能吃说明手牌已含同句另两字，
+  // 故手牌可独立成句。此时吃牌只会把另两字移入组合牌，并使手牌中这张同字
+  // 沦为废单（甚至破坏既有对/句结构），属于规则14的广义情形，不吃。
+  if (player.hand.some(c => c.char === discardedCard.char)) {
+    return false;
+  }
+
   // 困难模式：评估吃牌收益（匹配Flame的shouldChi）
   if (difficulty === 'hard') {
     const benefit = evaluateChiBenefit(player, discardedCard, ctx);
