@@ -1430,6 +1430,59 @@ class AIStrategyHard extends AIStrategy {
     if (group18Count <= 3) {
       final totalHu = _evaluateHuScore(player);
       if (totalHu <= 10) {
+        // 放弃黑元条件：门1/8胡数>=8 且 门1/8总张数>=4 且 2-7门手牌有超过两对
+        // 门1/8胡数高+张数多说明门1/8价值大，2-7门对子多说明普通胡路线可行
+        int group18Hu = 0;
+        // 组合牌中门1/8的胡数
+        for (final meld in player.melds) {
+          if (meld.cards.first.sentence == 1 ||
+              meld.cards.first.sentence == 8) {
+            group18Hu += meld.getHuCount(isHand: false);
+          }
+        }
+        // 手牌中门1/8的胡数
+        final hand18Cards =
+            player.hand.where((c) => c.sentence == 1 || c.sentence == 8).toList();
+        if (hand18Cards.isNotEmpty) {
+          final hand18Remaining = List<Card>.from(hand18Cards);
+          final hand18ASet = <Meld>[];
+          final hand18BSet = <Meld>[];
+          final hand18CSet = <Meld>[];
+          final hand18DSet = <Meld>[];
+          HuCalculator.extractJu(hand18Remaining, hand18ASet);
+          HuCalculator.extractZhao(hand18Remaining, hand18BSet);
+          HuCalculator.extractKan(hand18Remaining, hand18CSet);
+          HuCalculator.extractDuiAndKao(hand18Remaining, hand18DSet);
+          for (final m in hand18ASet) {
+            group18Hu += m.getHuCount(isHand: true);
+          }
+          for (final m in hand18BSet) {
+            group18Hu += m.getHuCount(isHand: true);
+          }
+          for (final m in hand18CSet) {
+            group18Hu += m.getHuCount(isHand: true);
+          }
+          for (final m in hand18DSet) {
+            group18Hu += m.getHuCount(isHand: true);
+          }
+          for (final c in hand18Remaining) {
+            // 精单(上/福)4胡，银单0胡，普单0胡
+            group18Hu += (c.character == '上' || c.character == '福') ? 4 : 0;
+          }
+        }
+        // 统计2-7门手牌中的对子数
+        final byChar27 = <String, int>{};
+        for (final c in player.hand) {
+          if (c.sentence >= 2 && c.sentence <= 7) {
+            byChar27[c.character] = (byChar27[c.character] ?? 0) + 1;
+          }
+        }
+        final pairCount27 =
+            byChar27.values.where((cnt) => cnt >= 2).length;
+        if (group18Hu >= 8 && group18Count >= 4 && pairCount27 > 2) {
+          return -1;
+        }
+
         // 严格条件1：手牌中不能有招（4张同字），但允许有坎（3张同字）
         // 招（4张）无法组成句且占用过多，但坎（3张）可通过出牌拆掉转化为句
         final byChar = <String, int>{};
