@@ -1474,6 +1474,36 @@ class AIStrategyHard extends AIStrategy {
           return -1;
         }
 
+        // 放弃黑元条件：2-7门手牌对子超过2对
+        // 对子多容易碰，碰了就破坏黑元资格（黑元不能有碰/坎/招）
+        // 对子多也说明2-7门结构适合走普通胡/十对路线
+        final byChar27 = <String, int>{};
+        for (final c in player.hand) {
+          if (c.sentence >= 2 && c.sentence <= 7) {
+            byChar27[c.character] = (byChar27[c.character] ?? 0) + 1;
+          }
+        }
+        final pairCount27 =
+            byChar27.values.where((cnt) => cnt >= 2).length;
+        if (pairCount27 > 2) {
+          return -1;
+        }
+
+        // 放弃黑元条件：门1/8有精句（上大人/福禄寿完整一句）
+        // 精句结构好，拆散代价大，且精句4胡贡献高
+        final hand18SentenceGroups = <int, Set<String>>{};
+        for (final c in hand18Cards) {
+          hand18SentenceGroups
+              .putIfAbsent(c.sentence, () => <String>{})
+              .add(c.character);
+        }
+        for (final entry in hand18SentenceGroups.entries) {
+          if (entry.value.length >= 3) {
+            // 门1/8有完整句，放弃黑元
+            return -1;
+          }
+        }
+
         // 严格条件1：手牌中不能有招（4张同字），但允许有坎（3张同字）
         // 招（4张）无法组成句且占用过多，但坎（3张）可通过出牌拆掉转化为句
         final byChar = <String, int>{};
