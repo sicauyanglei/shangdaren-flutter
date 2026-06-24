@@ -1479,7 +1479,7 @@ class AIStrategyHard extends AIStrategy {
         }
         final pairCount27 =
             byChar27.values.where((cnt) => cnt >= 2).length;
-        if (group18Hu >= 8 && group18Count >= 4 && pairCount27 > 2) {
+        if (group18Hu >= 8 && pairCount27 > 2) {
           return -1;
         }
 
