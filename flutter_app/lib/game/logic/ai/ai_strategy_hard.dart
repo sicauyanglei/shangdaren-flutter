@@ -7027,6 +7027,70 @@ class AIStrategyHard extends AIStrategy {
 
       if (distAfterDiscard < distBefore) return true;
 
+      // 比较碰vs吃：手牌能吃上家的牌时，模拟吃牌后效果
+      // 场景：手牌化化化三千千，玩家出化。碰化后化化化(组合坎2胡)+三千千(手牌)，
+      //       吃化后化三千(组合句0胡)+化化(手牌对)+千千(手牌对)，手牌结构更优
+      // 核心原因：手牌坎(3胡) > 组合牌坎(2胡)，吃保留坎在手牌更值
+      final otherChars = _getOtherCharsInGroup(card);
+      final availableChars = otherChars
+          .where((ch) => hand.any((c) => c.character == ch))
+          .toList();
+      if (availableChars.length >= 2) {
+        int bestChiDist = 99;
+        double bestChiHu = 0;
+        for (int i = 0; i < availableChars.length; i++) {
+          for (int j = i + 1; j < availableChars.length; j++) {
+            final consumedChars = [availableChars[i], availableChars[j]];
+            final chiHand = List<Card>.from(hand);
+            for (final ch in consumedChars) {
+              final idx = chiHand.indexWhere((c) => c.character == ch);
+              if (idx >= 0) chiHand.removeAt(idx);
+            }
+            final chiMeld = Meld(
+              cards: [
+                card,
+                ...consumedChars.map(
+                  (ch) => hand.firstWhere((c) => c.character == ch),
+                ),
+              ],
+              type: MeldType.ju,
+              isJing: card.isJing,
+            );
+            final chiMelds = [...player.melds, chiMeld];
+            final vc =
+                _cachedVisibleCount ?? _buildVisibleCharCount(player, state);
+            final tu = _cachedTotalUnknown ?? _totalUnknownCards(player, state);
+            final (_, chiDist) = _findBestDiscardAfterMeld(
+              chiHand,
+              chiMelds,
+              visibleCount: vc,
+              totalUnknown: tu,
+            );
+            if (chiDist < bestChiDist) {
+              bestChiDist = chiDist;
+              final chiPlayer = Player(
+                id: player.id,
+                name: player.name,
+                type: player.type,
+                hand: chiHand,
+                melds: chiMelds,
+              );
+              HuCalculator.updateMeldHuCache(chiPlayer);
+              bestChiHu = _evaluateHuScore(chiPlayer);
+            }
+          }
+        }
+        // 吃牌距离更短时，不碰（吃牌更优）
+        if (bestChiDist < distAfterDiscard) return false;
+        // 距离相同时，吃后胡数更高则倾向吃（保留手牌灵活性）
+        // 碰牌会把3张同字移走（2张手牌+1张出牌），可能破坏手牌结构
+        if (bestChiDist == distAfterDiscard &&
+            bestChiHu >= 11 &&
+            _evaluateHuScore(testPlayer) < bestChiHu + 5) {
+          return false;
+        }
+      }
+
       // 距离不变时，门1/8精句潜力保护
       // 碰银字(大/人/禄/寿)形成普坎(3胡)，但会消耗精句组件
       // 保留禄禄寿寿+福等摸福组"福禄寿"精句(4胡) > 碰禄普坎(3胡)
