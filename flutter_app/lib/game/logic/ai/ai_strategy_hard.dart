@@ -6350,9 +6350,24 @@ class AIStrategyHard extends AIStrategy {
     if (!_canOperate(player)) return false;
 
     // 黑元路线下，不吃门1/8的牌（吃门1/8会形成门1/8句，破坏黑元资格）
+    // 例外：吃门1/8牌能形成精句（含上/福）时允许吃，精句4胡价值高
     final heiYuanPotential = _evaluateHeiYuanPotential(player);
     if (heiYuanPotential > 0 && (card.sentence == 1 || card.sentence == 8)) {
-      return false;
+      final otherChars = _getOtherCharsInGroup(card);
+      final availableChars = otherChars
+          .where((ch) => player.hand.any((c) => c.character == ch))
+          .toList();
+      // 检查吃后是否形成精句（吃牌+手牌2张含精字上/福）
+      bool formsJingJu = false;
+      if (availableChars.length >= 2) {
+        // 吃牌的组合中是否含精字
+        final hasJingInHand = availableChars.any((ch) => ch == '上' || ch == '福');
+        final cardIsJing = card.character == '上' || card.character == '福';
+        formsJingJu = hasJingInHand || cardIsJing;
+      }
+      if (!formsJingJu) {
+        return false;
+      }
     }
 
     // 黑元路线下，吃牌后如果手牌中剩余对子无法再组成句（死对子），且没有其他多余牌可以打，不吃
