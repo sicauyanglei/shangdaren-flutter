@@ -1430,8 +1430,8 @@ class AIStrategyHard extends AIStrategy {
     if (group18Count <= 3) {
       final totalHu = _evaluateHuScore(player);
       if (totalHu <= 10) {
-        // 放弃黑元条件：门1/8胡数>=8 且 门1/8总张数>=4 且 2-7门手牌有超过两对
-        // 门1/8胡数高+张数多说明门1/8价值大，2-7门对子多说明普通胡路线可行
+        // 放弃黑元条件：门1/8胡数>=8，说明门1/8价值大，不应为黑元清理
+        // 主动进入黑元的条件：group18Count<=3 且 group18Hu<8
         int group18Hu = 0;
         // 组合牌中门1/8的胡数
         for (final meld in player.melds) {
@@ -1470,16 +1470,7 @@ class AIStrategyHard extends AIStrategy {
             group18Hu += (c.character == '上' || c.character == '福') ? 4 : 0;
           }
         }
-        // 统计2-7门手牌中的对子数
-        final byChar27 = <String, int>{};
-        for (final c in player.hand) {
-          if (c.sentence >= 2 && c.sentence <= 7) {
-            byChar27[c.character] = (byChar27[c.character] ?? 0) + 1;
-          }
-        }
-        final pairCount27 =
-            byChar27.values.where((cnt) => cnt >= 2).length;
-        if (group18Hu >= 8 && pairCount27 > 2) {
+        if (group18Hu >= 8) {
           return -1;
         }
 
