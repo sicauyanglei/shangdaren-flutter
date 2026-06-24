@@ -1114,7 +1114,9 @@ class GameBoard extends Component {
     _renderBackground(canvas);
     _renderDeck(canvas);
     _renderDeckIndicator(canvas);
-    _renderPlayedCards(canvas);
+    if (!(showHuResult || showHuDisplay)) {
+      _renderPlayedCards(canvas);
+    }
     _renderSmallCards(canvas);
     _renderAIHandCards(canvas);
     _renderHandCards(canvas);
@@ -1122,6 +1124,7 @@ class GameBoard extends Component {
     _renderDragCard(canvas);
     if (showHuResult || showHuDisplay) {
       _renderHuResult(canvas);
+      _renderPlayedCards(canvas);
     }
   }
 
@@ -1352,12 +1355,10 @@ class GameBoard extends Component {
   }
 
   void _renderPlayedCards(Canvas canvas) {
-    // 自摸时使用huZimoCard，点炮时不渲染中央卡牌（已在弃牌区）
     final isZimoDisplay =
         showHuDisplay && huMethod == '自摸' && huZimoCard != null;
     if (!isZimoDisplay && lastPlayedCard == null) return;
     if (!dealingComplete) return;
-    if (showHuDisplay && huMethod == '点炮') return;
 
     final displayCard = isZimoDisplay ? huZimoCard! : lastPlayedCard!;
     double px, py;
