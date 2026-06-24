@@ -1450,16 +1450,14 @@ class GameBoard extends Component {
   void _renderSmallCards(Canvas canvas) {
     if (_atlasImage == null || _atlasLoader == null) return;
 
-    final smallLists = showHuDisplay
-        ? [_player0Melds, _player1Melds, _player2Melds]
-        : [
-            _player0Melds,
-            _player1Melds,
-            _player2Melds,
-            _player0Discards,
-            _player1Discards,
-            _player2Discards,
-          ];
+    final smallLists = [
+      _player0Melds,
+      _player1Melds,
+      _player2Melds,
+      _player0Discards,
+      _player1Discards,
+      _player2Discards,
+    ];
 
     for (final list in smallLists) {
       final meldGroups = <List<CardRender>>[];
