@@ -120,6 +120,9 @@ class _ReplayScreenState extends State<ReplayScreen>
   Timer? _scoreAnimTimer;
   bool _scoreAnimPlayed = false;
 
+  // 回放完成后的显示分数（初始=回放开始分数，完成后加上scoreChanges）
+  late List<int> _displayScores;
+
   // 牌局页面设计尺寸
   static const double designWidth = 1280.0;
   static const double designHeight = 720.0;
@@ -159,6 +162,7 @@ class _ReplayScreenState extends State<ReplayScreen>
   void initState() {
     super.initState();
     _initHands();
+    _displayScores = List<int>.from(widget.replay.playerScores);
     _statusText = '第${widget.replay.roundNumber}局回放 - 就绪';
   }
 
@@ -211,6 +215,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     _isPlaying = false;
     _isPaused = false;
     _showResult = false;
+    _displayScores = List<int>.from(widget.replay.playerScores);
     _initHands();
     _currentActionIndex = -1;
     setState(() {
@@ -763,6 +768,12 @@ class _ReplayScreenState extends State<ReplayScreen>
       if (elapsed >= const Duration(milliseconds: 1500)) {
         _scoreAnimTimer?.cancel();
         _flyingScores.clear();
+        // 更新显示分数为最终分数
+        for (int i = 0; i < _displayScores.length; i++) {
+          final dynamic raw = scoreChanges[i] ?? scoreChanges[i.toString()];
+          final change = (raw is int) ? raw : (int.tryParse('$raw') ?? 0);
+          _displayScores[i] += change;
+        }
         setState(() {});
       }
     });
@@ -955,7 +966,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     }
     if (maxStack == 0) return designHeight;
     final groupH = (maxStack - 1) * handStackVisible + handCardH;
-    return designHeight + 80 - groupH;
+    return designHeight + 120 - groupH;
   }
 
   /// 根据主视角获取位置映射
@@ -1015,11 +1026,11 @@ class _ReplayScreenState extends State<ReplayScreen>
               child: _buildBottomMeldsAndDiscards(positions[2]),
             ),
           ),
-          // 底部 - 手牌（水平居中，与正常牌局一致，底部超出屏幕80px）
+          // 底部 - 手牌（水平居中，与正常牌局一致，底部超出屏幕120px）
           Positioned(
             left: 0,
             right: 0,
-            bottom: -80 * scale,
+            bottom: -120 * scale,
             child: Transform.scale(
               scale: scale,
               alignment: Alignment.bottomCenter,
@@ -1097,7 +1108,7 @@ class _ReplayScreenState extends State<ReplayScreen>
     final isDealer = widget.replay.dealerIndex == playerIndex;
     final piao = widget.replay.playerPiao[playerIndex];
     final name = widget.replay.playerNames[playerIndex];
-    final score = widget.replay.playerScores[playerIndex];
+    final score = _displayScores[playerIndex];
     final gender = widget.replay.playerGenders[playerIndex];
     final isFemale = gender == Gender.female;
     final handCount = _hands[playerIndex].length;
@@ -1938,6 +1949,7 @@ class _ReplayScreenState extends State<ReplayScreen>
               top: y * scale,
               child: Transform.scale(
                 scale: scale,
+                alignment: Alignment.topLeft,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1984,14 +1996,16 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     final List<Widget> badgeWidgets = [];
 
-    // 所有玩家都显示徽章
+    // 只显示赢家和点炮者徽章（与正常牌局窗口一致，不显示其他输家徽章）
     for (int i = 0; i < widget.replay.playerNames.length; i++) {
       final isWinner = i == winnerIndex;
       final isDianpao = i == dianpaoIndex && method == '点炮';
 
+      if (!isWinner && !isDianpao) continue;
+
       final badges = <_HuBadgeInfo>[];
       if (isWinner) {
-        // 赢家：自摸 + 胡型 或 仅胡型
+        // 赢家：自摸 + 胡型
         if (method == '自摸') {
           badges.add(_HuBadgeInfo(text: '自摸', isPrimary: true));
         }
@@ -1999,16 +2013,6 @@ class _ReplayScreenState extends State<ReplayScreen>
       } else if (isDianpao) {
         // 点炮者
         badges.add(_HuBadgeInfo(text: '点炮', isPrimary: true));
-      } else {
-        // 其他输家：显示分数变化
-        final dynamic raw = scoreChanges?[i] ?? scoreChanges?[i.toString()];
-        final change = (raw is int) ? raw : (int.tryParse('$raw') ?? 0);
-        badges.add(
-          _HuBadgeInfo(
-            text: change < 0 ? '输$change' : '+$change',
-            isPrimary: false,
-          ),
-        );
       }
 
       badgeWidgets.add(
@@ -2067,18 +2071,18 @@ class _ReplayScreenState extends State<ReplayScreen>
 
     if (playerIndex == positions[0]) {
       // 左上玩家：徽章在头像右侧
-      left = (aiAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      left = (aiAvatarLeft + 260 + badgeGapFromAvatar) * scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = false;
     } else if (playerIndex == positions[2]) {
       // 底部玩家：徽章在头像右侧
-      left = (myAvatarLeft + 250 + badgeGapFromAvatar) * scale;
+      left = (myAvatarLeft + 260 + badgeGapFromAvatar) * scale;
       top = (designHeight - myAvatarBottom - 108) * scale;
       isRight = false;
     } else {
       // 右上玩家：徽章在头像左侧
       left =
-          (designWidth - aiAvatarLeft - 250 - badgeGapFromAvatar - totalW) *
+          (designWidth - aiAvatarLeft - 260 - badgeGapFromAvatar - totalW) *
           scale;
       top = (aiAvatarTop + 108 - badgeH) * scale;
       isRight = true;
@@ -2089,7 +2093,7 @@ class _ReplayScreenState extends State<ReplayScreen>
       top: top,
       child: Transform.scale(
         scale: scale,
-        alignment: isRight ? Alignment.topRight : Alignment.topLeft,
+        alignment: Alignment.topLeft,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2210,7 +2214,7 @@ class _ReplayScreenState extends State<ReplayScreen>
       top: panelTop * scale,
       child: Transform.scale(
         scale: scale,
-        alignment: Alignment.topCenter,
+        alignment: Alignment.topLeft,
         child: Material(
           color: Colors.transparent,
           child: Container(
