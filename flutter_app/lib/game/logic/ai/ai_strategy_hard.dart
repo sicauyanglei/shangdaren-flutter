@@ -1441,8 +1441,9 @@ class AIStrategyHard extends AIStrategy {
           }
         }
         // 手牌中门1/8的胡数
-        final hand18Cards =
-            player.hand.where((c) => c.sentence == 1 || c.sentence == 8).toList();
+        final hand18Cards = player.hand
+            .where((c) => c.sentence == 1 || c.sentence == 8)
+            .toList();
         if (hand18Cards.isNotEmpty) {
           final hand18Remaining = List<Card>.from(hand18Cards);
           final hand18ASet = <Meld>[];
@@ -1492,8 +1493,9 @@ class AIStrategyHard extends AIStrategy {
         for (final doorChars in byChar27ByDoor.values) {
           if (doorChars.length < 3) {
             // 不够3个不同字，无法成句，直接数对子
-            outOfJuPairCount +=
-                doorChars.values.where((cnt) => cnt >= 2).length;
+            outOfJuPairCount += doorChars.values
+                .where((cnt) => cnt >= 2)
+                .length;
           } else {
             // 提取尽可能多的句，每句消耗每种字各1张
             final counts = doorChars.values.toList();
@@ -6137,7 +6139,8 @@ class AIStrategyHard extends AIStrategy {
           }
           // 检查出对中字后是否形成半靠（对孤张型中出对中字，保留孤张+对中剩余1张=半靠）
           // 黑元路线下半靠有成句潜力，远优于保留对子
-          final formsKaoAfterDiscard = currentType == '对孤张型' &&
+          final formsKaoAfterDiscard =
+              currentType == '对孤张型' &&
               otherChars.any((ch) => (byChar[ch] ?? 0) >= 1);
           if (otherRem <= 2) {
             // 死对子：同门其他字剩余很少，无法成句，黑元路线下完全无用
@@ -6361,7 +6364,9 @@ class AIStrategyHard extends AIStrategy {
       bool formsJingJu = false;
       if (availableChars.length >= 2) {
         // 吃牌的组合中是否含精字
-        final hasJingInHand = availableChars.any((ch) => ch == '上' || ch == '福');
+        final hasJingInHand = availableChars.any(
+          (ch) => ch == '上' || ch == '福',
+        );
         final cardIsJing = card.character == '上' || card.character == '福';
         formsJingJu = hasJingInHand || cardIsJing;
       }
@@ -6575,7 +6580,9 @@ class AIStrategyHard extends AIStrategy {
   }
 
   /// 检查手牌中是否已有包含出牌的完整一句，且每个字都只有1张
+  /// 或者出牌的字有2张以上（吃牌后只是把该字从2张变成1张，和自己组句没有区别）
   /// 例如：手牌有"丘乙己"各1张，上家出"丘"，则返回true
+  /// 例如：手牌有"八九子子"，上家出"子"，则返回true（子有2张，吃牌无收益）
   bool _hasCompleteSentenceWithSingleCards(Player player, Card card) {
     final hand = player.hand;
     final sentence = card.sentence;
@@ -6592,8 +6599,16 @@ class AIStrategyHard extends AIStrategy {
       }
     }
 
-    // 检查是否该句组3个字在手牌中都有，且每个字都只有1张
+    // 检查是否该句组3个字在手牌中都有
     final allPresent = charCount.values.every((count) => count >= 1);
+
+    // 如果3个字都有，出牌的字有2张以上，吃牌后只是把该字从2张变成1张
+    // 和自己组句没有区别，没有实质收益，阻止吃牌
+    if (allPresent && charCount[card.character]! >= 2) {
+      return true;
+    }
+
+    // 检查是否每个字都只有1张
     final allSingle = charCount.values.every((count) => count == 1);
 
     // 出的牌也属于这个句组
