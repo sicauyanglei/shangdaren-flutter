@@ -1934,6 +1934,25 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown: totalUnknown,
     );
 
+    // 吃牌后出同字检测：如果吃牌后最优出牌与被吃的牌同字，
+    // 且该字在手牌中原始数量≤2，说明吃牌是无效操作（吃进来又打出去）
+    // 例：手牌有八九子子，吃"子"形成八九子句后出"子"，
+    // 等于把句从手牌移到组合牌区，浪费了吃牌机会
+    final discardedCard = testHand.length > bestHand.length
+        ? testHand.firstWhere(
+            (c) => !bestHand.contains(c),
+            orElse: () => testHand.first,
+          )
+        : null;
+    if (discardedCard != null &&
+        discardedCard.character == card.character) {
+      final origCount =
+          hand.where((c) => c.character == card.character).length;
+      if (origCount <= 2) {
+        return -1;
+      }
+    }
+
     if (distAfterDiscard > distBefore) {
       // 吃牌可能破坏十对路线但改善普通路线
       // 如果普通路线距离不增加，仍然允许吃牌
@@ -2235,6 +2254,25 @@ class AIStrategyHard extends AIStrategy {
       visibleCount: visibleCount,
       totalUnknown: totalUnknown,
     );
+
+    // 吃牌后出同字检测：如果吃牌后最优出牌与被吃的牌同字，
+    // 且该字在手牌中原始数量≤2，说明吃牌是无效操作（吃进来又打出去）
+    // 例：手牌有八九子子，吃"子"形成八九子句后出"子"，
+    // 等于把句从手牌移到组合牌区，浪费了吃牌机会
+    final discardedCard = testHand.length > bestHand.length
+        ? testHand.firstWhere(
+            (c) => !bestHand.contains(c),
+            orElse: () => testHand.first,
+          )
+        : null;
+    if (discardedCard != null &&
+        discardedCard.character == card.character) {
+      final origCount =
+          hand.where((c) => c.character == card.character).length;
+      if (origCount <= 2) {
+        return -1;
+      }
+    }
 
     if (distAfterDiscard > distBefore) {
       // 吃牌可能破坏十对路线但改善普通路线
