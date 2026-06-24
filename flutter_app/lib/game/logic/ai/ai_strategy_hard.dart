@@ -1474,18 +1474,39 @@ class AIStrategyHard extends AIStrategy {
           return -1;
         }
 
-        // 放弃黑元条件：2-7门手牌对子超过2对
+        // 放弃黑元条件：2-7门句外对超过2对
+        // 句外对 = 先提取完所有句后，剩余牌中对子数
         // 对子多容易碰，碰了就破坏黑元资格（黑元不能有碰/坎/招）
         // 对子多也说明2-7门结构适合走普通胡/十对路线
-        final byChar27 = <String, int>{};
+        // 例：丘丘=1对，丘丘乙=1对，丘丘丘乙己=1对(提句后剩丘丘)，
+        //     丘丘乙乙己己=0对(2句提完)，丘丘乙己=0对(提句后剩丘)
+        final byChar27ByDoor = <int, Map<String, int>>{};
         for (final c in player.hand) {
           if (c.sentence >= 2 && c.sentence <= 7) {
-            byChar27[c.character] = (byChar27[c.character] ?? 0) + 1;
+            byChar27ByDoor
+                .putIfAbsent(c.sentence, () => <String, int>{})
+                .update(c.character, (v) => v + 1, ifAbsent: () => 1);
           }
         }
-        final pairCount27 =
-            byChar27.values.where((cnt) => cnt >= 2).length;
-        if (pairCount27 > 2) {
+        int outOfJuPairCount = 0;
+        for (final doorChars in byChar27ByDoor.values) {
+          if (doorChars.length < 3) {
+            // 不够3个不同字，无法成句，直接数对子
+            outOfJuPairCount +=
+                doorChars.values.where((cnt) => cnt >= 2).length;
+          } else {
+            // 提取尽可能多的句，每句消耗每种字各1张
+            final counts = doorChars.values.toList();
+            final juCount = counts.reduce((a, b) => a < b ? a : b);
+            // 提取句后剩余对子数
+            for (final cnt in counts) {
+              if (cnt - juCount >= 2) {
+                outOfJuPairCount++;
+              }
+            }
+          }
+        }
+        if (outOfJuPairCount > 2) {
           return -1;
         }
 
