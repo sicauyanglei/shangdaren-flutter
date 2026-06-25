@@ -2986,7 +2986,7 @@ class AIStrategyHard extends AIStrategy {
       totalUnknown,
     );
     // 门结构分变化作为补充评分，权重适中避免覆盖主评分
-    final menScoreDelta = (menScoreAfter - menScoreBefore) * 0.3;
+    final menScoreDelta = (menScoreAfter - menScoreBefore) * 0.2;
     score += menScoreDelta;
 
     // card-group-type.md 规则评分：牌型分类、保留价值排名、门间优先级、剩余张数动态调整
@@ -3013,7 +3013,7 @@ class AIStrategyHard extends AIStrategy {
       visibleCount,
       totalUnknown,
     );
-    score += routeBonus * 0.3;
+    score += routeBonus * 0.2;
 
     // 胡牌类型倍数层级加分（概率相同时优先朝着倍数高的胡牌类型操作）
     // 卡胡(11胡,倍数1) > 普通胡(12-21胡,倍数0)
