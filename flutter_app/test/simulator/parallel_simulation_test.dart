@@ -55,6 +55,7 @@ Future<WorkerResult> _runSimulationWorker(WorkerConfig config) async {
   final stats = StatsCollector();
 
   final stopwatch = Stopwatch()..start();
+  print('Worker ${config.workerId}: started, ${config.gameCount} games');
 
   for (int i = 0; i < config.gameCount; i++) {
     try {
@@ -63,8 +64,8 @@ Future<WorkerResult> _runSimulationWorker(WorkerConfig config) async {
     } catch (e) {
       // Silently skip errored games
     }
-    // Progress report every 1000 games
-    if ((i + 1) % 1000 == 0) {
+    // Progress report every 200 games
+    if ((i + 1) % 200 == 0) {
       final elapsed = stopwatch.elapsed.inSeconds;
       final rate = (i + 1) / elapsed;
       final eta = (config.gameCount - i - 1) / rate;
@@ -74,6 +75,7 @@ Future<WorkerResult> _runSimulationWorker(WorkerConfig config) async {
   }
 
   stopwatch.stop();
+  print('Worker ${config.workerId}: completed ${config.gameCount} games in ${stopwatch.elapsed.inSeconds}s');
 
   final s = stats.getStats();
   return WorkerResult(
