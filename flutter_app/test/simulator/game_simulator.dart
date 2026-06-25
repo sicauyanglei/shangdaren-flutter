@@ -269,6 +269,10 @@ class GameSimulator {
         if (response.isHu) {
           final winner = response.responderIndex!;
           final dianpao = currentPlayer;
+          // 修复：将点炮牌加入赢家手牌，确保detectHuType和calculateTotalHu
+          // 看到与canHu相同的完整手牌（含点炮牌）
+          players[winner].hand.add(discardCard);
+          HuCalculator.updateMeldHuCache(players[winner]);
           final huType = HuCalculator.detectHuType(players[winner], paoCard: discardCard);
           final huCount = HuCalculator.calculateTotalHu(players[winner], paoCard: discardCard);
           final scoreChanges = _calculateScores(players, winner, false, dianpao, huType);

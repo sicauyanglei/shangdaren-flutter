@@ -172,21 +172,17 @@ void _printAggregatedReport(WorkerResult agg, int workerCount, int wallClockMs) 
 }
 
 void main() {
-  // Configuration: 36-hour parallel simulation
-  // 12 CPU cores, use 10 workers (leave 2 for system)
-  // Single-thread speed: ~8s/game, 10x speedup with 10 workers
-  // 36h = 129600s, per worker: 129600/8 = 16200 games, use 15000 for margin
-  const int workerCount = 10;       // Number of parallel isolates
-  const int gamesPerWorker = 15000; // Games per worker (total = 10 * 15000 = 150000 games)
+  // Quick iteration mode: 10 workers × 50 games = 500 games (~8 min)
+  const int workerCount = 10;
+  const int gamesPerWorker = 50;
 
   test('parallel AI strategy simulation', () async {
     GameLogger.setEnabled(false);
 
     final totalGames = workerCount * gamesPerWorker;
-    print('=== Parallel AI Strategy Simulator ($workerCount Threads, 36h) ===');
+    print('=== Parallel AI Strategy Simulator ($workerCount Threads) ===');
     print('Workers: $workerCount, Games/Worker: $gamesPerWorker');
     print('Total Games: $totalGames (${totalGames * 8} rounds)');
-    print('Estimated time: ~36 hours');
     print('');
 
     final stopwatch = Stopwatch()..start();
@@ -196,20 +192,17 @@ void main() {
     for (int i = 0; i < workerCount; i++) {
       final config = WorkerConfig(
         gameCount: gamesPerWorker,
-        startSeed: i * 100000,  // Different seed per worker
+        startSeed: i * 100000,
         workerId: i,
       );
-      // Use Isolate.run for true parallelism across CPU cores
       futures.add(Isolate.run(() => _runSimulationWorker(config)));
     }
 
-    // Wait for all workers to complete
     final results = await Future.wait(futures);
 
     stopwatch.stop();
 
-    // Aggregate and print results
     final agg = _aggregateResults(results);
     _printAggregatedReport(agg, workerCount, stopwatch.elapsedMilliseconds);
-  }, timeout: Timeout(Duration(minutes: 2220))); // 37 hours timeout
+  }, timeout: Timeout(Duration(minutes: 30)));
 }
