@@ -63,6 +63,14 @@ Future<WorkerResult> _runSimulationWorker(WorkerConfig config) async {
     } catch (e) {
       // Silently skip errored games
     }
+    // Progress report every 1000 games
+    if ((i + 1) % 1000 == 0) {
+      final elapsed = stopwatch.elapsed.inSeconds;
+      final rate = (i + 1) / elapsed;
+      final eta = (config.gameCount - i - 1) / rate;
+      print('Worker ${config.workerId}: ${i + 1}/${config.gameCount} '
+          '(${rate.toStringAsFixed(1)} games/s, ETA ${eta.toStringAsFixed(0)}s)');
+    }
   }
 
   stopwatch.stop();
@@ -162,17 +170,21 @@ void _printAggregatedReport(WorkerResult agg, int workerCount, int wallClockMs) 
 }
 
 void main() {
-  // Configuration: adjust these for different test scales
-  const int workerCount = 4;       // Number of parallel isolates
-  const int gamesPerWorker = 100;  // Games per worker (total = workerCount * gamesPerWorker)
+  // Configuration: 36-hour parallel simulation
+  // 12 CPU cores, use 10 workers (leave 2 for system)
+  // Single-thread speed: ~8s/game, 10x speedup with 10 workers
+  // 36h = 129600s, per worker: 129600/8 = 16200 games, use 15000 for margin
+  const int workerCount = 10;       // Number of parallel isolates
+  const int gamesPerWorker = 15000; // Games per worker (total = 10 * 15000 = 150000 games)
 
   test('parallel AI strategy simulation', () async {
     GameLogger.setEnabled(false);
 
     final totalGames = workerCount * gamesPerWorker;
-    print('=== Parallel AI Strategy Simulator ===');
+    print('=== Parallel AI Strategy Simulator ($workerCount Threads, 36h) ===');
     print('Workers: $workerCount, Games/Worker: $gamesPerWorker');
     print('Total Games: $totalGames (${totalGames * 8} rounds)');
+    print('Estimated time: ~36 hours');
     print('');
 
     final stopwatch = Stopwatch()..start();
@@ -197,5 +209,5 @@ void main() {
     // Aggregate and print results
     final agg = _aggregateResults(results);
     _printAggregatedReport(agg, workerCount, stopwatch.elapsedMilliseconds);
-  }, timeout: Timeout(Duration(minutes: 60)));
+  }, timeout: Timeout(Duration(minutes: 2220))); // 37 hours timeout
 }
