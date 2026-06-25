@@ -219,8 +219,8 @@ class AIStrategyHard extends AIStrategy {
     final currentRoute = _currentRoute ?? _RouteType.normal;
     if (bestRoute != currentRoute) {
       final currentPotential = routePotentials[currentRoute]!;
-      // 切换条件：新路线潜力值 > 当前路线潜力值 × 1.3
-      if (bestPotential > currentPotential * 1.3) {
+      // 切换条件：新路线潜力值 > 当前路线潜力值 × 1.2（降低阈值加快切换）
+      if (bestPotential > currentPotential * 1.2) {
         // 冷却期检查：3回合内不再切换
         if (_routeSwitchCooldown > 0) {
           // 冷却期内不切换，维持当前路线
@@ -381,11 +381,20 @@ class AIStrategyHard extends AIStrategy {
     final deadPenalty = deadCardCount * 8.0;
 
     final progress = (totalHu / 11).clamp(0.0, 1.0);
+    // 高胡数奖励：超过11胡后，每多1胡额外加分，鼓励追求更高胡牌类型
+    double highHuBonus = 0;
+    if (totalHu > 11) {
+      highHuBonus = (totalHu - 11) * 3.0;
+    }
     // 胡牌类型倍数层级加分：卡胡(11)倍数1 > 普通胡(12-21)倍数0
     // 台卡(22)倍数2 > 台胡(23-32)倍数1，重台卡(33)倍数7 > 重台胡(34+)倍数6
     // 概率相同时优先朝着倍数高的胡牌类型操作
     final multBonus = _huTypeMultiplierBonus(totalHu, totalHu);
-    return 1.0 * progress * 100 + probBonus - deadPenalty + multBonus * 0.3;
+    return 1.0 * progress * 100 +
+        probBonus +
+        highHuBonus -
+        deadPenalty +
+        multBonus * 0.3;
   }
 
   /// 十对路线潜力值
@@ -2700,7 +2709,7 @@ class AIStrategyHard extends AIStrategy {
 
       final quickDist = _distanceToTing(testHand, player.melds);
 
-      if (quickDist <= 2) {
+      if (quickDist <= 3) {
         final tingResult = _checkTingCached(testPlayer);
         if (tingResult.isTing) {
           int tingRem = 0;
@@ -2746,12 +2755,17 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 2000;
+          double tingScore = 10000 + tingProb * 3000;
           final effectiveTingCount = seenChars.length;
-          tingScore += effectiveTingCount * 200;
+          tingScore += effectiveTingCount * 300;
           tingScore += huScore * 10;
           if (isLate) tingScore += 3000;
           tingScore += huQualifyPenalty;
+          // 高进张数加成：tingRem>=6时额外加分
+          if (tingRem >= 6)
+            tingScore += 1000;
+          else if (tingRem >= 4)
+            tingScore += 500;
           // 死听（tingRem==0）时，听牌无实际价值，大幅降低评分让综合评分接管
           if (tingRem == 0) {
             tingScore -= 9000;
@@ -3047,6 +3061,23 @@ class AIStrategyHard extends AIStrategy {
         availableChars,
       );
       score += lookaheadScore;
+    }
+
+    // 优化3：听牌距离评估 - 优先选择能更快接近听牌的出牌
+    // quickDist是出牌后的听牌距离，distBefore是出牌前的听牌距离
+    {
+      final distBefore = _distanceToTing(player.hand, player.melds);
+      if (quickDist < distBefore) {
+        // 出牌后距离减少，奖励（每减少1步+200分）
+        score += (distBefore - quickDist) * 200.0;
+      } else if (quickDist > distBefore) {
+        // 出牌后距离增加，惩罚（每增加1步-150分）
+        score -= (quickDist - distBefore) * 150.0;
+      }
+      // 绝对距离奖励：越接近听牌越优先（dist<=3时额外加分）
+      if (quickDist <= 3) {
+        score += (4 - quickDist) * 100.0;
+      }
     }
 
     if (shiDuiPotential > 0) {
@@ -6335,13 +6366,8 @@ class AIStrategyHard extends AIStrategy {
   @override
   bool shouldChi(Player player, Card card, GameState state) {
     _initCache(player, state);
-    print(
-      'DEBUG shouldChi开始: card=${card.character}, hand=${player.hand.map((c) => c.character).join()}, melds=${player.melds.map((m) => m.cards.map((c) => c.character).join()).join(",")}',
-    );
-
     // 8对以上强制走十对路线，不吃牌
     if (_currentShiDuiEnabled && _countHandPairsWithMelds(player) >= 8) {
-      print('DEBUG shouldChi: 拒绝吃牌(8对以上十对路线)');
       return false;
     }
 
@@ -6469,10 +6495,6 @@ class AIStrategyHard extends AIStrategy {
 
     if (bestBenefit < 0) return false;
 
-    print(
-      'DEBUG shouldChi: bestBenefit=$bestBenefit, availableChars=$availableChars',
-    );
-
     // 胡数小于8且不走黑元路线时，吃牌如果破坏普通对子，不吃
     // 例外：吃后听牌（bestBenefit>=10000）时允许吃
     // 例：手牌"丘丘己"胡数<8且非黑元，吃"乙"会破坏丘对，不吃
@@ -6511,18 +6533,12 @@ class AIStrategyHard extends AIStrategy {
     if (!player.isTing && bestBenefit < 10000) {
       final heiYuanPot = _evaluateHeiYuanPotential(player);
       final hongYuanPot = _evaluateHongYuanPotential(player);
-      print(
-        'DEBUG shouldChi坎破坏检查: card=${card.character}, isTing=${player.isTing}, bestBenefit=$bestBenefit, heiYuanPot=$heiYuanPot, hongYuanPot=$hongYuanPot',
-      );
       if (heiYuanPot <= 0 && hongYuanPot <= 0) {
         final wouldBreakKan = _wouldBreakKan(player, card);
-        print('DEBUG shouldChi坎破坏检查: wouldBreakKan=$wouldBreakKan');
         if (wouldBreakKan) {
           // 检查对中字是否剩余0张（对已降级）
           final pairRemainZero = _pairCharRemainZero(player, card, state);
-          print('DEBUG shouldChi坎破坏检查: pairRemainZero=$pairRemainZero');
           if (!pairRemainZero) {
-            print('DEBUG shouldChi坎破坏检查: 拒绝吃牌(破坏坎)');
             return false;
           }
         }
@@ -6557,15 +6573,10 @@ class AIStrategyHard extends AIStrategy {
 
     // 截胡策略：其他玩家快听牌时，更积极吃牌加速自己
     if (_hasOpponentNearTing(state, player.id)) {
-      print(
-        'DEBUG shouldChi最终: 截胡策略, bestBenefit=$bestBenefit > -50? ${bestBenefit > -50}',
-      );
       return bestBenefit > -50;
     }
 
-    final result = bestBenefit > 0;
-    print('DEBUG shouldChi最终: bestBenefit=$bestBenefit > 0? $result');
-    return result;
+    return bestBenefit > 0;
   }
 
   /// 检查是否有对手快听牌（距离<=2或已听牌）

@@ -17,13 +17,13 @@ void main() {
 
     final simulator = GameSimulator();
     final stats = StatsCollector();
-    DecisionLogger().enabled = true;
-    DecisionLogger().clear();
+    // Disable decision logger for speed
+    DecisionLogger().enabled = false;
 
     final stopwatch = Stopwatch()..start();
 
     for (int i = 0; i < gameCount; i++) {
-      if ((i + 1) % 5 == 0 || i == 0) {
+      if ((i + 1) % 10 == 0 || i == 0) {
         print('Progress: ${i + 1}/$gameCount');
       }
 
@@ -42,8 +42,5 @@ void main() {
     print('');
 
     stats.getStats().printReport();
-
-    print('');
-    DecisionLogger().printAnalysis();
   });
 }
