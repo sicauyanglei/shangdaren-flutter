@@ -3074,9 +3074,9 @@ class AIStrategyHard extends AIStrategy {
         // 出牌后距离增加，惩罚（每增加1步-150分）
         score -= (quickDist - distBefore) * 150.0;
       }
-      // 绝对距离奖励：越接近听牌越优先（dist<=3时额外加分）
-      if (quickDist <= 3) {
-        score += (4 - quickDist) * 100.0;
+      // 绝对距离奖励：越接近听牌越优先（dist<=2时额外加分）
+      if (quickDist <= 2) {
+        score += (3 - quickDist) * 100.0;
       }
     }
 
