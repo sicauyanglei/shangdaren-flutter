@@ -2755,7 +2755,7 @@ class AIStrategyHard extends AIStrategy {
             bestTingHu = huScore;
           }
 
-          double tingScore = 10000 + tingProb * 3000;
+          double tingScore = 11000 + tingProb * 3000;
           final effectiveTingCount = seenChars.length;
           tingScore += effectiveTingCount * 300;
           tingScore += huScore * 10;
