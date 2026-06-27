@@ -190,9 +190,14 @@ class _GameOverlayState extends State<GameOverlay> {
     final player1 = players.length > 1 ? players[1] : null;
     final player2 = players.length > 2 ? players[2] : null;
 
+    // 胡牌/流局面板显示时，禁用背景 onTap，避免覆盖层的手势识别器
+    // 在手势竞技场中抢占主 GestureDetector 的 onTapUp（关闭按钮检测），
+    // 导致点击关闭按钮无法触发 handleTapAt -> onHuCloseFromPanel。
+    final panelShowing =
+        gameState.showHuResult || gameState.showLiujuResult;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: _handleBackgroundTap,
+      onTap: panelShowing ? null : _handleBackgroundTap,
       child: Stack(
         children: [
           Positioned(
