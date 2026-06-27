@@ -103,7 +103,8 @@ class GameController {
     print('=== GameController.startGame called ===');
     state.reset();
     _isStartingRound = false;
-    GameRecorder().setEnabled(AudioManager().recordingEnabled);
+    // 回放数据始终录制，与"游戏录制(视频)"设置解耦
+    GameRecorder().setEnabled(true);
     GameRecorder().clear();
     if (state.difficulty == 'hard') {
       aiController = AIController(strategy: AIStrategyHard());
