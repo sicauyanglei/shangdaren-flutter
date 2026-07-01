@@ -1498,56 +1498,16 @@ class _ReplayScreenState extends State<ReplayScreen>
       groupWidths.add(groupW);
     }
 
-    // 多行布局，每行最多3组，组间间隔2px
-    final List<Widget> rows = [];
-    List<Widget> currentGroups = [];
-    double currentRowWidth = 0;
-    int groupCountInRow = 0;
-    final maxW = isRight ? rightMaxW : leftMaxW;
-
-    for (int i = 0; i < groupWidgets.length; i++) {
-      final gw = groupWidgets[i];
-      final groupW = groupWidths[i];
-      final newWidth = currentGroups.isEmpty
-          ? groupW
-          : currentRowWidth + 2 + groupW;
-      if (groupCountInRow >= 3 ||
-          (currentGroups.isNotEmpty && newWidth > maxW)) {
-        rows.add(
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
-            children: currentGroups,
-          ),
-        );
-        currentGroups = [];
-        currentRowWidth = 0;
-        groupCountInRow = 0;
-      }
-      if (currentGroups.isNotEmpty) {
-        currentGroups.add(const SizedBox(width: 2));
-        currentRowWidth += 2;
-      }
-      currentGroups.add(gw);
-      currentRowWidth += groupW;
-      groupCountInRow++;
-    }
-    if (currentGroups.isNotEmpty) {
-      rows.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
-          children: currentGroups,
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+    // 单行布局：所有门组放在一行内，组间间隔2px
+    return Row(
       mainAxisSize: MainAxisSize.min,
-      children: rows,
+      textDirection: isRight ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        for (int i = 0; i < groupWidgets.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          groupWidgets[i],
+        ],
+      ],
     );
   }
 
