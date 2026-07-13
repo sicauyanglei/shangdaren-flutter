@@ -1,0 +1,153 @@
+name: Build Android APK
+
+# 上大人字牌游戏 - GitHub Actions 流水线编译支持
+# 触发条件：推送/PR 到主分支，或手动触发
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/build-android.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/build-android.yml'
+  workflow_dispatch:
+    inputs:
+      build_flavor:
+        description: '构建类型 (release/debug)'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+env:
+  FLUTTER_CHANNEL: 'stable'
+  JAVA_VERSION: '17'
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter version info
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('flutter_app/android/**/*.gradle*', 'flutter_app/android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            flutter_app/.dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.yaml', 'flutter_app/pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: Remove local proxy config from gradle.properties
+        # gradle.properties 中配置了本地代理 (127.0.0.1:18080)，在 CI 环境不可用，需要移除
+        run: |
+          sed -i '/systemProp\.http\.proxyHost=/d; /systemProp\.http\.proxyPort=/d; /systemProp\.https\.proxyHost=/d; /systemProp\.https\.proxyPort=/d; /systemProp\.http\.nonProxyHosts=/d; /systemProp\.https\.nonProxyHosts=/d' android/gradle.properties
+          echo "=== gradle.properties ==="
+          cat android/gradle.properties
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run Flutter analyzer
+        run: flutter analyze --no-fatal-infos || true
+
+      - name: Determine build type
+        id: build_type
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "flavor=${{ github.event.inputs.build_flavor }}" >> $GITHUB_OUTPUT
+          else
+            echo "flavor=release" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build APK
+        run: flutter build apk --${{ steps.build_type.outputs.flavor }}
+
+      - name: List build output
+        run: |
+          ls -lh build/android/outputs/flutter-apk/ || true
+          ls -lh build/app/outputs/flutter/apk/${{ steps.build_type.outputs.flavor }}/ || true
+
+      - name: Locate APK file
+        id: apk
+        run: |
+          APK_PATH=$(find build -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No APK file found in build output"
+            exit 1
+          fi
+          echo "path=$APK_PATH" >> $GITHUB_OUTPUT
+          APK_NAME="shangdaren-$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)-${{ steps.build_type.outputs.flavor }}.apk"
+          echo "name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "Found APK: $APK_PATH"
+          ls -lh "$APK_PATH"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shangdaren-apk-${{ steps.build_type.outputs.flavor }}-${{ github.run_number }}
+          path: flutter_app/${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Type**: ${{ steps.build_type.outputs.flavor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Flutter Channel**: ${{ env.FLUTTER_CHANNEL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Java**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ steps.apk.outputs.path }}" ]; then
+            APK_SIZE=$(du -h "${{ steps.apk.outputs.path }}" | cut -f1)
+            echo "- **APK Size**: $APK_SIZE" >> $GITHUB_STEP_SUMMARY
+            echo "- **APK File**: ${{ steps.apk.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          fi
