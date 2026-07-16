@@ -1,7 +1,12 @@
 node_modules/
 dist/
 .idea/
+# 全局忽略所有 .log 文件
 *.log
+# 但允许 logs/ 目录下的日志文件上传到 GitHub
+!logs/
+!logs/.gitkeep
+!logs/*.log
 .DS_Store
 Thumbs.db
 flutter_app/build/

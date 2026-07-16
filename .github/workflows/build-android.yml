@@ -2,6 +2,9 @@ name: Build Android APK
 
 # 上大人字牌游戏 - GitHub Actions 流水线编译支持
 # 触发条件：推送/PR 到主分支或 feature/frame/webgl 分支，或手动触发
+#
+# 触发路径限制：仅当 flutter_app/ 或本工作流文件变更时才触发编译
+# logs/ 目录下的日志文件变更不会触发流水线（不在 paths 列表中）
 
 on:
   push:

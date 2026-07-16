@@ -1,0 +1,2 @@
+# 此目录用于存放从设备导出的游戏运行日志 (game_log_*.log)
+# 日志文件可正常提交到 GitHub，但不会触发 GitHub Actions 流水线编译
