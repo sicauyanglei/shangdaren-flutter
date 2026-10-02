@@ -1,0 +1,147 @@
+name: Release Android APK
+
+# 上大人字牌游戏 - Tag 发布流水线
+# 推送 v* 标签时自动编译 release APK 并创建 GitHub Release 附带下载
+# 工作流合入默认分支后，也可在 Actions 页面手动触发（仅编译 + artifact，不创建 Release）
+#
+# 用法：
+#   git tag v1.0.0 && git push origin v1.0.0
+#   → 自动编译 APK，创建 Release "shangdaren v1.0.0"，APK 命名 shangdaren-v1.0.0-release.apk
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FLUTTER_CHANNEL: 'stable'
+  JAVA_VERSION: '17'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('flutter_app/android/**/*.gradle*', 'flutter_app/android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            flutter_app/.dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.yaml', 'flutter_app/pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: Remove local proxy config from gradle.properties
+        # gradle.properties 中配置了本地代理 (127.0.0.1:18080)，在 CI 环境不可用，需要移除
+        run: |
+          sed -i '/systemProp\.http\.proxyHost=/d; /systemProp\.http\.proxyPort=/d; /systemProp\.https\.proxyHost=/d; /systemProp\.https\.proxyPort=/d; /systemProp\.http\.nonProxyHosts=/d; /systemProp\.https\.nonProxyHosts=/d' android/gradle.properties
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Locate APK and determine tag
+        id: apk
+        run: |
+          APK_PATH=$(find build -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No APK file found in build output"
+            exit 1
+          fi
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="$GITHUB_REF_NAME"
+            APK_NAME="shangdaren-${TAG}-release.apk"
+          else
+            TAG=""
+            APK_NAME="shangdaren-${VERSION}-release.apk"
+          fi
+          cp "$APK_PATH" "$APK_NAME"
+          {
+            echo "path=$APK_PATH"
+            echo "name=$APK_NAME"
+            echo "tag=$TAG"
+          } >> $GITHUB_OUTPUT
+          echo "Found APK: $APK_PATH"
+          ls -lh "$APK_PATH" "$APK_NAME"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shangdaren-release-${{ github.run_number }}
+          path: flutter_app/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Create GitHub Release with APK
+        if: steps.apk.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.apk.outputs.tag }}"
+          APK_FILE="${{ steps.apk.outputs.name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading APK with clobber..."
+            gh release upload "$TAG" "$APK_FILE" --clobber
+          else
+            gh release create "$TAG" "$APK_FILE" --title "shangdaren $TAG" --generate-notes
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Flutter Channel**: ${{ env.FLUTTER_CHANNEL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Java**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.apk.outputs.tag }}" ]; then
+            echo "- **Release Tag**: ${{ steps.apk.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Release URL**: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.apk.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Mode**: Manual build (artifact only, no Release created)" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "${{ steps.apk.outputs.name }}" ]; then
+            APK_SIZE=$(du -h "${{ steps.apk.outputs.name }}" | cut -f1)
+            echo "- **APK Name**: ${{ steps.apk.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **APK Size**: $APK_SIZE" >> $GITHUB_STEP_SUMMARY
+          fi
