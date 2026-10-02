@@ -1,0 +1,95 @@
+name: Build Web
+
+# 上大人字牌游戏 - Web 编译流水线
+# 推送/PR 到主分支或 feature/frame/webgl 分支时自动编译 Flutter Web 版本并上传 artifact
+# 触发路径限制：仅当 flutter_app/ 或本工作流文件变更时才触发编译
+#
+# Web 平台说明：
+# - lib/ 中 path_provider/permission_handler 仅在 game_logger_io.dart（条件导入 io）中使用
+# - Web 环境走 game_logger_web.dart，audioplayers/shared_preferences/flame 均支持 Web
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - feature/frame/webgl
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/build-web.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+      - feature/frame/webgl
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/build-web.yml'
+  workflow_dispatch:
+
+env:
+  FLUTTER_CHANNEL: 'stable'
+
+jobs:
+  build-web:
+    name: Flutter Web Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter version info
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            flutter_app/.dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('flutter_app/pubspec.yaml', 'flutter_app/pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Web (release)
+        run: flutter build web --release
+
+      - name: List build output
+        run: ls -lh build/web/
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shangdaren-web-${{ github.run_number }}
+          path: flutter_app/build/web
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Web Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Flutter Channel**: ${{ env.FLUTTER_CHANNEL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          if [ -d build/web ]; then
+            WEB_SIZE=$(du -sh build/web | cut -f1)
+            echo "- **Web Bundle Size**: $WEB_SIZE" >> $GITHUB_STEP_SUMMARY
+          fi

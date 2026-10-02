@@ -102,6 +102,12 @@ jobs:
       - name: Run Flutter analyzer
         run: flutter analyze --no-fatal-infos || true
 
+      - name: Run AI logic tests
+        # 仅运行 AI 决策回归测试 (test/ai_*.dart)
+        # widget_test.dart 为模板遗留（引用不存在的 MyApp，无法编译）
+        # simulator 测试需运行数十局完整模拟，耗时过长，不适合 CI 卡点
+        run: flutter test test/ai_*.dart
+
       - name: Determine build type
         id: build_type
         run: |
