@@ -3,7 +3,9 @@ import 'package:flutter/material.dart' hide Card;
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
 import 'game/shangdaren_game.dart';
+import 'game/network/game_sync_manager.dart';
 import 'game/ui/start_screen.dart';
+import 'game/ui/lobby_screen.dart';
 import 'game/ui/settlement_screen.dart';
 import 'game/ui/replay_screen.dart';
 import 'game/core/game_logger.dart';
@@ -61,10 +63,12 @@ class _GameHomePageState extends State<GameHomePage>
   Offset _lastDragPos = Offset.zero;
   Offset? _dragStartPos;
   bool _showStartScreen = true;
+  bool _showLobby = false;
   bool _showSettlement = false;
   bool _showSettings = false;
   bool _showReplay = false;
   RoundReplay? _currentReplay;
+  final GameSyncManager _sync = GameSyncManager();
   final Map<int, int> _displayScores = {};
   final Map<int, int> _targetScores = {};
   final Map<int, Timer> _scoreAnimTimers = {};
@@ -127,6 +131,12 @@ class _GameHomePageState extends State<GameHomePage>
     _game.onScoreArrive = (playerId) {
       if (!mounted) return;
       _startScoreAnim(playerId);
+    };
+    _game.onOnlineGameEnd = (reason) {
+      if (!mounted) return;
+      GameLogger.i('ONLINE', '对局结束: $reason');
+      _game.overlays.remove('gameOverlay');
+      setState(() => _showLobby = true);
     };
   }
 
@@ -201,6 +211,28 @@ class _GameHomePageState extends State<GameHomePage>
       difficulty: difficulty,
       piaoEnabled: piaoEnabled,
     );
+  }
+
+  void _onOpenLobby() {
+    setState(() {
+      _showStartScreen = false;
+      _showLobby = true;
+    });
+  }
+
+  void _onCloseLobby() {
+    setState(() {
+      _showLobby = false;
+      _showStartScreen = true;
+    });
+  }
+
+  /// 3 人准备就绪、服务器广播 room:game:start 后：切入对局界面并挂载联机状态机。
+  void _onOnlineGameStarting() {
+    if (!_game.gameLoaded) return;
+    setState(() => _showLobby = false);
+    _game.overlays.add('gameOverlay');
+    _game.startOnlineGame(_sync);
   }
 
   void _onCloseSettlement() {
@@ -363,7 +395,14 @@ class _GameHomePageState extends State<GameHomePage>
               if (_showStartScreen)
                 StartScreen(
                   onStartGame: _onStartGame,
+                  onOnlineGame: _onOpenLobby,
                   onExit: () => SystemNavigator.pop(),
+                ),
+              if (_showLobby)
+                LobbyScreen(
+                  sync: _sync,
+                  onClose: _onCloseLobby,
+                  onGameStarting: _onOnlineGameStarting,
                 ),
               if (_showSettlement)
                 SettlementScreen(

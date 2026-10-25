@@ -29,6 +29,9 @@ class GameState {
   String difficulty;
   bool piaoEnabled;
 
+  // 联机模式（由 GameController 在对局入口设置，reset 不清除）
+  bool isOnline;
+
   // 飘分阶段
   bool isPiaoPhase;
   int piaoCurrentPlayerIndex;
@@ -131,6 +134,7 @@ class GameState {
     this.multiplierBase = 2,
     this.difficulty = 'hard',
     this.piaoEnabled = false,
+    this.isOnline = false,
     this.isPiaoPhase = false,
     this.piaoCurrentPlayerIndex = 0,
     this.piaoSetCount = 0,

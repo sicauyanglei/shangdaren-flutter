@@ -11,6 +11,7 @@ import 'models/card.dart';
 import 'models/game_state.dart';
 import 'models/meld.dart';
 import 'logic/game_controller.dart';
+import 'network/game_sync_manager.dart';
 import 'render/animation_system.dart';
 import 'render/card_render.dart';
 import 'render/game_board.dart';
@@ -261,6 +262,7 @@ class ShangdarenGame extends FlameGame {
   VoidCallback? onShowPiao;
   VoidCallback? onPiaoPhaseComplete;
   void Function(int playerId)? onScoreArrive;
+  void Function(String reason)? onOnlineGameEnd;
 
   ShangdarenGame()
     : super(
@@ -380,6 +382,19 @@ class ShangdarenGame extends FlameGame {
     _gameController!.state.difficulty = difficulty;
     _gameController!.state.piaoEnabled = piaoEnabled;
     _gameController!.startGame();
+  }
+
+  /// 联机对局：由 UI 在收到 room:game:start 后调用，
+  /// 挂载同步管理器并进入联机状态机（发牌/摸牌由服务器下发）。
+  void startOnlineGame(GameSyncManager syncManager) {
+    if (!_loaded) return;
+    _lastPlayedCard = null;
+    _scoreAnimPlayed = false;
+    _gameBoard?.clearLastDiscard();
+    _animationSystem?.clearAll();
+    _gameController!.onOnlineGameEnd = (reason) =>
+        onOnlineGameEnd?.call(reason);
+    _gameController!.startOnlineGame(syncManager);
   }
 
   void startRound() {

@@ -1,0 +1,14 @@
+{
+  "name": "shangdaren-server",
+  "version": "1.0.0",
+  "description": "上大人字牌游戏联机服务器：100桌房间管理 + 3人真人对战同步",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/room_test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

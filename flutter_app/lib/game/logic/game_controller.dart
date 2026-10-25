@@ -12,6 +12,8 @@ import 'ting_checker.dart';
 import 'score_calculator.dart';
 import 'ai/ai_controller.dart';
 import 'ai/ai_strategy_hard.dart';
+import '../network/game_sync_manager.dart';
+import '../network/seat_mapper.dart';
 
 typedef VoidCallback = void Function();
 typedef IntCallback = void Function(int);
@@ -22,7 +24,7 @@ typedef CardAnimCallback =
 typedef MeldAnimCallback =
     void Function(List<Card> cards, int playerId, String meldType);
 
-class GameController {
+class GameController implements OnlineGameDelegate {
   static const List<List<String>> _groupChars = [
     ['上', '大', '人'],
     ['丘', '乙', '己'],
@@ -50,6 +52,16 @@ class GameController {
   MeldAnimCallback? onMeldAnimation;
 
   final AudioManager _audio = AudioManager();
+
+  // ---------------- 联机（3真人对战） ----------------
+  /// 联机同步管理器（单机为 null）
+  GameSyncManager? _syncManager;
+
+  /// 联机对局结束（面板关闭/掉线）后通知 UI 返回大厅
+  void Function(String reason)? onOnlineGameEnd;
+
+  bool get _online => state.isOnline && _syncManager != null;
+  SeatMapper get _mapper => _syncManager!.seatMapper;
 
   Timer? _countdownTimer;
   int _countdownTimerId = 0;
@@ -102,6 +114,10 @@ class GameController {
   void startGame() {
     print('=== GameController.startGame called ===');
     state.reset();
+    // 单机模式：确保清除联机状态
+    state.isOnline = false;
+    _syncManager?.detachGameDelegate();
+    _syncManager = null;
     _isStartingRound = false;
     // 回放数据始终录制，与"游戏录制(视频)"设置解耦
     GameRecorder().setEnabled(true);
@@ -300,6 +316,14 @@ class GameController {
     state.piaoSetCount++;
     state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
 
+    if (_online) {
+      // 联机：上报服务器，全员飘完后服务器统一发牌
+      state.isPiaoPhase = false;
+      _syncManager!.sendPiao(piaoValue);
+      onStateChanged?.call();
+      return;
+    }
+
     // 继续处理AI飘分
     _processAIPiao();
   }
@@ -382,6 +406,8 @@ class GameController {
   }
 
   void _startTurn() {
+    // 联机：回合推进由服务器事件驱动，本地不启动回合
+    if (state.isOnline) return;
     if (state.deck.isEmpty && !_skipDraw) {
       _handleLiuju();
       return;
@@ -644,6 +670,10 @@ class GameController {
     }
     _skipDraw = false;
     stopCountdown();
+    if (_online) {
+      // 联机：出牌上报服务器，由服务器广播给其他玩家
+      _syncManager!.sendDiscard(discardCard.character);
+    }
     onCardAnimation?.call(discardCard, player.id, 'discard');
     _audio.playDiscard(
       discardCard.character,
@@ -687,6 +717,9 @@ class GameController {
     onPlayerDiscard?.call(card);
     onStateChanged?.call();
 
+    // 联机：其他玩家的响应由服务器仲裁，本地不检查
+    if (_online) return;
+
     _pendingCheckResponse = true;
     _pendingCheckResponseCard = card;
     _pendingCheckResponsePlayerId = player.id;
@@ -700,6 +733,7 @@ class GameController {
   }
 
   void _checkResponses(Card card, int discardPlayerId) {
+    if (state.isOnline) return;
     _pendingCheckResponse = false;
     _pendingCheckResponseCard = null;
     _pendingCheckResponsePlayerId = null;
@@ -893,6 +927,25 @@ class GameController {
     state.waitingForResponse = false;
     _clearPendingAIResponses();
     onStateChanged?.call();
+
+    if (_online) {
+      // 联机：胡牌上报服务器，各端等 game:hu 广播统一展示
+      final winner = state.players[humanIndex];
+      final huCard = isZimo ? _lastDrawnCard : state.lastDiscardedCard;
+      final winnerData = _buildOnlineWinnerData(
+        winner,
+        huCard: huCard,
+        isZimo: isZimo,
+        dianpaoIndex: isZimo ? null : state.lastDiscardPlayerIndex,
+      );
+      if (isZimo) {
+        _syncManager!.sendZimoHu(huCard?.character ?? '', winnerData);
+      } else {
+        _syncManager!.sendClaim('hu', winnerData: winnerData);
+      }
+      return;
+    }
+
     _handleHu(
       humanIndex,
       isZimo: isZimo,
@@ -919,6 +972,15 @@ class GameController {
       state.waitingForResponse = false;
       if (humanIndex == 1) {
         state.hideTingBadge = true;
+      }
+      if (_online) {
+        // 联机：招认领上报服务器，等裁决后各端统一执行
+        _syncManager!.sendClaim(
+          'zhao',
+          meldCards: [state.lastDiscardedCard!.character],
+        );
+        onStateChanged?.call();
+        return;
       }
       _handleZhaoRespond(
         humanIndex,
@@ -974,6 +1036,14 @@ class GameController {
       state.hideTingBadge = true;
     }
     onStateChanged?.call();
+    if (_online) {
+      // 联机：碰认领上报服务器，等裁决后各端统一执行
+      _syncManager!.sendClaim(
+        'peng',
+        meldCards: [state.lastDiscardedCard!.character],
+      );
+      return;
+    }
     _handlePeng(
       humanIndex,
       state.lastDiscardedCard!,
@@ -998,6 +1068,19 @@ class GameController {
       state.hideTingBadge = true;
     }
     onStateChanged?.call();
+    if (_online) {
+      // 联机：吃认领上报服务器（meldCards=完整句3字按position排序），等裁决后各端统一执行
+      final me = state.players[humanIndex];
+      final chiCards = _findChiCards(me, state.lastDiscardedCard!);
+      if (chiCards == null) return;
+      final juCards = [chiCards[0], chiCards[1], state.lastDiscardedCard!]
+        ..sort((a, b) => a.position.compareTo(b.position));
+      _syncManager!.sendClaim(
+        'chi',
+        meldCards: juCards.map((c) => c.character).toList(),
+      );
+      return;
+    }
     _handleChi(
       humanIndex,
       state.lastDiscardedCard!,
@@ -1020,6 +1103,14 @@ class GameController {
       voiceType: AudioManager.voiceTypeFromGender(state.players[1].gender),
     );
     stopCountdown();
+
+    if (_online && wasWaitingForResponse) {
+      // 联机：过牌上报服务器，由服务器收齐后裁决推进
+      state.isMyTurn = false;
+      _syncManager!.sendClaim('pass');
+      onStateChanged?.call();
+      return;
+    }
 
     if (wasWaitingForResponse) {
       state.isMyTurn = false;
@@ -1163,6 +1254,35 @@ class GameController {
     _isFromTimeout = true;
     final useAiStrategy =
         state.isAutoHosting && AudioManager().autoHostingStrategy == 'ai';
+
+    if (_online) {
+      // 联机：超时只能过牌/自动出牌，全部走服务器（禁止本地策略直接胡/碰/吃）
+      if (state.waitingForResponse) {
+        respondPass();
+      } else if (state.isMyTurn) {
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+        final player = state.players[1];
+        if (_lastDrawnCard != null) {
+          final idx = player.hand.indexWhere(
+            (c) => c.id == _lastDrawnCard!.id,
+          );
+          if (idx >= 0) {
+            discardCard(idx);
+            _lastDrawnCard = null;
+            _isFromTimeout = false;
+            return;
+          }
+        }
+        if (player.hand.isNotEmpty) {
+          discardCard(player.hand.length - 1);
+        }
+      }
+      _isFromTimeout = false;
+      return;
+    }
 
     if (state.waitingForResponse) {
       if (useAiStrategy) {
@@ -1512,7 +1632,7 @@ class GameController {
     GameRecorder().endRound(resultType: 'liuju');
     _audio.playLiuju(
       voiceType: AudioManager.voiceTypeFromGender(
-        state.players[(state.lastDiscardPlayerIndex! + 1) % 3].gender,
+        state.players[((state.lastDiscardPlayerIndex ?? 0) + 1) % 3].gender,
       ),
     );
 
@@ -1558,6 +1678,11 @@ class GameController {
   }
 
   void handleLiujuClose() {
+    // 联机：单局制，面板关闭后由 UI 返回大厅
+    if (_online) {
+      _finishOnlineGame();
+      return;
+    }
     // 庄家轮转在面板关闭后执行
     if (state.nextDealerIndex != null) {
       state.dealerIndex = state.nextDealerIndex!;
@@ -1572,6 +1697,11 @@ class GameController {
   }
 
   void handleHuClose() {
+    // 联机：单局制，面板关闭后由 UI 返回大厅
+    if (_online) {
+      _finishOnlineGame();
+      return;
+    }
     // 庄家轮转在面板关闭后执行
     if (state.nextDealerIndex != null) {
       state.dealerIndex = state.nextDealerIndex!;
@@ -1598,12 +1728,16 @@ class GameController {
   }
 
   void pauseGame() {
+    // 联机对局由服务器事件驱动，不做本地暂停（避免漏处理服务器事件）
+    if (_online) return;
     _isPaused = true;
     stopCountdown();
   }
 
   void resumeGame() {
     _isPaused = false;
+    // 联机对局完全由服务器事件驱动（含延迟回调），本地恢复会造成双重执行
+    if (state.isOnline) return;
     if (!state.gameStarted) return;
     if (state.showHuResult || state.showLiujuResult) return;
     if (state.isHandlingHu) return;
@@ -1748,6 +1882,11 @@ class GameController {
 
     final zhaoCards = byChar[targetChar]!.sublist(0, 4);
 
+    if (_online) {
+      // 联机：招手牌上报服务器，补牌由服务器下发（game:draw:self）
+      _syncManager!.sendZhaoSelf(targetChar!);
+    }
+
     onMeldAnimation?.call(zhaoCards, player.id, 'zhao');
     _audio.playZhao(voiceType: AudioManager.voiceTypeFromGender(player.gender));
 
@@ -1768,6 +1907,7 @@ class GameController {
       onPlayerMeld?.call(zhaoCards, player.id);
       onStateChanged?.call();
       _pendingMeldAction = null;
+      if (_online) return; // 联机：招后补牌由服务器下发
       _drawAfterZhao(player);
     };
 
@@ -2277,5 +2417,678 @@ class GameController {
         }
       }
     }
+  }
+
+  /* ==================== 联机（3真人对战） ==================== */
+
+  int _onlineCardSeq = 1000000;
+
+  /// 联机对局入口：挂载同步管理器，后续流程全部由服务器事件驱动
+  void startOnlineGame(GameSyncManager mgr) {
+    state.reset();
+    state.isOnline = true;
+    // 联机统一计分参数（各端一致，保证赢家计算的 winnerData 全端相同）
+    state.baseScore = 5;
+    state.multiplierBase = 2;
+    state.piaoEnabled = true;
+    _isStartingRound = false;
+    _isPaused = false;
+    _lastDrawnCard = null;
+    _skipDraw = false;
+    _hasDealerPlayedFirstTurn = false;
+    _onlineCardSeq = 1000000;
+    stopCountdown();
+    _syncManager = mgr;
+    mgr.attachGameDelegate(this);
+    onStateChanged?.call();
+  }
+
+  /// 联机用唯一 id 重建牌对象（服务器只下发字面）
+  Card _newOnlineCard(String character) {
+    final proto = Card.buildFromCharacter(character);
+    return Card(
+      id: _onlineCardSeq++,
+      character: character,
+      sentence: proto.sentence,
+      position: proto.position,
+    );
+  }
+
+  /// 其他玩家手牌的牌背占位（只维持数量，不参与判定与显示字面）
+  Card _newDummyCard() => _newOnlineCard('上');
+
+  /// 联机对局收尾：面板关闭/掉线后由 UI 返回大厅
+  void _finishOnlineGame() {
+    stopCountdown();
+    state.showHuResult = false;
+    state.showLiujuResult = false;
+    state.gameStarted = false;
+    _syncManager?.detachGameDelegate();
+    _syncManager = null;
+    state.isOnline = false;
+    onOnlineGameEnd?.call('对局结束');
+  }
+
+  /// 构建胡牌结算数据（赢家客户端计算，随 game:hu 广播给各端统一展示）
+  Map<String, dynamic> _buildOnlineWinnerData(
+    Player winner, {
+    Card? huCard,
+    bool isZimo = false,
+    int? dianpaoIndex,
+  }) {
+    final winnerIndex = state.players.indexOf(winner);
+    // 点炮时胡牌暂不在手，临时加入用于检测（与 _handleHu 最终状态一致）
+    final inserted = !isZimo && huCard != null && !winner.hand.contains(huCard);
+    if (inserted) winner.hand.add(huCard!);
+    final huTypeResult = HuCalculator.detectHuType(
+      winner,
+      paoCard: isZimo ? null : huCard,
+    );
+    final scores = ScoreCalculator.calculateScores(
+      state,
+      winnerIndex,
+      dianpaoIndex,
+      isZimo,
+      huTypeResult,
+    );
+    final totalHu = HuCalculator.calculateTotalHu(
+      winner,
+      paoCard: isZimo ? null : huCard,
+    );
+    final handChars = winner.hand.map((c) => c.character).toList();
+    if (inserted) winner.hand.remove(huCard!);
+
+    // 分数变动以服务器座位为键，各端收到后转回本地视角
+    final scoreChanges = <String, int>{};
+    scores.forEach((localIndex, value) {
+      scoreChanges['${_mapper.toServer(localIndex)}'] = value;
+    });
+    return {
+      'hand': handChars,
+      'huType': huTypeResult.name,
+      'huCount': totalHu,
+      'multiplier': isZimo ? huTypeResult.zimo : huTypeResult.dianpao,
+      'scoreChanges': scoreChanges,
+    };
+  }
+
+  @override
+  void onOnlineGameStart(int dealerSeat, List<OnlinePlayerInfo> players) {
+    state.isOnline = true;
+    state.gameStarted = true;
+    state.roundNumber = 1;
+    state.showHuResult = false;
+    state.showLiujuResult = false;
+    state.isDealingComplete = false;
+    state.lastDiscardedCard = null;
+    state.lastDiscardPlayerIndex = null;
+    state.nextDealerIndex = null;
+    state.dealerIndex = _mapper.toLocal(dealerSeat);
+    state.currentPlayerIndex = state.dealerIndex;
+    _lastDrawnCard = null;
+    _hasDealerPlayedFirstTurn = false;
+    _skipDraw = false;
+    stopCountdown();
+
+    // 按本地视角重排玩家：players[1] 恒为"我"
+    final arranged = List<Player>.generate(
+      3,
+      (i) => Player(id: i, name: '玩家$i', type: PlayerType.remote),
+    );
+    for (final info in players) {
+      final local = _mapper.toLocal(info.seat);
+      if (local < 0 || local > 2) continue;
+      arranged[local] = Player(
+        id: local,
+        name: _mapper.isMe(info.seat) ? '我' : info.name,
+        type: local == 1 ? PlayerType.human : PlayerType.remote,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      );
+    }
+    state.players
+      ..clear()
+      ..addAll(arranged);
+
+    // 飘分阶段：服务器收集全员飘分后统一发牌
+    if (state.piaoEnabled) {
+      state.isPiaoPhase = true;
+      state.piaoCurrentPlayerIndex = 1;
+      state.piaoSetCount = 0;
+    } else {
+      state.isPiaoPhase = false;
+      for (final p in state.players) {
+        p.piao = 0;
+      }
+      _syncManager!.sendPiao(0);
+    }
+    onStateChanged?.call();
+  }
+
+  @override
+  void onOnlinePiaoUpdate(int seat, int piao) {
+    final local = _mapper.toLocal(seat);
+    if (local < 0 || local >= state.players.length) return;
+    state.players[local].piao = piao;
+    onStateChanged?.call();
+  }
+
+  @override
+  void onOnlineDeal(
+    int dealerSeat,
+    List<String> hand,
+    Map<int, int> piao,
+    int remaining,
+  ) {
+    state.isPiaoPhase = false;
+    final me = state.players[1];
+    me.hand.clear();
+    for (final ch in hand) {
+      me.hand.add(_newOnlineCard(ch));
+    }
+    me.sortHand();
+    piao.forEach((seat, value) {
+      final local = _mapper.toLocal(seat);
+      if (local >= 0 && local < state.players.length) {
+        state.players[local].piao = value;
+      }
+    });
+    // 服务器牌堆只下发剩余数，用占位牌维护牌堆显示
+    state.deck = List.generate(remaining, (_) => _newDummyCard());
+    state.isDealingComplete = true;
+    state.humanDrawRecords.clear();
+    state.currentPlayerIndex = _mapper.toLocal(dealerSeat);
+    _rebuildPublicCardCount();
+    me.huCount = HuCalculator.calculateTotalHu(me);
+    onStateChanged?.call();
+
+    // 庄家先出牌（不摸牌）；我是庄家则直接进入出牌回合
+    if (_mapper.isMe(dealerSeat)) {
+      state.isMyTurn = true;
+      state.isDrawing = false;
+      _checkMyActionsAfterDraw(skipZimoCheck: true); // 20张可招手牌，不能自摸
+      onStateChanged?.call();
+      startCountdown();
+    }
+  }
+
+  @override
+  void onOnlineDraw(int seat, int remaining) {
+    final local = _mapper.toLocal(seat);
+    if (local < 0 || local >= state.players.length) return;
+    state.deck = List.generate(remaining, (_) => _newDummyCard());
+    state.currentPlayerIndex = local;
+    state.isMyTurn = false;
+    final player = state.players[local];
+    player.hand.add(_newDummyCard());
+    onCardAnimation?.call(_newDummyCard(), local, 'draw');
+    onStateChanged?.call();
+  }
+
+  @override
+  void onOnlineDrawSelf(String card, int remaining) {
+    if (card.isEmpty) return;
+    state.deck = List.generate(remaining, (_) => _newDummyCard());
+    final c = _newOnlineCard(card);
+    final player = state.players[1];
+    state.isDrawing = true;
+    state.isMyTurn = false;
+    state.currentPlayerIndex = 1;
+    _lastDrawnCard = c;
+    _pendingDrawCard = c;
+    _pendingDrawPlayerId = 1;
+    final version = ++_drawVersion;
+    onCardAnimation?.call(c, 1, 'draw');
+    state.hideTingBadge = true;
+    onStateChanged?.call();
+    Future.delayed(const Duration(milliseconds: 2100), () {
+      if (!state.gameStarted) return;
+      if (_drawVersion != version) return;
+      if (state.showHuResult || state.showLiujuResult) return;
+      _completeDrawForHuman(c, player);
+    });
+  }
+
+  @override
+  void onOnlineDiscard(int seat, String card) {
+    final local = _mapper.toLocal(seat);
+    if (local < 0 || local >= state.players.length || card.isEmpty) return;
+    if (local == 1) return; // 自己的出牌本地已处理（防御）
+    final player = state.players[local];
+    final c = _newOnlineCard(card);
+    if (player.hand.isNotEmpty) player.hand.removeLast();
+    player.discards.add(c);
+    _addToPublicCount(c.character, 1);
+    state.lastDiscardedCard = c;
+    state.lastDiscardPlayerIndex = local;
+    state.currentPlayerIndex = local;
+    state.isMyTurn = false;
+    _lastDrawnCard = null;
+    onCardAnimation?.call(c, local, 'discard');
+    onPlayerDiscard?.call(c);
+    onStateChanged?.call();
+
+    // 计算我方可响应的操作（胡/招/碰/吃）
+    final me = state.players[1];
+    final actions = <String>[];
+    if (me.isTing && _canHuWith(me, c)) actions.add('hu');
+    if (_canZhaoWith(me, c)) actions.add('zhao');
+    if (_canPengWith(me, c)) actions.add('peng');
+    if (_canChiWith(me, 1, c, local) &&
+        !_hasCompleteSentenceWithSingleCards(me, c)) {
+      actions.add('chi');
+    }
+
+    if (actions.isEmpty) {
+      // 无可响应操作自动过牌（服务器需收齐响应才能推进）
+      _syncManager!.sendClaim('pass');
+      return;
+    }
+
+    for (final action in actions) {
+      if (action == 'hu') {
+        state.canHu = true;
+        state.isZimoOpportunity = false;
+      } else if (action == 'zhao') {
+        state.canZhao = true;
+      } else if (action == 'peng') {
+        state.canPeng = true;
+      } else if (action == 'chi') {
+        state.canChi = true;
+      }
+    }
+    state.waitingForResponse = true;
+    state.isMyTurn = true;
+    onStateChanged?.call();
+    startCountdown();
+  }
+
+  @override
+  void onOnlineActionResult(OnlineActionResult result) {
+    switch (result.result) {
+      case 'pass':
+        state.waitingForResponse = false;
+        state.isMyTurn = false;
+        state.canChi = false;
+        state.canPeng = false;
+        state.canZhao = false;
+        state.canHu = false;
+        stopCountdown();
+        onStateChanged?.call();
+        break;
+      case 'claim':
+        if (result.seat == null || result.action == null) return;
+        _applyOnlineClaim(result);
+        break;
+      case 'zhao-self':
+        if (result.seat == null) return;
+        _applyOnlineZhaoSelf(result);
+        break;
+    }
+  }
+
+  /// 其他玩家招自己手牌的 4 张同字牌（自己的回声已被过滤）
+  void _applyOnlineZhaoSelf(OnlineActionResult result) {
+    final local = _mapper.toLocal(result.seat!);
+    if (local < 0 || local >= state.players.length) return;
+    if (local == 1) return; // 自己的招手牌已本地处理
+    final character = result.character;
+    if (character == null || character.isEmpty) return;
+    final player = state.players[local];
+    var removed = 0;
+    for (var i = player.hand.length - 1; i >= 0 && removed < 4; i--) {
+      player.hand.removeAt(i);
+      removed++;
+    }
+    final zhaoCards = List.generate(4, (_) => _newOnlineCard(character));
+    player.melds.add(
+      Meld(
+        cards: zhaoCards,
+        type: MeldType.zhao,
+        isJing: zhaoCards.first.isJing,
+      ),
+    );
+    HuCalculator.updateMeldHuCache(player);
+    _addToPublicCount(character, 4);
+    state.currentPlayerIndex = local;
+    onPlayerMeld?.call(zhaoCards, local);
+    onStateChanged?.call();
+    // 招后服务器会补发摸牌事件
+  }
+
+  /// 执行服务器裁决的碰/吃/招认领（对包括我在内的所有客户端统一生效）
+  void _applyOnlineClaim(OnlineActionResult result) {
+    final seatLocal = _mapper.toLocal(result.seat!);
+    if (seatLocal < 0 || seatLocal >= state.players.length) return;
+    final isMe = seatLocal == 1;
+    final player = state.players[seatLocal];
+    final discarderIdx = state.lastDiscardPlayerIndex;
+    final claimedCard = state.lastDiscardedCard;
+    if (discarderIdx == null || claimedCard == null) return;
+    final discarder = state.players[discarderIdx];
+    final char = claimedCard.character;
+
+    state.waitingForResponse = false;
+    state.isMyTurn = false;
+    state.canChi = false;
+    state.canPeng = false;
+    state.canZhao = false;
+    state.canHu = false;
+    stopCountdown();
+
+    // 招认领且已有坎：坎升级为招（无需动牌数）
+    if (result.action == 'zhao') {
+      final existingKan = player.melds
+          .where(
+            (m) => m.type == MeldType.kan && m.cards.first.character == char,
+          )
+          .toList();
+      if (existingKan.isNotEmpty) {
+        discarder.discards.remove(claimedCard);
+        _addToPublicCount(char, -1);
+        final oldMeld = existingKan.first;
+        player.melds.remove(oldMeld);
+        _addToPublicCount(char, -3);
+        final newCards = List<Card>.from(oldMeld.cards)..add(claimedCard);
+        player.melds.add(
+          Meld(cards: newCards, type: MeldType.zhao, isJing: claimedCard.isJing),
+        );
+        HuCalculator.updateMeldHuCache(player);
+        _addToPublicCount(char, 4);
+        state.currentPlayerIndex = seatLocal;
+        onPlayerMeld?.call(newCards, seatLocal);
+        onStateChanged?.call();
+        return; // 招后由服务器补发摸牌
+      }
+    }
+
+    List<Card> meldCards;
+    MeldType meldType;
+    int handRemoveCount;
+    if (result.action == 'peng') {
+      meldCards = [claimedCard, _newOnlineCard(char), _newOnlineCard(char)];
+      meldType = MeldType.kan;
+      handRemoveCount = 2;
+    } else if (result.action == 'zhao') {
+      meldCards = [
+        claimedCard,
+        _newOnlineCard(char),
+        _newOnlineCard(char),
+        _newOnlineCard(char),
+      ];
+      meldType = MeldType.zhao;
+      handRemoveCount = 3;
+    } else if (result.action == 'chi') {
+      final chars = (result.meldCards != null && result.meldCards!.isNotEmpty)
+          ? result.meldCards!
+          : [char];
+      meldCards = chars.map(_newOnlineCard).toList();
+      meldType = MeldType.ju;
+      handRemoveCount = chars.where((c) => c != char).length;
+    } else {
+      return;
+    }
+
+    // 从弃牌区移除被认领的牌
+    discarder.discards.remove(claimedCard);
+    _addToPublicCount(char, -1);
+
+    // 从认领者手牌移除对应牌
+    if (isMe) {
+      if (result.action == 'chi') {
+        for (final c in meldCards) {
+          if (c.character == char) continue;
+          final idx = player.hand.indexWhere((h) => h.character == c.character);
+          if (idx >= 0) player.hand.removeAt(idx);
+        }
+      } else {
+        var removed = 0;
+        for (var i = player.hand.length - 1;
+            i >= 0 && removed < handRemoveCount;
+            i--) {
+          if (player.hand[i].character == char) {
+            player.hand.removeAt(i);
+            removed++;
+          }
+        }
+      }
+    } else {
+      // 其他玩家手牌为牌背占位，按数量移除
+      var removed = 0;
+      for (var i = player.hand.length - 1;
+          i >= 0 && removed < handRemoveCount;
+          i--) {
+        player.hand.removeAt(i);
+        removed++;
+      }
+    }
+
+    player.melds.add(
+      Meld(
+        cards: meldCards,
+        type: meldType,
+        isJing: meldCards.any((c) => c.isJing),
+      ),
+    );
+    HuCalculator.updateMeldHuCache(player);
+    for (final c in meldCards) {
+      _addToPublicCount(c.character, 1);
+    }
+    state.currentPlayerIndex = seatLocal;
+    onPlayerMeld?.call(meldCards, seatLocal);
+
+    if (isMe) {
+      final tingResult = TingChecker.checkTing(player);
+      player.isTing = tingResult.isTing;
+      player.tingCards = tingResult.tingCards;
+      player.tingType = tingResult.tingType;
+      player.huCount = HuCalculator.calculateTotalHu(player);
+    }
+    onStateChanged?.call();
+
+    if (meldType == MeldType.zhao) {
+      return; // 招后由服务器补发摸牌
+    }
+
+    // 碰/吃：认领者不摸牌直接出牌
+    if (isMe) {
+      state.isMyTurn = true;
+      state.isDrawing = false;
+      if (_canZhaoAfterDraw(player)) {
+        state.canZhao = true;
+        final candidates = _getZhaoCandidates(player);
+        state.zhaoCandidates = candidates;
+        state.showZhaoSelection = candidates.length > 1;
+      }
+      onStateChanged?.call();
+      startCountdown();
+    }
+  }
+
+  @override
+  void onOnlineHu(OnlineHuEvent event) {
+    final winnerLocal = _mapper.toLocal(event.seat);
+    final dianpaoLocal = event.fromSeat != null
+        ? _mapper.toLocal(event.fromSeat!)
+        : null;
+    if (winnerLocal == 1) {
+      // 我是赢家：本地状态完整，直接结算（分数与广播的 winnerData 一致）
+      _handleHu(
+        1,
+        isZimo: event.zimo,
+        dianpaoIndex: dianpaoLocal,
+        zimoCard: event.zimo ? _lastDrawnCard : null,
+      );
+      return;
+    }
+    _handleOnlineHuRemote(event, winnerLocal, dianpaoLocal);
+  }
+
+  /// 其他玩家胡牌：用广播的 winnerData 重建赢家手牌并统一结算
+  void _handleOnlineHuRemote(
+    OnlineHuEvent event,
+    int winnerLocal,
+    int? dianpaoLocal,
+  ) {
+    stopCountdown();
+    state.isHandlingHu = true;
+    state.canChi = false;
+    state.canPeng = false;
+    state.canZhao = false;
+    state.canHu = false;
+    state.isMyTurn = false;
+    state.waitingForResponse = false;
+
+    final winner = state.players[winnerLocal];
+    final data = event.winnerData;
+
+    // 重建赢家手牌（含胡牌那张，供胡牌面板明牌显示）
+    winner.hand.clear();
+    final handChars = data?['hand'];
+    if (handChars is List) {
+      for (final ch in handChars) {
+        if (ch is String) winner.hand.add(_newOnlineCard(ch));
+      }
+    }
+    winner.sortHand();
+
+    // 点炮：弃牌区的牌归入赢家（重建手牌已含该牌，弃牌区需移除）
+    if (!event.zimo &&
+        dianpaoLocal != null &&
+        state.lastDiscardedCard != null) {
+      final discarder = state.players[dianpaoLocal];
+      discarder.discards.remove(state.lastDiscardedCard);
+      _addToPublicCount(state.lastDiscardedCard!.character, -1);
+    }
+
+    // 结算数据：优先使用赢家客户端计算并广播的 winnerData
+    final huTypeName = (data?['huType'] as String?) ?? '';
+    final totalHu = (data?['huCount'] as num?)?.toInt() ?? 0;
+    final displayMultiplier = (data?['multiplier'] as num?)?.toInt() ?? 0;
+    final scoreChanges = <int, int>{};
+    final rawChanges = data?['scoreChanges'];
+    if (rawChanges is Map) {
+      rawChanges.forEach((key, value) {
+        final seat = int.tryParse(key.toString());
+        final v = value is int
+            ? value
+            : (value is num ? value.toInt() : null);
+        if (seat != null && v != null) {
+          final local = _mapper.toLocal(seat);
+          if (local >= 0 && local < state.players.length) {
+            scoreChanges[local] = v;
+          }
+        }
+      });
+    }
+    if (scoreChanges.isEmpty) {
+      // 兜底：winnerData 缺失时本地计算（手牌已重建，结果一致）
+      final huTypeResult = HuCalculator.detectHuType(
+        winner,
+        paoCard: event.zimo ? null : state.lastDiscardedCard,
+      );
+      scoreChanges.addAll(
+        ScoreCalculator.calculateScores(
+          state,
+          winnerLocal,
+          dianpaoLocal,
+          event.zimo,
+          huTypeResult,
+        ),
+      );
+    }
+
+    if (event.zimo) {
+      _audio.playZimo(
+        voiceType: AudioManager.voiceTypeFromGender(winner.gender),
+      );
+    } else {
+      _audio.playHu(voiceType: AudioManager.voiceTypeFromGender(winner.gender));
+    }
+    if (huTypeName.isNotEmpty) {
+      _audio.playHuType(
+        huTypeName,
+        voiceType: AudioManager.voiceTypeFromGender(winner.gender),
+        delayMs: 800,
+      );
+    }
+
+    final oldScores = <int, int>{};
+    for (final p in state.players) {
+      oldScores[p.id] = p.score;
+    }
+    for (final entry in scoreChanges.entries) {
+      state.players[entry.key].score += entry.value;
+    }
+
+    winner.huCount = totalHu;
+    final method = event.zimo ? '自摸' : '点炮';
+    state.roundHistory.add({
+      'roundNumber': state.roundNumber,
+      'winner': winner.name,
+      'winnerIndex': winnerLocal,
+      'huType': huTypeName,
+      'method': method,
+      'multiplier': displayMultiplier,
+      'score': scoreChanges[winnerLocal] ?? 0,
+      'piaoScores': state.players.map((p) => p.piao).toList(),
+      'isLiuJu': false,
+      'scoreChanges': List<int>.from(
+        state.players.map((p) => scoreChanges[p.id] ?? 0),
+      ),
+      'huCount': totalHu,
+      'dianpaoIndex': dianpaoLocal,
+      'dealerIndex': state.dealerIndex,
+    });
+
+    state.huResultWinnerName = winner.name;
+    state.huResultWinnerIndex = winnerLocal;
+    state.huResultMethod = method;
+    state.huResultHuType = huTypeName;
+    state.huResultHuCount = totalHu;
+    state.huResultMultiplier = displayMultiplier;
+    state.huResultScore = scoreChanges[winnerLocal] ?? 0;
+    state.huResultScoreChanges = scoreChanges;
+    state.huResultOldScores = oldScores;
+    state.huResultDianpaoIndex = dianpaoLocal;
+    if (!event.zimo && dianpaoLocal != null) {
+      state.huResultDianpaoName = state.players[dianpaoLocal].name;
+      state.huResultDianpaoCard = state.lastDiscardedCard;
+      state.huResultZimoCard = null;
+    } else {
+      state.huResultDianpaoName = null;
+      state.huResultDianpaoCard = null;
+      state.huResultZimoCard = (event.card != null && event.card!.isNotEmpty)
+          ? _newOnlineCard(event.card!)
+          : null;
+    }
+    state.isHandlingHu = false;
+    state.showHuResult = true;
+    onShowHu?.call();
+    onStateChanged?.call();
+  }
+
+  @override
+  void onOnlineLiuju() {
+    state.waitingForResponse = false;
+    state.canChi = false;
+    state.canPeng = false;
+    state.canZhao = false;
+    state.canHu = false;
+    state.isMyTurn = false;
+    _handleLiuju();
+  }
+
+  @override
+  void onOnlinePlayerDisconnect(int seat, String name) {
+    stopCountdown();
+    state.showHuResult = false;
+    state.showLiujuResult = false;
+    state.gameStarted = false;
+    _syncManager?.detachGameDelegate();
+    _syncManager = null;
+    state.isOnline = false;
+    onOnlineGameEnd?.call(
+      name.isEmpty ? '有玩家掉线，对局已结束' : '玩家「$name」掉线，对局已结束',
+    );
   }
 }

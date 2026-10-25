@@ -9,9 +9,15 @@ class StartScreen extends StatefulWidget {
     bool piaoEnabled,
   )?
   onStartGame;
+  final VoidCallback? onOnlineGame;
   final VoidCallback? onExit;
 
-  const StartScreen({super.key, this.onStartGame, this.onExit});
+  const StartScreen({
+    super.key,
+    this.onStartGame,
+    this.onOnlineGame,
+    this.onExit,
+  });
 
   @override
   State<StartScreen> createState() => _StartScreenState();
@@ -346,6 +352,47 @@ class _StartScreenState extends State<StartScreen> {
                                 fontWeight: FontWeight.w900,
                                 color: const Color(0xFF1a0a00),
                                 letterSpacing: startFontSize * 0.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: screenH * 0.025),
+                        // Online (3 real players) button
+                        GestureDetector(
+                          onTap: () => widget.onOnlineGame?.call(),
+                          child: Container(
+                            width: screenW * 0.28,
+                            height: startBtnH * 0.68,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment(-0.3, -1),
+                                end: Alignment(0.3, 1),
+                                colors: [Color(0xFF4ecdc4), Color(0xFF3db8b0)],
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                startBtnH * 0.25,
+                              ),
+                              border: Border.all(
+                                color: const Color(0xFF4ecdc4).withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF4ecdc4,
+                                  ).withOpacity(0.2),
+                                  blurRadius: 16,
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '3人联机对战',
+                              style: TextStyle(
+                                fontSize: startFontSize * 0.62,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: startFontSize * 0.12,
                               ),
                             ),
                           ),

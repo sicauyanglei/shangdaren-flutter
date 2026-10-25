@@ -2,7 +2,7 @@ import 'card.dart';
 import 'meld.dart';
 import '../logic/ting_checker.dart';
 
-enum PlayerType { human, ai }
+enum PlayerType { human, ai, remote }
 
 enum Gender { male, female }
 
