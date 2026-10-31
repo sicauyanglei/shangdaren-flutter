@@ -1,0 +1,15 @@
+# Render 一键部署配置（Blueprint）
+# 使用方法：Render 控制台 → New → Blueprint → 关联本 GitHub 仓库 → Apply
+# 部署成功后获得地址形如 wss://shangdaren-server.onrender.com，三台手机在
+# 联机大厅的"服务器地址"填该地址即可互联（无需 :8080 端口）。
+#
+# 免费版说明：15 分钟无连接会休眠，首个连接需等待约 30-60 秒冷启动。
+services:
+  - type: web
+    name: shangdaren-server
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/rooms

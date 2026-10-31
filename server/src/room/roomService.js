@@ -9,12 +9,19 @@ class RoomService {
   /**
    * @param {import('./roomManager').RoomManager} roomManager
    * @param {number} port
+   * @param {import('http').Server} [sharedServer] 云端单端口模式：复用外部
+   *   http server（与 WebSocket 共端口），此时不自行 listen
    */
-  constructor(roomManager, port = 8081) {
+  constructor(roomManager, port = 8081, sharedServer) {
     this.roomManager = roomManager;
     this.port = port;
-    this.server = http.createServer((req, res) => this._handle(req, res));
-    this.server.listen(port);
+    if (sharedServer) {
+      this.server = sharedServer;
+      sharedServer.on('request', (req, res) => this._handle(req, res));
+    } else {
+      this.server = http.createServer((req, res) => this._handle(req, res));
+      this.server.listen(port);
+    }
   }
 
   _json(res, status, body) {

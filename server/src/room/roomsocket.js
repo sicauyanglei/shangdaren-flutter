@@ -50,14 +50,18 @@ class RoomSocketServer {
   /**
    * @param {import('./roomManager').RoomManager} roomManager
    * @param {number} port
+   * @param {import('http').Server} [sharedServer] 云端单端口模式：复用外部
+   *   http server（与 HTTP 查询共端口），此时监听其 upgrade 事件
    */
-  constructor(roomManager, port = 8080) {
+  constructor(roomManager, port = 8080, sharedServer) {
     this.roomManager = roomManager;
     this.port = port;
     /** @type {Map<string, import('ws').WebSocket>} playerId -> ws */
     this.sockets = new Map();
 
-    this.wss = new WebSocketServer({ port });
+    this.wss = sharedServer
+      ? new WebSocketServer({ server: sharedServer })
+      : new WebSocketServer({ port });
     this.wss.on('connection', (ws) => this._onConnection(ws));
 
     this.heartbeatTimer = setInterval(() => {
