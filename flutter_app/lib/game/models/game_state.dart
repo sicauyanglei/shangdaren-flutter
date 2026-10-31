@@ -32,6 +32,11 @@ class GameState {
   // 联机模式（由 GameController 在对局入口设置，reset 不清除）
   bool isOnline;
 
+  // 热座模式（由 GameController 在对局入口设置，reset 不清除）
+  bool isHotSeat;
+  // 热座交接屏：当前等待接设备的玩家名（null=无交接）
+  String? hsHandoffName;
+
   // 飘分阶段
   bool isPiaoPhase;
   int piaoCurrentPlayerIndex;
@@ -135,6 +140,8 @@ class GameState {
     this.difficulty = 'hard',
     this.piaoEnabled = false,
     this.isOnline = false,
+    this.isHotSeat = false,
+    this.hsHandoffName,
     this.isPiaoPhase = false,
     this.piaoCurrentPlayerIndex = 0,
     this.piaoSetCount = 0,
@@ -174,6 +181,7 @@ class GameState {
     players = [];
     currentPlayerIndex = 0;
     dealerIndex = 0;
+    hsHandoffName = null;
     nextDealerIndex = null;
     roundNumber = 1;
     deck = [];

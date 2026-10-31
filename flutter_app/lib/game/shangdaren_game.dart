@@ -397,6 +397,29 @@ class ShangdarenGame extends FlameGame {
     _gameController!.startOnlineGame(syncManager);
   }
 
+  /// 热座对局：3名真人共用一台设备轮流操作，视角随持机人旋转。
+  void startHotSeatGame({
+    int baseScore = 5,
+    int multiplierBase = 2,
+    bool piaoEnabled = false,
+  }) {
+    if (!_loaded) return;
+    _lastPlayedCard = null;
+    _scoreAnimPlayed = false;
+    _gameBoard?.clearLastDiscard();
+    _animationSystem?.clearAll();
+    _gameController!.state.baseScore = baseScore;
+    _gameController!.state.multiplierBase = multiplierBase;
+    _gameController!.state.piaoEnabled = piaoEnabled;
+    _gameController!.startHotSeatGame();
+  }
+
+  /// 热座交接屏：玩家点击"开始"后旋转视角并继续流程
+  void completeHotSeatHandoff() {
+    if (!_loaded) return;
+    _gameController!.completeHotSeatHandoff();
+  }
+
   void startRound() {
     if (!_loaded) return;
     _lastPlayedCard = null;

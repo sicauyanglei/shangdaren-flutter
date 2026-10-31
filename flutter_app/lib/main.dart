@@ -235,6 +235,22 @@ class _GameHomePageState extends State<GameHomePage>
     _game.startOnlineGame(_sync);
   }
 
+  /// 热座对局：3 名真人共用一台设备轮流操作。
+  void _onHotSeatGame(
+    int baseScore,
+    int multiplierBase,
+    bool piaoEnabled,
+  ) {
+    if (!_game.gameLoaded) return;
+    setState(() => _showStartScreen = false);
+    _game.overlays.add('gameOverlay');
+    _game.startHotSeatGame(
+      baseScore: baseScore,
+      multiplierBase: multiplierBase,
+      piaoEnabled: piaoEnabled,
+    );
+  }
+
   void _onCloseSettlement() {
     setState(() {
       _showSettlement = false;
@@ -382,6 +398,7 @@ class _GameHomePageState extends State<GameHomePage>
                                   onShowSettlementFromButton:
                                       _triggerNextOrSettlement,
                                   onAvatarSizeChanged: g.updateAvatarSize,
+                                  onHotSeatHandoff: g.completeHotSeatHandoff,
                                 ),
                               ),
                             ),
@@ -396,6 +413,7 @@ class _GameHomePageState extends State<GameHomePage>
                 StartScreen(
                   onStartGame: _onStartGame,
                   onOnlineGame: _onOpenLobby,
+                  onHotSeatGame: _onHotSeatGame,
                   onExit: () => SystemNavigator.pop(),
                 ),
               if (_showLobby)

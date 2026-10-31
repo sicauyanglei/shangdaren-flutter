@@ -92,6 +92,7 @@ class GameOverlay extends StatefulWidget {
   final VoidCallback? onNextRound;
   final VoidCallback? onShowSettlementFromButton;
   final void Function(double w, double h, int playerIndex)? onAvatarSizeChanged;
+  final VoidCallback? onHotSeatHandoff;
 
   const GameOverlay({
     super.key,
@@ -110,6 +111,7 @@ class GameOverlay extends StatefulWidget {
     this.onNextRound,
     this.onShowSettlementFromButton,
     this.onAvatarSizeChanged,
+    this.onHotSeatHandoff,
   });
 
   @override
@@ -386,7 +388,14 @@ class _GameOverlayState extends State<GameOverlay> {
                   PlayerType.human)
             Positioned.fill(
               child: Center(
-                child: _PiaoSelectionPopup(onSetPiao: widget.onSetPiao),
+                child: _PiaoSelectionPopup(
+                  onSetPiao: widget.onSetPiao,
+                  playerName: gameState.isHotSeat
+                      ? gameState
+                            .players[gameState.piaoCurrentPlayerIndex]
+                            .name
+                      : null,
+                ),
               ),
             ),
           if (gameState.showZhaoSelection &&
@@ -397,6 +406,14 @@ class _GameOverlayState extends State<GameOverlay> {
                   candidates: gameState.zhaoCandidates,
                   onSelect: widget.onSelectZhaoCharacter,
                 ),
+              ),
+            ),
+          // 热座交接屏：全屏不透明遮罩，防止其他玩家偷看手牌
+          if (gameState.isHotSeat && gameState.hsHandoffName != null)
+            Positioned.fill(
+              child: _HotSeatHandoffMask(
+                playerName: gameState.hsHandoffName!,
+                onTap: widget.onHotSeatHandoff,
               ),
             ),
         ],
@@ -839,7 +856,10 @@ class _MyPlayerInfo extends StatelessWidget {
                   left: -10,
                   child: _CountdownTimer(countdown: gameState.countdown),
                 ),
-              if (player!.huCount > 0 && player!.type == PlayerType.human)
+              // 热座模式：其余两家胡数不可暴露给持机人
+              if (player!.huCount > 0 &&
+                  player!.type == PlayerType.human &&
+                  !gameState.isHotSeat)
                 Positioned(
                   top: -10,
                   right: -10,
@@ -1225,13 +1245,93 @@ class _RoundInfoState extends State<_RoundInfo> {
   }
 }
 
-class _PiaoSelectionPopup extends StatelessWidget {
-  final void Function(int piaoValue)? onSetPiao;
+/// 热座交接屏：全屏不透明遮罩，请指定玩家接过设备后点击继续
+class _HotSeatHandoffMask extends StatelessWidget {
+  final String playerName;
+  final VoidCallback? onTap;
 
-  const _PiaoSelectionPopup({this.onSetPiao});
+  const _HotSeatHandoffMask({required this.playerName, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: Colors.black.withOpacity(0.96),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.phone_android,
+              size: 64,
+              color: const Color(0xFFffd700).withOpacity(0.9),
+            ),
+            const SizedBox(height: 28),
+            Text(
+              '请将设备交给',
+              style: TextStyle(
+                fontSize: 30,
+                color: Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              playerName,
+              style: const TextStyle(
+                fontSize: 52,
+                color: Color(0xFFffd700),
+                fontWeight: FontWeight.w900,
+                shadows: [Shadow(color: Color(0xFFffd700), blurRadius: 20)],
+              ),
+            ),
+            const SizedBox(height: 48),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 36,
+                vertical: 14,
+              ),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment(-0.3, -1),
+                  end: Alignment(0.3, 1),
+                  colors: [Color(0xFFffd700), Color(0xFFff8c00)],
+                ),
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFffd700).withOpacity(0.4),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: const Text(
+                '我已就座，开始',
+                style: TextStyle(
+                  fontSize: 26,
+                  color: Color(0xFF1a0a00),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PiaoSelectionPopup extends StatelessWidget {
+  final void Function(int piaoValue)? onSetPiao;
+  final String? playerName;
+
+  const _PiaoSelectionPopup({this.onSetPiao, this.playerName});
+
+  @override
+  Widget build(BuildContext context) {
+    final piaoPlayerName = playerName;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -1258,9 +1358,9 @@ class _PiaoSelectionPopup extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            '请选择本局飘分',
-            style: TextStyle(fontSize: 20, color: Colors.white),
+          Text(
+            piaoPlayerName == null ? '请选择本局飘分' : '$piaoPlayerName 请选择本局飘分',
+            style: const TextStyle(fontSize: 20, color: Colors.white),
           ),
           const SizedBox(height: 12),
           Row(

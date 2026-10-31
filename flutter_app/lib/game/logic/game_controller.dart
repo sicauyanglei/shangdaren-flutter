@@ -107,6 +107,19 @@ class GameController implements OnlineGameDelegate {
   int _checkResponseVersion = 0;
   int _meldActionVersion = 0;
 
+  // ===== 热座模式状态 =====
+  bool get _hotSeat => state.isHotSeat;
+  // 交接屏目标玩家（对象引用，旋转不失效）
+  Player? _hsHandoffPlayer;
+  // 交接完成后继续执行的流程
+  VoidCallback? _hsPendingAfterHandoff;
+  // 顺序询问队列（出牌后按回合顺序询问其余两家）
+  List<MapEntry<Player, List<String>>>? _hsAskQueue;
+  Card? _hsAskCard;
+  Player? _hsAskDiscarder;
+  String? _hsPendingClaimAction;
+  Player? _hsPendingClaimPlayer;
+
   GameController({GameState? gameState, AIController? aiCtrl})
     : state = gameState ?? GameState(),
       aiController = aiCtrl ?? AIController();
@@ -114,8 +127,10 @@ class GameController implements OnlineGameDelegate {
   void startGame() {
     print('=== GameController.startGame called ===');
     state.reset();
-    // 单机模式：确保清除联机状态
+    // 单机模式：确保清除联机/热座状态
     state.isOnline = false;
+    state.isHotSeat = false;
+    _hsResetState();
     _syncManager?.detachGameDelegate();
     _syncManager = null;
     _isStartingRound = false;
@@ -153,6 +168,59 @@ class GameController implements OnlineGameDelegate {
     print('=== calling startRound ===');
     startRound();
     print('=== startRound done ===');
+  }
+
+  /// 热座模式：3名真人共用一台设备轮流操作。
+  /// 持机人始终位于 players[1]（本地视角底部、手牌正面朝上），
+  /// 其余两家手牌背面朝上。轮到谁就把设备交给谁，视角随持机人旋转。
+  void startHotSeatGame() {
+    print('=== GameController.startHotSeatGame called ===');
+    state.reset();
+    state.isOnline = false;
+    state.isHotSeat = true;
+    _hsResetState();
+    _syncManager?.detachGameDelegate();
+    _syncManager = null;
+    _isStartingRound = false;
+    // 热座视角会旋转，回放数据索引会错乱，禁用录制
+    GameRecorder().setEnabled(false);
+    GameRecorder().clear();
+    state.players.addAll([
+      Player(
+        id: 0,
+        name: '玩家甲',
+        type: PlayerType.human,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
+      Player(
+        id: 1,
+        name: '玩家乙',
+        type: PlayerType.human,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
+      Player(
+        id: 2,
+        name: '玩家丙',
+        type: PlayerType.human,
+        gender: _rng.nextBool() ? Gender.male : Gender.female,
+      ),
+    ]);
+    state.dealerIndex = Random().nextInt(3);
+    state.roundNumber = 0;
+    state.gameStarted = true;
+    print('=== hotseat calling startRound ===');
+    startRound();
+  }
+
+  void _hsResetState() {
+    _hsHandoffPlayer = null;
+    _hsPendingAfterHandoff = null;
+    _hsAskQueue = null;
+    _hsAskCard = null;
+    _hsAskDiscarder = null;
+    _hsPendingClaimAction = null;
+    _hsPendingClaimPlayer = null;
+    state.hsHandoffName = null;
   }
 
   void startRound() {
@@ -253,6 +321,13 @@ class GameController implements OnlineGameDelegate {
     state.currentPlayerIndex = state.dealerIndex;
     onStateChanged?.call();
 
+    // 热座模式：每局发牌前交接给庄家，防止上一持机人看到庄家手牌
+    if (_hotSeat) {
+      _hsResetAskState();
+      _hsShowHandoff(state.players[state.dealerIndex], _showPiaoScreen);
+      return;
+    }
+
     // 进入飘分阶段或直接发牌
     _showPiaoScreen();
   }
@@ -290,6 +365,13 @@ class GameController implements OnlineGameDelegate {
         state.piaoSetCount++;
         state.piaoCurrentPlayerIndex = (state.piaoCurrentPlayerIndex + 1) % 3;
       } else {
+        // 热座模式：飘分者不在持机位时，交接设备后再弹飘分弹窗
+        if (_hotSeat && state.piaoCurrentPlayerIndex != 1) {
+          _hsShowHandoff(player, () {
+            // 交接后飘分者已在 players[1]，弹窗条件成立自动显示
+          });
+          return;
+        }
         // 人类玩家，等待UI输入
         break;
       }
@@ -410,6 +492,12 @@ class GameController implements OnlineGameDelegate {
     if (state.isOnline) return;
     if (state.deck.isEmpty && !_skipDraw) {
       _handleLiuju();
+      return;
+    }
+
+    // 热座：当前行动者不在持机位时，先交接设备（旋转后其位于 players[1]）
+    if (_hotSeat && state.currentPlayerIndex != 1) {
+      _hsShowHandoff(state.currentTurnPlayer(), _startTurn);
       return;
     }
 
@@ -734,6 +822,11 @@ class GameController implements OnlineGameDelegate {
 
   void _checkResponses(Card card, int discardPlayerId) {
     if (state.isOnline) return;
+    // 热座：按回合顺序逐家询问（轮到谁就交接给谁）
+    if (_hotSeat) {
+      _hsCheckResponses(card, discardPlayerId);
+      return;
+    }
     _pendingCheckResponse = false;
     _pendingCheckResponseCard = null;
     _pendingCheckResponsePlayerId = null;
@@ -913,9 +1006,9 @@ class GameController implements OnlineGameDelegate {
   }
 
   void respondHu() {
-    final humanIndex = state.players.indexWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanIndex = _hotSeat
+        ? 1
+        : state.players.indexWhere((p) => p.type == PlayerType.human);
     if (humanIndex < 0) return;
     stopCountdown();
     state.timeoutCount = 0;
@@ -927,6 +1020,12 @@ class GameController implements OnlineGameDelegate {
     state.waitingForResponse = false;
     _clearPendingAIResponses();
     onStateChanged?.call();
+
+    // 热座：点炮认领走询问状态机（可能被更高优先级截胡，统一延迟应用）
+    if (_hotSeat && !isZimo) {
+      _hsAcceptClaim('hu');
+      return;
+    }
 
     if (_online) {
       // 联机：胡牌上报服务器，各端等 game:hu 广播统一展示
@@ -955,9 +1054,9 @@ class GameController implements OnlineGameDelegate {
   }
 
   void respondZhao() {
-    final humanIndex = state.players.indexWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanIndex = _hotSeat
+        ? 1
+        : state.players.indexWhere((p) => p.type == PlayerType.human);
     if (humanIndex < 0) return;
     stopCountdown();
     state.timeoutCount = 0;
@@ -972,6 +1071,11 @@ class GameController implements OnlineGameDelegate {
       state.waitingForResponse = false;
       if (humanIndex == 1) {
         state.hideTingBadge = true;
+      }
+      // 热座：招认领走询问状态机
+      if (_hotSeat) {
+        _hsAcceptClaim('zhao');
+        return;
       }
       if (_online) {
         // 联机：招认领上报服务器，等裁决后各端统一执行
@@ -1008,9 +1112,9 @@ class GameController implements OnlineGameDelegate {
   }
 
   void selectZhaoCharacter(String character) {
-    final humanIndex = state.players.indexWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanIndex = _hotSeat
+        ? 1
+        : state.players.indexWhere((p) => p.type == PlayerType.human);
     if (humanIndex < 0) return;
     // 手动选择招字重置超时计数
     state.timeoutCount = 0;
@@ -1020,9 +1124,9 @@ class GameController implements OnlineGameDelegate {
   }
 
   void respondPeng() {
-    final humanIndex = state.players.indexWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanIndex = _hotSeat
+        ? 1
+        : state.players.indexWhere((p) => p.type == PlayerType.human);
     if (humanIndex < 0) return;
     stopCountdown();
     state.timeoutCount = 0;
@@ -1036,6 +1140,11 @@ class GameController implements OnlineGameDelegate {
       state.hideTingBadge = true;
     }
     onStateChanged?.call();
+    // 热座：碰认领走询问状态机
+    if (_hotSeat) {
+      _hsAcceptClaim('peng');
+      return;
+    }
     if (_online) {
       // 联机：碰认领上报服务器，等裁决后各端统一执行
       _syncManager!.sendClaim(
@@ -1052,9 +1161,9 @@ class GameController implements OnlineGameDelegate {
   }
 
   void respondChi() {
-    final humanIndex = state.players.indexWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanIndex = _hotSeat
+        ? 1
+        : state.players.indexWhere((p) => p.type == PlayerType.human);
     if (humanIndex < 0) return;
     stopCountdown();
     state.timeoutCount = 0;
@@ -1068,6 +1177,11 @@ class GameController implements OnlineGameDelegate {
       state.hideTingBadge = true;
     }
     onStateChanged?.call();
+    // 热座：吃认领走询问状态机
+    if (_hotSeat) {
+      _hsAcceptClaim('chi');
+      return;
+    }
     if (_online) {
       // 联机：吃认领上报服务器（meldCards=完整句3字按position排序），等裁决后各端统一执行
       final me = state.players[humanIndex];
@@ -1114,6 +1228,11 @@ class GameController implements OnlineGameDelegate {
 
     if (wasWaitingForResponse) {
       state.isMyTurn = false;
+      // 热座：过牌 → 询问下一家
+      if (_hotSeat) {
+        _hsAskNext();
+        return;
+      }
       if (_pendingAIResponses != null && _pendingResponseCard != null) {
         final pending = _pendingAIResponses!;
         final card = _pendingResponseCard!;
@@ -1131,6 +1250,204 @@ class GameController implements OnlineGameDelegate {
       state.isMyTurn = true;
       onStateChanged?.call();
       startCountdown();
+    }
+  }
+
+  // ==================== 热座模式核心 ====================
+
+  void _hsResetAskState() {
+    _hsAskQueue = null;
+    _hsAskCard = null;
+    _hsAskDiscarder = null;
+    _hsPendingClaimAction = null;
+    _hsPendingClaimPlayer = null;
+  }
+
+  /// 显示交接屏：全屏遮罩"请将设备交给玩家X"，点击后旋转视角并继续挂起流程
+  void _hsShowHandoff(Player player, VoidCallback after) {
+    stopCountdown();
+    state.canChi = false;
+    state.canPeng = false;
+    state.canZhao = false;
+    state.canHu = false;
+    state.waitingForResponse = false;
+    state.isMyTurn = false;
+    state.isDrawing = false;
+    _hsHandoffPlayer = player;
+    _hsPendingAfterHandoff = after;
+    state.hsHandoffName = player.name;
+    onStateChanged?.call();
+  }
+
+  /// UI 在玩家点击交接屏后调用：旋转视角至接机人并继续挂起的流程
+  void completeHotSeatHandoff() {
+    if (!state.isHotSeat) return;
+    final player = _hsHandoffPlayer;
+    if (player == null || state.hsHandoffName == null) return;
+    _hsHandoffPlayer = null;
+    state.hsHandoffName = null;
+    final after = _hsPendingAfterHandoff;
+    _hsPendingAfterHandoff = null;
+    final idx = state.players.indexOf(player);
+    if (idx >= 0 && idx != 1) {
+      _hsRotateTo(idx);
+    }
+    onStateChanged?.call();
+    after?.call();
+  }
+
+  /// 视角旋转：把当前 local targetIdx 的玩家移到持机位 players[1]。
+  /// 数组重排 + 所有索引字段 remap + player.id 重排（id 即数组下标）。
+  /// 3人循环顺序在旋转下保持不变。
+  void _hsRotateTo(int targetIdx) {
+    final old = List<Player>.from(state.players);
+    final shift = (targetIdx - 1 + 3) % 3;
+    for (var j = 0; j < 3; j++) {
+      state.players[j] = old[(j + shift) % 3];
+    }
+    int mapIdx(int i) => (i - shift + 3) % 3;
+    state.currentPlayerIndex = mapIdx(state.currentPlayerIndex);
+    state.dealerIndex = mapIdx(state.dealerIndex);
+    if (state.nextDealerIndex != null) {
+      state.nextDealerIndex = mapIdx(state.nextDealerIndex!);
+    }
+    if (state.lastDiscardPlayerIndex != null) {
+      state.lastDiscardPlayerIndex = mapIdx(state.lastDiscardPlayerIndex!);
+    }
+    state.piaoCurrentPlayerIndex = mapIdx(state.piaoCurrentPlayerIndex);
+    if (state.huResultWinnerIndex != null) {
+      state.huResultWinnerIndex = mapIdx(state.huResultWinnerIndex!);
+    }
+    if (state.huResultDianpaoIndex != null) {
+      state.huResultDianpaoIndex = mapIdx(state.huResultDianpaoIndex!);
+    }
+    if (state.huResultScoreChanges != null) {
+      state.huResultScoreChanges = state.huResultScoreChanges!.map(
+        (k, v) => MapEntry(mapIdx(k), v),
+      );
+    }
+    if (state.huResultOldScores != null) {
+      state.huResultOldScores = state.huResultOldScores!.map(
+        (k, v) => MapEntry(mapIdx(k), v),
+      );
+    }
+    for (var j = 0; j < 3; j++) {
+      state.players[j].id = j;
+    }
+    // 跨视角敏感的临时状态（上一持机人的摸牌高亮）
+    _lastDrawnCard = null;
+  }
+
+  /// 热座响应仲裁：按出牌者之后的回合顺序逐家询问。
+  /// 询问对象、认领者、出牌者均用 Player 引用（旋转不失效）。
+  void _hsCheckResponses(Card card, int discardPlayerId) {
+    _hsResetAskState();
+    final discarder = state.players[discardPlayerId];
+    final queue = <MapEntry<Player, List<String>>>[];
+    for (var k = 1; k <= 2; k++) {
+      final i = (discardPlayerId + k) % 3;
+      final p = state.players[i];
+      final acts = <String>[];
+      if (_canHuWith(p, card) && p.isTing) acts.add('hu');
+      if (_canZhaoWith(p, card)) acts.add('zhao');
+      if (_canPengWith(p, card)) acts.add('peng');
+      if (_canChiWith(p, i, card, discardPlayerId) &&
+          !_hasCompleteSentenceWithSingleCards(p, card)) {
+        acts.add('chi');
+      }
+      if (acts.isNotEmpty) queue.add(MapEntry(p, acts));
+    }
+    if (queue.isEmpty) {
+      _nextTurn();
+      return;
+    }
+    _hsAskQueue = queue;
+    _hsAskCard = card;
+    _hsAskDiscarder = discarder;
+    _hsAskNext();
+  }
+
+  /// 询问下一家；全部问完后统一裁决。
+  /// 支配优化：已有认领时，不可能超越当前认领优先级的玩家直接跳过。
+  void _hsAskNext() {
+    if (_hsAskQueue == null) return; // 不在询问流程中
+    const prio = {'hu': 4, 'zhao': 3, 'peng': 2, 'chi': 1};
+    while (_hsAskQueue!.isNotEmpty) {
+      final item = _hsAskQueue!.removeAt(0);
+      if (_hsPendingClaimAction != null) {
+        final best = item.value
+            .map((a) => prio[a]!)
+            .reduce((a, b) => a > b ? a : b);
+        if (best <= prio[_hsPendingClaimAction!]!) continue;
+      }
+      final i = state.players.indexOf(item.key);
+      if (i != 1) {
+        _hsShowHandoff(item.key, () => _hsShowResponseButtons(item.value));
+      } else {
+        _hsShowResponseButtons(item.value);
+      }
+      return;
+    }
+    _hsResolveResponses();
+  }
+
+  /// 询问流程中显示响应按钮（此时被询问者已在持机位 players[1]）
+  void _hsShowResponseButtons(List<String> acts) {
+    state.canHu = acts.contains('hu');
+    state.isZimoOpportunity = false;
+    state.canZhao = acts.contains('zhao');
+    state.canPeng = acts.contains('peng');
+    state.canChi = acts.contains('chi');
+    state.waitingForResponse = true;
+    state.isMyTurn = true;
+    onStateChanged?.call();
+    startCountdown();
+  }
+
+  /// 玩家认领动作（当前持机人即认领者），继续询问剩余玩家
+  void _hsAcceptClaim(String action) {
+    _hsPendingClaimAction = action;
+    _hsPendingClaimPlayer = state.players[1];
+    onStateChanged?.call();
+    _hsAskNext();
+  }
+
+  /// 全部询问完成：应用优先级最高的认领；无认领则进入下家回合
+  void _hsResolveResponses() {
+    final action = _hsPendingClaimAction;
+    final claimer = _hsPendingClaimPlayer;
+    final card = _hsAskCard;
+    final discarder = _hsAskDiscarder;
+    _hsResetAskState();
+
+    if (action == null || claimer == null || card == null || discarder == null) {
+      _nextTurn();
+      return;
+    }
+
+    void apply() {
+      final claimIdx = state.players.indexOf(claimer);
+      final discardIdx = state.players.indexOf(discarder);
+      if (claimIdx < 0 || discardIdx < 0) {
+        _nextTurn();
+        return;
+      }
+      if (action == 'hu') {
+        _handleHu(claimIdx, isZimo: false, dianpaoIndex: discardIdx);
+      } else if (action == 'zhao') {
+        _handleZhaoRespond(claimIdx, card, discardIdx);
+      } else if (action == 'peng') {
+        _handlePeng(claimIdx, card, discardIdx);
+      } else if (action == 'chi') {
+        _handleChi(claimIdx, card, discardIdx);
+      }
+    }
+
+    // 认领者不在持机位（视角已被后续询问转走）→ 交接回认领者再应用
+    if (state.players.indexOf(claimer) != 1) {
+      _hsShowHandoff(claimer, apply);
+    } else {
+      apply();
     }
   }
 
@@ -2427,6 +2744,8 @@ class GameController implements OnlineGameDelegate {
   void startOnlineGame(GameSyncManager mgr) {
     state.reset();
     state.isOnline = true;
+    state.isHotSeat = false;
+    _hsResetState();
     // 联机统一计分参数（各端一致，保证赢家计算的 winnerData 全端相同）
     state.baseScore = 5;
     state.multiplierBase = 2;

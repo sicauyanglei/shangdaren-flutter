@@ -10,12 +10,15 @@ class StartScreen extends StatefulWidget {
   )?
   onStartGame;
   final VoidCallback? onOnlineGame;
+  final void Function(int baseScore, int multiplierBase, bool piaoEnabled)?
+  onHotSeatGame;
   final VoidCallback? onExit;
 
   const StartScreen({
     super.key,
     this.onStartGame,
     this.onOnlineGame,
+    this.onHotSeatGame,
     this.onExit,
   });
 
@@ -44,6 +47,10 @@ class _StartScreenState extends State<StartScreen> {
       _difficulty,
       _piaoEnabled,
     );
+  }
+
+  void _onHotSeatGame() {
+    widget.onHotSeatGame?.call(_baseScore, _multiplierBase, _piaoEnabled);
   }
 
   @override
@@ -388,6 +395,47 @@ class _StartScreenState extends State<StartScreen> {
                             alignment: Alignment.center,
                             child: Text(
                               '3人联机对战',
+                              style: TextStyle(
+                                fontSize: startFontSize * 0.62,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: startFontSize * 0.12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: screenH * 0.02),
+                        // Hot-seat (3 real players, one device) button
+                        GestureDetector(
+                          onTap: _onHotSeatGame,
+                          child: Container(
+                            width: screenW * 0.28,
+                            height: startBtnH * 0.68,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment(-0.3, -1),
+                                end: Alignment(0.3, 1),
+                                colors: [Color(0xFFb06ae0), Color(0xFF8e4fd0)],
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                startBtnH * 0.25,
+                              ),
+                              border: Border.all(
+                                color: const Color(0xFFb06ae0).withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFFb06ae0,
+                                  ).withOpacity(0.2),
+                                  blurRadius: 16,
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '3人热座对战',
                               style: TextStyle(
                                 fontSize: startFontSize * 0.62,
                                 fontWeight: FontWeight.w900,
